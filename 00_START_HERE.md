@@ -74,14 +74,14 @@ You now have a **fully functional, working MUD server** written in Common Lisp t
 # 1. Install dependencies
 ./setup.sh
 
-# 2. Start the server (in SBCL)
-sbcl
-> (ql:quickload :mud)
-> (mud:start)
+# 2. Start the server
+sbcl --load run-mud.lisp
 
 # 3. Connect players (in another terminal)
 telnet localhost 8888
 ```
+
+**That's it!** The `run-mud.lisp` script handles all the setup automatically.
 
 ### Testing the System
 

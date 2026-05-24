@@ -1,6 +1,6 @@
 (defpackage #:mud.tests
   (:use #:cl #:fiveam)
-  (:export #:run-tests))
+  (:export #:run-tests #:mud-tests))
 
 (in-package #:mud.tests)
 

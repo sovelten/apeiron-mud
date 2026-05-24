@@ -8,9 +8,12 @@
 
 # Step 2: Start the server
 sbcl
+> (push (uiop:getcwd) asdf:*central-registry*)
 > (ql:quickload :mud)
 > (mud:start)
 ```
+
+**IMPORTANT:** The line `(push (uiop:getcwd) asdf:*central-registry*)` tells SBCL where to find mud.asd
 
 ## 🎮 Play the MUD
 

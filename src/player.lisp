@@ -42,8 +42,9 @@
 (defun player-send-message (player message)
   "Send a message to a player."
   (handler-case
-      (usocket:socket-send (player-socket player) 
-                          (concatenate 'string message (string #\Newline)))
+      (let ((stream (usocket:socket-stream (player-socket player))))
+        (format stream "~A~%" message)
+        (force-output stream))
     (error (e)
       (mud.utils:log-error "Failed to send message to player ~A: ~A" 
                           (object-name player) e))))

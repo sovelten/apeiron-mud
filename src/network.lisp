@@ -8,8 +8,7 @@
 (defun handle-client (player)
   "Main loop for handling a client connection."
   (handler-case
-      (loop while (and *server-running* 
-                       (usocket:socket-connected-p (player-socket player)))
+      (loop while *server-running*
             do
             (handler-case
                 (progn
@@ -18,8 +17,7 @@
                   
                   ;; Receive input
                   (let ((input (usocket:socket-receive (player-socket player) 
-                                                       +buffer-size+
-                                                       :timeout 10)))
+                                                       *buffer-size*)))
                     (when input
                       ;; Process input
                       (let ((line (string-trim '(#\Return #\Newline) input)))
@@ -42,8 +40,7 @@
       (loop while *server-running*
             do
             (handler-case
-                (let ((client-socket (usocket:socket-accept *server-socket*
-                                                            :timeout 1)))
+                (let ((client-socket (usocket:socket-accept *server-socket*)))
                   (when client-socket
                     (let ((player-name (format nil "Player~D" (random 10000))))
                       (mud.utils:log-message "New connection: ~A" player-name)

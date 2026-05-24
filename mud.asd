@@ -28,4 +28,6 @@
                 :components
                 ((:file "test-package")
                  (:file "test-object" :depends-on ("test-package"))
-                 (:file "test-world" :depends-on ("test-package"))))))
+                 (:file "test-world" :depends-on ("test-package"))
+                 (:file "test-player" :depends-on ("test-package"))
+                 (:file "test-commands" :depends-on ("test-package"))))))

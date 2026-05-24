@@ -76,15 +76,7 @@
   (player-send-message player "Goodbye!")
   (player-disconnect player))
 
-(defun parse-command (input)
-  "Parse a command string into command name and arguments."
-  (let ((trimmed (string-trim '(#\Space #\Tab) input)))
-    (if (zerop (length trimmed))
-        (values nil nil)
-        (let ((parts (split-sequence:split-sequence #\Space trimmed :remove-empty-subseqs t)))
-          (values (string-downcase (car parts)) (cdr parts))))))
-
-(defun split-sequence:split-sequence (delimiter sequence &key (remove-empty-subseqs nil))
+(defun split-sequence (delimiter sequence &key (remove-empty-subseqs nil))
   "Simple helper to split a sequence by a delimiter."
   (let ((result '())
         (current '()))
@@ -97,6 +89,14 @@
     (when (or (not remove-empty-subseqs) (> (length current) 0))
       (push (coerce (reverse current) 'string) result))
     (reverse result)))
+
+(defun parse-command (input)
+  "Parse a command string into command name and arguments."
+  (let ((trimmed (string-trim '(#\Space #\Tab) input)))
+    (if (zerop (length trimmed))
+        (values nil nil)
+        (let ((parts (split-sequence #\Space trimmed :remove-empty-subseqs t)))
+          (values (string-downcase (car parts)) (cdr parts))))))
 
 (defun process-command (player command-string)
   "Process a command from a player."

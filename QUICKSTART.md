@@ -33,9 +33,26 @@ This will install the required dependencies (usocket, bordeaux-threads, fiveam).
 
 ## Starting the MUD Server
 
-Open SBCL and run:
+**IMPORTANT:** You must be in the project directory first!
+
+```bash
+cd /path/to/musical-guacamole
+```
+
+Then open SBCL and run:
 
 ```lisp
+(push #p"/path/to/musical-guacamole/" asdf:*central-registry*)
+(ql:quickload :mud)
+(mud:start)
+```
+
+**Replace `/path/to/musical-guacamole/` with your actual project path.**
+
+Example (if you're in the project directory):
+
+```lisp
+(push (uiop:getcwd) asdf:*central-registry*)
 (ql:quickload :mud)
 (mud:start)
 ```

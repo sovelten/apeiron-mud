@@ -5,6 +5,11 @@
    #:*mud-version*
    #:*debug-mode*
    
+   ;; Server control
+   #:start
+   #:stop
+   #:status
+   
    ;; Object system
    #:mud-object
    #:create-object
@@ -26,6 +31,12 @@
    #:room-exits
    #:room-add-exit
    #:room-get-exit
+   #:world-initialize
+   #:world-add-room
+   #:world-get-room
+   #:world-all-rooms
+   #:*world*
+   #:*start-room*
    
    ;; Player system
    #:mud-player
@@ -36,6 +47,8 @@
    #:player-inventory-add
    #:player-inventory-remove
    #:player-send-message
+   #:player-send-prompt
+   #:player-disconnect
    
    ;; Command system
    #:process-command
