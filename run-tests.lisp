@@ -3,7 +3,9 @@
 
 (push #p"./" asdf:*central-registry*)
 
-;; Load just the mud system without starting the server
+;; Explicitly load the ASDF system definitions
+(asdf:load-asd #P"./mud.asd")
+(asdf:load-asd #P"./mud-test.asd")
 (ql:quickload :mud)
 
 ;; Now load the tests
@@ -11,7 +13,7 @@
 
 ;; Run the tests
 (format t "~%=== Running MUD Tests ===~%~%")
-(fiveam:run! 'mud.tests:mud-tests)
+(mud.tests:run-tests)
 (format t "~%=== Tests Complete ===~%~%")
 
 ;; Exit cleanly
