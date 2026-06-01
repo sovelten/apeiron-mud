@@ -9,7 +9,7 @@
 (ql:quickload :mud)
 
 ;; Now load the tests
-(ql:quickload :mud/tests)
+(ql:quickload :mud-test)
 
 ;; Run the tests
 (format t "~%=== Running MUD Tests ===~%~%")

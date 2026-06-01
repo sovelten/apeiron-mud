@@ -1,7 +1,8 @@
-(defsystem "mud/tests"
+(defsystem "mud-test"
   :version "0.0.1"
   :description "Tests for the MUD server"
   :author "Sophia"
+  :license "MIT"
   :depends-on ("mud" "fiveam")
   :components ((:module "tests"
                 :components
