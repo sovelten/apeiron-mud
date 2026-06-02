@@ -15,5 +15,4 @@
                  (:file "world" :depends-on ("package" "constants" "object"))
                  (:file "player" :depends-on ("package" "constants" "object" "world"))
                  (:file "command-handler" :depends-on ("package" "constants" "player" "world"))
-                 (:file "network" :depends-on ("package" "constants" "player" "command-handler"))
-                 (:file "server" :depends-on ("package" "constants" "network" "world"))))))
+                 (:file "network" :depends-on ("package" "constants" "player" "command-handler"))))))
