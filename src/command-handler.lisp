@@ -5,12 +5,13 @@
   "Hash table of command handlers")
 
 (defmacro define-command (name (player args) &body body)
-  "Define a command handler."
+  "Define a command handler. ARGS is a raw string that the handler can parse as needed."
   `(setf (gethash ,name *commands*)
          (lambda (,player ,args)
            ,@body)))
 
 ;; Built-in commands
+
 (define-command "look" (player args)
   (declare (ignore args))
   (let ((room (object-location player)))
@@ -19,9 +20,9 @@
         (player-send-message player "You are in a void!"))))
 
 (define-command "go" (player args)
-  (let ((direction (car args))
+  (let ((direction (string-trim '(#\Space #\Tab) args))
         (room (object-location player)))
-    (if (not direction)
+    (if (zerop (length direction))
         (player-send-message player "Go where? Usage: go <direction>")
         (let ((target-room (room-get-exit room direction)))
           (if target-room
@@ -32,16 +33,11 @@
               (player-send-message player "You can't go that way."))))))
 
 (define-command "eval" (player args)
-  (if (null args)
-      (player-send-message player "Eval what? Usage: eval <code>")
-      (let* ((code-str (format nil "~{~A~^ ~}" args))
-             (trimmed-str (if (and (>= (length code-str) 2)
-                                   (char= (char code-str 0) #\")
-                                   (char= (char code-str (1- (length code-str))) #\"))
-                              (subseq code-str 1 (1- (length code-str)))
-                              code-str)))
+  (let ((code-str (string-trim '(#\Space #\Tab) args)))
+    (if (zerop (length code-str))
+        (player-send-message player "Eval what? Usage: eval <code>")
         (handler-case
-            (let* ((form (read-from-string trimmed-str))
+            (let* ((form (read-from-string code-str))
                    (result (eval form)))
               (player-send-message player (format nil "~A" result)))
           (error (e)
@@ -66,7 +62,7 @@
                                      (map 'list #'object-describe inv))))))
 
 (define-command "say" (player args)
-  (let ((message (format nil "~{~A~^ ~}" args)))
+  (let ((message (string-trim '(#\Space #\Tab) args)))
     (if (zerop (length message))
         (player-send-message player "Say what?")
         (let ((room (object-location player)))
@@ -107,12 +103,16 @@
     (reverse result)))
 
 (defun parse-command (input)
-  "Parse a command string into command name and arguments."
+  "Parse a command string into command name and raw args string.
+   Returns: (values command-name raw-args-string)"
   (let ((trimmed (string-trim '(#\Space #\Tab) input)))
     (if (zerop (length trimmed))
-        (values nil nil)
-        (let ((parts (split-sequence #\Space trimmed :remove-empty-subseqs t)))
-          (values (string-downcase (car parts)) (cdr parts))))))
+        (values nil "")
+        (let ((space-pos (position #\Space trimmed)))
+          (if space-pos
+              (values (string-downcase (subseq trimmed 0 space-pos))
+                      (string-trim '(#\Space #\Tab) (subseq trimmed (1+ space-pos))))
+              (values (string-downcase trimmed) ""))))))
 
 (defun process-command (player command-string)
   "Process a command from a player."
