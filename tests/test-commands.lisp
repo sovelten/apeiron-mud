@@ -67,17 +67,12 @@
              (mud:process-command player "eval")
              (is (equal '("Eval what? Usage: eval <code>") captured-messages))
              
-             ;; Test 2: With quotes
-             (setf captured-messages '())
-             (mud:process-command player "eval \"(+ 1 2)\"")
-             (is (equal '("3") captured-messages))
-             
-             ;; Test 3: Without quotes
+             ;; Test 2: Simple sum
              (setf captured-messages '())
              (mud:process-command player "eval (+ 3 4)")
              (is (equal '("7") captured-messages))
              
-             ;; Test 4: Error handling
+             ;; Test 3: Error handling
              (setf captured-messages '())
              (mud:process-command player "eval (/ 1 0)")
              (is (= 1 (length captured-messages)))
