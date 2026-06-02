@@ -39,12 +39,14 @@
   (setf (player-inventory player)
         (delete obj (player-inventory player))))
 
-(defun player-send-message (player message)
-  "Send a message to a player."
+(defun player-send-message (player message &key (newline t))
+  "Send a message to a player. If NEWLINE is nil, don't add a trailing newline."
   (handler-case
       (let ((stream (usocket:socket-stream (player-socket player))))
         (when stream
-          (format stream "~A~%" message)
+          (if newline
+              (format stream "~A~%" message)
+              (format stream "~A" message))
           (force-output stream)))
     (error (e)
       ;; Only log if it's not a connection error
@@ -55,8 +57,8 @@
                               (object-name player) e))))))
 
 (defun player-send-prompt (player)
-  "Send a prompt to a player."
-  (player-send-message player "> "))
+  "Send a prompt to a player on the same line (no newline)."
+  (player-send-message player "> " :newline nil))
 
 (defun player-set-input-buffer (player text)
   "Set the input buffer for a player."

@@ -4,7 +4,8 @@
   :author "Sophia"
   :license "MIT"
   :depends-on ("usocket"
-               "bordeaux-threads")
+               "bordeaux-threads"
+               "str")
   :components ((:module "src"
                 :components
                 ((:file "package")

@@ -20,7 +20,7 @@
         (player-send-message player "You are in a void!"))))
 
 (define-command "go" (player args)
-  (let ((direction (string-trim '(#\Space #\Tab) args))
+  (let ((direction args)
         (room (object-location player)))
     (if (zerop (length direction))
         (player-send-message player "Go where? Usage: go <direction>")
@@ -33,7 +33,7 @@
               (player-send-message player "You can't go that way."))))))
 
 (define-command "eval" (player args)
-  (let ((code-str (string-trim '(#\Space #\Tab) args)))
+  (let ((code-str args))
     (if (zerop (length code-str))
         (player-send-message player "Eval what? Usage: eval <code>")
         (handler-case
@@ -62,12 +62,12 @@
                                      (map 'list #'object-describe inv))))))
 
 (define-command "say" (player args)
-  (let ((message (string-trim '(#\Space #\Tab) args)))
+  (let ((message args))
     (if (zerop (length message))
         (player-send-message player "Say what?")
         (let ((room (object-location player)))
           (player-send-message player (format nil "You say: ~A" message))
-          (dolist (obj (room-contents room))
+          (loop for obj across (room-contents room) do
             (when (and (typep obj 'mud-player)
                        (not (eq obj player)))
               (player-send-message obj 
@@ -87,20 +87,6 @@
   (declare (ignore args))
   (player-send-message player "Goodbye!")
   (player-disconnect player))
-
-(defun split-sequence (delimiter sequence &key (remove-empty-subseqs nil))
-  "Simple helper to split a sequence by a delimiter."
-  (let ((result '())
-        (current '()))
-    (loop for char across sequence do
-      (if (eq char delimiter)
-          (when (or (not remove-empty-subseqs) (> (length current) 0))
-            (push (coerce (reverse current) 'string) result)
-            (setf current '()))
-          (push char current)))
-    (when (or (not remove-empty-subseqs) (> (length current) 0))
-      (push (coerce (reverse current) 'string) result))
-    (reverse result)))
 
 (defun parse-command (input)
   "Parse a command string into command name and raw args string.

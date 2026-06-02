@@ -29,14 +29,6 @@
     (error (e)
       (fail (format nil "Player connection simulation failed: ~A" e)))))
 
-(test command-parsing
-  "Test that command parsing works correctly"
-  (let* ((input "go north")
-         (parts (mud::split-sequence #\Space input :remove-empty-subseqs t)))
-    (is (= (length parts) 2))
-    (is (equal (car parts) "go"))
-    (is (equal (cadr parts) "north"))))
-
 (test socket-stream-error-handling
   "Test that socket errors are handled gracefully"
   (handler-case
