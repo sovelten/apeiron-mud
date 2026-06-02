@@ -2,6 +2,8 @@
 
 (defvar *server-running* nil)
 (defvar *server-socket* nil)
+(defvar *acceptance-thread* nil
+  "The thread handling incoming connections")
 (defvar *player-threads* (make-hash-table :test #'equal))
 (defvar *server-lock* (bordeaux-threads:make-lock "server-lock"))
 
@@ -107,8 +109,9 @@
           
           (mud.utils:log-message "MUD Server started on ~A:~D" host port)
           
-          ;; Start acceptance thread
-          (bordeaux-threads:make-thread #'accept-connections :name "accept-connections")
+          ;; Start acceptance thread and store reference
+          (setf *acceptance-thread*
+                (bordeaux-threads:make-thread #'accept-connections :name "accept-connections"))
           
           t))))
 
@@ -118,14 +121,25 @@
     (when *server-running*
       (setf *server-running* nil)
       
+      ;; Close server socket first (this will unblock socket-accept)
+      (when *server-socket*
+        (handler-case
+            (usocket:socket-close *server-socket*)
+          (error (e)
+            (mud.utils:log-error "Error closing server socket: ~A" e)))
+        (setf *server-socket* nil))
+      
+      ;; Wait for acceptance thread to exit
+      (when *acceptance-thread*
+        (handler-case
+            (bordeaux-threads:join-thread *acceptance-thread* :timeout 5)
+          (error (e)
+            (mud.utils:log-error "Error joining acceptance thread: ~A" e)))
+        (setf *acceptance-thread* nil))
+      
       ;; Disconnect all players
       (dolist (player (world-all-players))
         (player-disconnect player))
-      
-      ;; Close server socket
-      (when *server-socket*
-        (usocket:socket-close *server-socket*)
-        (setf *server-socket* nil))
       
       (mud.utils:log-message "MUD Server stopped")
       t)))

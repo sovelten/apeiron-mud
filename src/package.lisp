@@ -57,7 +57,8 @@
    ;; Network/Server
    #:start-mud-server
    #:stop-mud-server
-   #:get-server-status))
+   #:get-server-status
+   #:*server-running*))
 
 (defpackage #:mud.utils
   (:use #:cl)
