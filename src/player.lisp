@@ -1,6 +1,7 @@
 (in-package #:mud)
 
 ;; Player class - a specialized mud-object with network connection
+
 (defclass mud-player (mud-object)
   ((socket :initarg :socket
            :accessor player-socket
@@ -12,7 +13,15 @@
    (input-buffer :initarg :input-buffer
                  :accessor player-input-buffer
                  :initform ""
-                 :documentation "Accumulated input from the player"))
+                 :documentation "Accumulated input from the player")
+   (username :initarg :username
+             :accessor player-username
+             :initform nil
+             :documentation "The username for this player (nil if not registered)")
+   (registration-state :initarg :registration-state
+                       :accessor player-registration-state
+                       :initform :anonymous
+                       :documentation "Registration state: :anonymous, :registering, :logging-in, :registered"))
   (:documentation "A player character in the MUD"))
 
 (defun create-player (name socket)

@@ -51,6 +51,18 @@
    #:player-send-message
    #:player-send-prompt
    #:player-disconnect
+   #:player-username
+   #:player-registration-state
+   
+   ;; Registration system
+   #:register-new-player
+   #:validate-login
+   #:player-exists-p
+   #:get-player-display-name
+   #:update-player-display-name
+   #:get-all-registered-players
+   #:get-player-object
+   #:update-player-socket
    
    ;; Command system
    #:process-command
