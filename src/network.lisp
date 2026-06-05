@@ -112,8 +112,27 @@
                        (let* ((guest-name (format nil "Guest~D" (random 10000)))
                               (session (make-instance 'mud-session :socket client-socket))
                               (character (create-character guest-name session)))
-                         (mud.utils:log-message "New connection: ~A" guest-name)
                          (session-send-message session "Welcome to the MUD!")
+                         (session-send-message session "What is your name?")
+                         (let ((stream (handler-case (usocket:socket-stream client-socket) (error () nil))))
+                           (if (null stream)
+                               ;; Socket is closed, exit loop
+                               (return)
+                               ;; Socket is open, continue
+                               (progn
+                                 ;; Send prompt
+                                 (session-send-prompt session)
+
+                                 ;; Receive input
+                                 (let ((line (read-line stream nil nil)))
+                                   (if line
+                                       (let ((trimmed (string-trim '(#\Return #\Newline) line)))
+                                         (when (and trimmed (> (length trimmed) 0))
+                                           (setf (object-name character) trimmed)))
+                                       (progn
+                                         (mud.utils:log-message "Client ~A disconnected (EOF)" (object-name character))
+                                         (return)))))))
+                         (mud.utils:log-message "New connection: ~A" (object-name character))
                          (world-new-character character)
                          (session-send-message session (room-describe (object-location character)))
                          ;; Start session thread

@@ -38,7 +38,13 @@
         (player-send-message player "Eval what? Usage: eval <code>")
         (handler-case
             (let* ((form (read-from-string code-str))
+                   (room (object-location player))
                    (result (eval form)))
+              (loop for obj across (room-contents room) do
+                (when (and (typep obj 'mud-character)
+                           (not (eq obj player)))
+                  (player-send-message obj (format nil "~A casts the spell: ~A" (object-name player) form))
+                  (player-send-message obj (format nil "~A" result))))
               (player-send-message player (format nil "~A" result)))
           (error (e)
             (player-send-message player (format nil "Error: ~A" e)))))))

@@ -35,6 +35,7 @@
    #:world-initialize
    #:world-new-character
    #:world-add-room
+   #:world-get-player
    #:world-get-room
    #:world-all-rooms
    #:*world*
