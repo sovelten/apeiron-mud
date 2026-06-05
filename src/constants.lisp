@@ -4,7 +4,7 @@
 (defparameter *debug-mode* t)
 
 ;; Server configuration
-(defparameter *server-host* "127.0.0.1")
+(defparameter *server-host* "0.0.0.0")
 (defparameter *server-port* 8888)
 (defparameter *max-connections* 100)
 (defparameter *buffer-size* 4096)
