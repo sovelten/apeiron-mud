@@ -35,7 +35,7 @@
 (defun player-send-message (player message &key (newline t))
   "Send a message to a player. If NEWLINE is nil, don't add a trailing newline."
   (let ((session (character-session player)))
-    (session-send-message session message)))
+    (session-send-message session message :newline newline)))
 
 (defun player-send-prompt (player)
   "Send a prompt to a player on the same line (no newline)."

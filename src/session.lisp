@@ -19,6 +19,10 @@
                  :socket socket))
 
 (defun session-disconnect (session)
+  ;; Unlink character from session before disconnecting
+  ;; Is this the best approach?
+  (when (session-character session)
+    (setf (session-character session) nil))
   (when (and session (session-socket session))
     (handler-case
         (usocket:socket-close (session-socket session))
@@ -28,7 +32,7 @@
 
 (defun session-send-message (session message &key (newline t))
   "Send a message to a session. If NEWLINE is nil, don't add a trailing newline."
-  (when session
+  (when (and session (session-socket session))
     (handler-case
         (let ((stream (usocket:socket-stream (session-socket session))))
           (when stream

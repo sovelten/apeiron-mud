@@ -83,7 +83,8 @@
   (let ((session-id (session-id session)))
     (mud.utils:log-message "Attempting to remove thread for session ~A" session-id)
     (remhash session-id *player-threads*)
-    (world-remove-player (session-character session))
+    (when (session-character session)
+      (world-remove-player (session-character session)))
     (session-disconnect session)))
 
 (defun accept-connections ()
@@ -94,20 +95,25 @@
                (handler-case
                    (let ((client-socket (usocket:socket-accept *server-socket*)))
                      (when client-socket
-                       (let ((session (create-session client-socket)))
-                         ;; Start session thread
-                         (let ((thread (bordeaux-threads:make-thread
-                                        (lambda () (handle-client session))
-                                        :name (format nil "session-~A" (session-id session)))))
-                           (mud.utils:log-message "Thread for session ~A created" (session-id session))
-                           (setf (gethash (session-id session) *player-threads*) thread)))))
+                       (if (not *server-running*)
+                           (usocket:socket-close client-socket)
+                           (let ((session (create-session client-socket)))
+                             ;; Start session thread
+                             (let ((thread (bordeaux-threads:make-thread
+                                            (lambda () (handle-client session))
+                                            :name (format nil "session-~A" (session-id session)))))
+                               (mud.utils:log-message "Thread for session ~A created" (session-id session))
+                               (setf (gethash (session-id session) *player-threads*) thread))))))
                  (usocket:timeout-error ()
                    ;; Just a timeout, continue accepting
                    nil)
                  (error (e)
-                   (mud.utils:log-error "Error accepting connection: ~A" e))))
+                   ;; If the server is stopping, ignore socket errors from closed listening socket
+                   (when *server-running*
+                     (mud.utils:log-error "Error accepting connection: ~A" e)))))
     (error (e)
-      (mud.utils:log-error "Accept connections error: ~A" e))))
+      (when *server-running*
+        (mud.utils:log-error "Accept connections error: ~A" e)))))
 
 (defun start-mud-server (&key (host *server-host*) (port *server-port*))
   "Start the MUD server."
@@ -139,6 +145,15 @@
   (bordeaux-threads:with-lock-held (*server-lock*)
     (when *server-running*
       (setf *server-running* nil)
+      
+      ;; Fire a dummy connection to unblock socket-accept if it is blocked
+      (when *server-socket*
+        (handler-case
+            (let ((port (usocket:get-local-port *server-socket*)))
+              (when port
+                (let ((dummy (usocket:socket-connect "127.0.0.1" port)))
+                  (usocket:socket-close dummy))))
+          (error () nil)))
       
       ;; Close server socket first (this will unblock socket-accept)
       (when *server-socket*
