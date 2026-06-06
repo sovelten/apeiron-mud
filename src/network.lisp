@@ -8,7 +8,10 @@
 (defvar *server-lock* (bordeaux-threads:make-lock "server-lock"))
 
 (defclass mud-session ()
-  ((socket :initarg :socket
+  ((id :initarg :id
+       :accessor session-id
+       :documentation "Unique identifier for this object")
+   (socket :initarg :socket
            :accessor session-socket
            :documentation "Network socket for this session")
    (character :initarg :player
@@ -16,6 +19,11 @@
               :initform nil
               :documentation "Player controlled by this session"))
   (:documentation "A network session in the MUD"))
+
+(defun create-session (socket)
+  (make-instance 'mud-session
+                 :id (mud.utils:make-id)
+                 :socket socket))
 
 (defun session-disconnect (session)
   (when (and session (session-socket session))
@@ -47,59 +55,83 @@
   "Send a prompt to a player on the same line (no newline)."
   (session-send-message session "> " :newline nil))
 
-(defun handle-client (player)
+(defun ask-name (session default)
+  (session-send-message session "What is your name?")
+  (let* ((socket (session-socket session))
+         (stream (handler-case (usocket:socket-stream socket) (error () nil))))
+    (if (null stream)
+        ;; Socket is closed, exit loop
+        default
+        ;; Socket is open, continue
+        (progn
+          (session-send-prompt session)
+          (let ((line (read-line stream nil nil)))
+            (if line
+                (let ((trimmed (string-trim '(#\Return #\Newline) line)))
+                  (if (and trimmed (> (length trimmed) 0))
+                      trimmed
+                      default))
+                default))))))
+
+(defun handle-client (session)
   "Main loop for handling a client connection."
-  (let ((session (player-session player)))
+  (let* ((guest-name (format nil "Guest~D" (random 10000)))
+         (char-name (ask-name session guest-name))
+         (character (create-character char-name session)))
+    (mud.utils:log-message "New connection: ~A" char-name)
+    (world-new-character character)
+    (session-send-message session (room-describe (object-location character)))
+    (session-send-message session "Welcome to the MUD!")
     (handler-case
         (let ((socket (session-socket session)))
           (loop while *server-running*
                 do
-                (handler-case
-                    (let ((stream (handler-case
-                                    (usocket:socket-stream socket)
-                                    (error () nil))))
-                      (if (null stream)
-                          ;; Socket is closed, exit loop
-                          (return)
-                          ;; Socket is open, continue
-                          (progn
-                            ;; Send prompt
-                            (session-send-prompt session)
-                            
-                            ;; Receive input
-                            (let ((line (read-line stream nil nil)))
-                              (if line
-                                  (let ((trimmed (string-trim '(#\Return #\Newline) line)))
-                                    (when (and trimmed (> (length trimmed) 0))
-                                      (process-command player trimmed)))
-                                  (progn
-                                    (mud.utils:log-message "Client ~A disconnected (EOF)" (object-name player))
-                                    (return)))))))
-                  (end-of-file ()
-                    ;; Connection closed by client
-                    (mud.utils:log-message "Client ~A disconnected" (object-name player))
-                    (return))
-                  (error (e)
-                    ;; Check if this is a "broken pipe" or similar connection error
-                    (let ((error-str (format nil "~A" e)))
-                      (if (or (search "Broken pipe" error-str)
-                              (search "closed" error-str))
-                          ;; Connection error, exit gracefully
-                          (progn
-                            (mud.utils:log-message "Client ~A connection lost" (object-name player))
-                            (return))
-                          ;; Other error, log it
-                          (progn
-                            (mud.utils:log-error "Error in client handler: ~A" e)
-                            (return))))))))
+                   (handler-case
+                       (let ((stream (handler-case
+                                         (usocket:socket-stream socket)
+                                       (error () nil))))
+                         (if (null stream)
+                             ;; Socket is closed, exit loop
+                             (return)
+                             ;; Socket is open, continue
+                             (progn
+                               ;; Send prompt
+                               (session-send-prompt session)
+
+                               ;; Receive input
+                               (let ((line (read-line stream nil nil)))
+                                 (if line
+                                     (let ((trimmed (string-trim '(#\Return #\Newline) line)))
+                                       (when (and trimmed (> (length trimmed) 0))
+                                         (process-command character trimmed)))
+                                     (progn
+                                       (mud.utils:log-message "Client ~A disconnected (EOF)" char-name)
+                                       (return)))))))
+                     (end-of-file ()
+                       ;; Connection closed by client
+                       (mud.utils:log-message "Client ~A disconnected" char-name)
+                       (return))
+                     (error (e)
+                       ;; Check if this is a "broken pipe" or similar connection error
+                       (let ((error-str (format nil "~A" e)))
+                         (if (or (search "Broken pipe" error-str)
+                                 (search "closed" error-str))
+                             ;; Connection error, exit gracefully
+                             (progn
+                               (mud.utils:log-message "Client ~A connection lost" char-name)
+                               (return))
+                             ;; Other error, log it
+                             (progn
+                               (mud.utils:log-error "Error in client handler: ~A" e)
+                               (return))))))))
       (error (e)
-        (mud.utils:log-error "Client handler error for ~A: ~A" (object-name player) e)))
-    
-    ;; Cleanup when disconnected
-    (let ((player-id (object-id player)))
-      (mud.utils:log-message "Attempting to remove thread for player ~A" player-id)
-      (remhash player-id *player-threads*))
-    (player-disconnect player)))
+        (mud.utils:log-error "Client handler error for ~A: ~A" char-name e))))
+
+  ;; Cleanup when disconnected
+  (let ((session-id (session-id session)))
+    (mud.utils:log-message "Attempting to remove thread for session ~A" session-id)
+    (remhash session-id *player-threads*))
+  (player-disconnect (session-character session)))
 
 (defun accept-connections ()
   "Accept incoming client connections."
@@ -109,37 +141,13 @@
                (handler-case
                    (let ((client-socket (usocket:socket-accept *server-socket*)))
                      (when client-socket
-                       (let* ((guest-name (format nil "Guest~D" (random 10000)))
-                              (session (make-instance 'mud-session :socket client-socket))
-                              (character (create-character guest-name session)))
-                         (session-send-message session "Welcome to the MUD!")
-                         (session-send-message session "What is your name?")
-                         (let ((stream (handler-case (usocket:socket-stream client-socket) (error () nil))))
-                           (if (null stream)
-                               ;; Socket is closed, exit loop
-                               (return)
-                               ;; Socket is open, continue
-                               (progn
-                                 ;; Send prompt
-                                 (session-send-prompt session)
-
-                                 ;; Receive input
-                                 (let ((line (read-line stream nil nil)))
-                                   (if line
-                                       (let ((trimmed (string-trim '(#\Return #\Newline) line)))
-                                         (when (and trimmed (> (length trimmed) 0))
-                                           (setf (object-name character) trimmed)))
-                                       (progn
-                                         (mud.utils:log-message "Client ~A disconnected (EOF)" (object-name character))
-                                         (return)))))))
-                         (mud.utils:log-message "New connection: ~A" (object-name character))
-                         (world-new-character character)
-                         (session-send-message session (room-describe (object-location character)))
+                       (let ((session (create-session client-socket)))
                          ;; Start session thread
                          (let ((thread (bordeaux-threads:make-thread
-                                        (lambda () (handle-client character))
-                                        :name (format nil "player-~A" (object-id character)))))
-                           (setf (gethash (object-id character) *player-threads*) thread)))))
+                                        (lambda () (handle-client session))
+                                        :name (format nil "session-~A" (session-id session)))))
+                           (mud.utils:log-message "Thread for session ~A created" (session-id session))
+                           (setf (gethash (session-id session) *player-threads*) thread)))))
                  (usocket:timeout-error ()
                    ;; Just a timeout, continue accepting
                    nil)
