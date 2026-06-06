@@ -7,54 +7,6 @@
 (defvar *player-threads* (make-hash-table :test #'equal))
 (defvar *server-lock* (bordeaux-threads:make-lock "server-lock"))
 
-(defclass mud-session ()
-  ((id :initarg :id
-       :accessor session-id
-       :documentation "Unique identifier for this object")
-   (socket :initarg :socket
-           :accessor session-socket
-           :documentation "Network socket for this session")
-   (character :initarg :player
-              :accessor session-character
-              :initform nil
-              :documentation "Player controlled by this session"))
-  (:documentation "A network session in the MUD"))
-
-(defun create-session (socket)
-  (make-instance 'mud-session
-                 :id (mud.utils:make-id)
-                 :socket socket))
-
-(defun session-disconnect (session)
-  (when (and session (session-socket session))
-    (handler-case
-        (usocket:socket-close (session-socket session))
-      (error (e)
-        (mud.utils:log-error "Error closing socket for ~A: ~A"
-                             (session-socket session) e)))))
-
-(defun session-send-message (session message &key (newline t))
-  "Send a message to a session. If NEWLINE is nil, don't add a trailing newline."
-  (when session
-    (handler-case
-        (let ((stream (usocket:socket-stream (session-socket session))))
-          (when stream
-            (if newline
-                (format stream "~A~%" message)
-                (format stream "~A" message))
-            (force-output stream)))
-      (error (e)
-        ;; Only log if it's not a connection error
-        (let ((error-str (format nil "~A" e)))
-          (unless (or (search "Broken pipe" error-str)
-                      (search "closed" error-str))
-            (mud.utils:log-error "Failed to send message to session ~A: ~A"
-                                 (session-socket session) e)))))))
-
-(defun session-send-prompt (session)
-  "Send a prompt to a player on the same line (no newline)."
-  (session-send-message session "> " :newline nil))
-
 (defun ask-name (session default)
   (session-send-message session "What is your name?")
   (let* ((socket (session-socket session))
@@ -130,8 +82,10 @@
   ;; Cleanup when disconnected
   (let ((session-id (session-id session)))
     (mud.utils:log-message "Attempting to remove thread for session ~A" session-id)
-    (remhash session-id *player-threads*))
-  (player-disconnect (session-character session)))
+    (remhash session-id *player-threads*)
+    (when (session-character session)
+      (world-remove-player (session-character session)))
+    (session-disconnect session)))
 
 (defun accept-connections ()
   "Accept incoming client connections."
@@ -141,20 +95,25 @@
                (handler-case
                    (let ((client-socket (usocket:socket-accept *server-socket*)))
                      (when client-socket
-                       (let ((session (create-session client-socket)))
-                         ;; Start session thread
-                         (let ((thread (bordeaux-threads:make-thread
-                                        (lambda () (handle-client session))
-                                        :name (format nil "session-~A" (session-id session)))))
-                           (mud.utils:log-message "Thread for session ~A created" (session-id session))
-                           (setf (gethash (session-id session) *player-threads*) thread)))))
+                       (if (not *server-running*)
+                           (usocket:socket-close client-socket)
+                           (let ((session (create-session client-socket)))
+                             ;; Start session thread
+                             (let ((thread (bordeaux-threads:make-thread
+                                            (lambda () (handle-client session))
+                                            :name (format nil "session-~A" (session-id session)))))
+                               (mud.utils:log-message "Thread for session ~A created" (session-id session))
+                               (setf (gethash (session-id session) *player-threads*) thread))))))
                  (usocket:timeout-error ()
                    ;; Just a timeout, continue accepting
                    nil)
                  (error (e)
-                   (mud.utils:log-error "Error accepting connection: ~A" e))))
+                   ;; If the server is stopping, ignore socket errors from closed listening socket
+                   (when *server-running*
+                     (mud.utils:log-error "Error accepting connection: ~A" e)))))
     (error (e)
-      (mud.utils:log-error "Accept connections error: ~A" e))))
+      (when *server-running*
+        (mud.utils:log-error "Accept connections error: ~A" e)))))
 
 (defun start-mud-server (&key (host *server-host*) (port *server-port*))
   "Start the MUD server."
@@ -187,6 +146,15 @@
     (when *server-running*
       (setf *server-running* nil)
       
+      ;; Fire a dummy connection to unblock socket-accept if it is blocked
+      (when *server-socket*
+        (handler-case
+            (let ((port (usocket:get-local-port *server-socket*)))
+              (when port
+                (let ((dummy (usocket:socket-connect "127.0.0.1" port)))
+                  (usocket:socket-close dummy))))
+          (error () nil)))
+      
       ;; Close server socket first (this will unblock socket-accept)
       (when *server-socket*
         (handler-case
@@ -205,7 +173,8 @@
       
       ;; Disconnect all players
       (dolist (player (world-all-players))
-        (player-disconnect player))
+        (progn (world-remove-player player)
+               (session-disconnect (character-session player))))
       
       (mud.utils:log-message "MUD Server stopped")
       t)))

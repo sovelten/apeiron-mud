@@ -15,10 +15,10 @@
   (mud:world-initialize)
   (let ((player (mud:create-character "TestPlayer" (make-instance 'mud:mud-session :socket nil)))
         (obj (mud:create-object :name "Test Item")))
-    (mud:player-inventory-add player obj)
+    (mud:character-inventory-add player obj)
     (is (> (length (mud:player-inventory player)) 0))
     (is (equal (aref (mud:player-inventory player) 0) obj))
-    (mud:player-inventory-remove player obj)
+    (mud:character-inventory-remove player obj)
     (is (= (length (mud:player-inventory player)) 0))))
 
 (test player-location

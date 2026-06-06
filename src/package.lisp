@@ -48,14 +48,14 @@
    #:create-character
    #:session-socket
    #:session-input-buffer
-   #:player-session
+   #:character-session
    #:player-location
    #:player-inventory
-   #:player-inventory-add
-   #:player-inventory-remove
+   #:character-inventory-add
+   #:character-inventory-remove
    #:player-send-message
    #:player-send-prompt
-   #:player-disconnect
+   #:world-remove-player
    
    ;; Command system
    #:process-command

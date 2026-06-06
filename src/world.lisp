@@ -56,9 +56,18 @@
       (room-add-object *start-room* character))
   (world-add-player character))
 
-(defun world-remove-player (player-id)
+(defun world-remove-player (player)
   "Remove a player from the world."
-  (remhash player-id *players*))
+  (mud.utils:log-message "Character ~A leaving" (object-name player))
+  (let ((room (object-location player)))
+    (mud.utils:log-message "Removing from ~A" (object-name room))
+    ;; Remove from room
+    (when (typep room 'mud-room)
+      (room-remove-object room player))
+    ;; Remove from world
+    (mud.utils:log-message "Removing ~A from world" (object-name player))
+    (remhash (object-id player) *players*)
+    (mud.utils:log-message "Removed")))
 
 (defun world-get-player (player-id)
   "Get a player by ID."
