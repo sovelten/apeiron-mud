@@ -2,7 +2,7 @@
 
 A MUD (Multi-User Dungeon) server written in Common Lisp, inspired by Dworkin's Game Driver (DGD) and LMUD, with the added reckless capability of running lisp code at your own risk and peril (don't start a real server with this on the internet). The name was inspired by the first repository name that github suggested to me.
 
-**Status**: ✅ Production-ready and fully functional (it is obviously not production-ready nor fully functional, don't believe the LLM)
+Very simple and raw at the moment, but the fact that it runs on lisp gives it some super powers, such as the ability to change the running image within the session.
 
 ## Inspiration
 
@@ -80,30 +80,57 @@ telnet localhost 8888
 | `quit` | `quit` | Disconnect |
 | `eval` | `eval <sexpr>` | Run arbritrary lisp code!!! (very dangerous) |
 
-### Example Session
+```
+
+### Example Session 
+
+Using eval to create a room:
 
 ```
-Welcome to the MUD!
+What is your name?
+> Frodo
 
 === The Tavern ===
 
-> look
-=== The Tavern ===
+You see:
+  - Frodo (ID: 4)
+
+
 Exits: north
 
-> go north
-You go north.
-=== A Dense Forest ===
-Exits: south
+Welcome to the MUD!
+>  eval (mud:world-add-room (mud:create-room :name "Valinor")) 
+#<MUD-ROOM Valinor (ID: 5)>
+> eval (mud:world-all-rooms)
+(#<MUD-ROOM The Tavern (ID: 1)> #<MUD-ROOM A Dense Forest (ID: 2)>
+ #<MUD-ROOM Valinor (ID: 5)>)
+> eval (mud:room-add-exits (mud:world-get-room 1) :west (mud:world-get-room 5) :east)
+#<MUD-ROOM The Tavern (ID: 1)>
+> look
 
-> say Hello everyone!
-You say: Hello everyone!
+=== The Tavern ===
 
-> quit
-Goodbye!
+You see:
+  - Frodo (ID: 4)
 
-> eval (+ 1 2)
-3
+
+Exits: north, west
+
+> go west
+You go west.
+
+
+=== Valinor ===
+
+You see:
+  - Frodo (ID: 4)
+
+
+Exits: east
+
+> say Where are all the elves?
+You say: Where are all the elves?
+> 
 ```
 
 ### Stop the Server
