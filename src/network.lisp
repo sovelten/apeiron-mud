@@ -33,11 +33,12 @@
    If the socket's connection has been lost, this write or its flush will signal an error."
   (when socket
     (let ((stream (usocket:socket-stream socket)))
+      (mud.utils:log-message "A A A A Staying alive!")
       (when stream
         (write-char #\Return stream)
         (force-output stream)))))
 
-(defun read-line-with-timeout-loop (socket &key (poll-interval 30) (keepalive-func nil))
+(defun read-line-with-timeout-loop (socket &key (poll-interval 30) (keepalive-func #'send-keepalive))
   "Read a line from socket stream by polling with a short timeout (POLL-INTERVAL).
    If polling times out, it invokes KEEPALIVE-FUNC (e.g., to send a keepalive probe)
    to verify if the connection is still alive, and then continues waiting.
@@ -51,7 +52,7 @@
           (if keepalive-func
               (handler-case
                   (progn
-                    (funcall keepalive-func)
+                    (funcall keepalive-func socket)
                     nil)
                 (error (e)
                   (return (values nil e))))
@@ -92,15 +93,14 @@
                          ;; Send prompt
                          (session-send-prompt session)
 
-                         ;; Receive input with a 10-minute timeout
-                         (multiple-value-bind (line status) (read-line-with-timeout socket 600)
+                         (multiple-value-bind (line status) (read-line-with-timeout-loop socket)
                            (cond
                              ((eq status :timeout)
                               (session-send-message session "Timed out due to inactivity.")
                               (mud.utils:log-message "Client ~A timed out due to inactivity" char-name)
                               (return))
                              ((or (eq status :eof) (typep status 'error))
-                              (mud.utils:log-message "Client ~A disconnected" char-name)
+                              (mud.utils:log-message "Client ~A disconnected ~A" char-name status)
                               (return))
                              (line
                               (let ((trimmed (string-trim '(#\Return #\Newline) line)))
@@ -110,7 +110,7 @@
                               (return)))))
                      (end-of-file ()
                        ;; Connection closed by client
-                       (mud.utils:log-message "Client ~A disconnected" char-name)
+                       (mud.utils:log-message "Client ~A disconnected end-of-file" char-name)
                        (return))
                      (error (e)
                        ;; Check if this is a "broken pipe" or similar connection error
