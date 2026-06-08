@@ -29,14 +29,24 @@
                       (values nil e)))))))))
 
 (defun send-keepalive (socket)
-  "Send a harmless carriage return to the client to trigger TCP transmission.
+  "Send a harmless Telnet NOP (No Operation) command to keep the connection alive.
+   This complies with RFC 854 and is ignored by compliant Telnet clients without shifting the cursor.
    If the socket's connection has been lost, this write or its flush will signal an error."
   (when socket
     (let ((stream (usocket:socket-stream socket)))
-      (mud.utils:log-message "A A A A Staying alive!")
+      (mud.utils:log-message "Staying alive with Telnet NOP...")
       (when stream
-        (write-char #\Return stream)
-        (force-output stream)))))
+        (force-output stream)
+        #+sbcl
+        (let* ((fd (sb-sys:fd-stream-fd stream))
+               (octets (make-array 2 :element-type '(unsigned-byte 8) :initial-contents '(255 241)))
+               (sap (sb-sys:vector-sap octets)))
+          (sb-unix:unix-write fd sap 0 2))
+        #-sbcl
+        (progn
+          (write-char (code-char 255) stream)
+          (write-char (code-char 241) stream)
+          (force-output stream))))))
 
 (defun read-line-with-timeout-loop (socket &key (poll-interval 30) (keepalive-func #'send-keepalive))
   "Read a line from socket stream by polling with a short timeout (POLL-INTERVAL).
