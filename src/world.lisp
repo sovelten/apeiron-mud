@@ -1,9 +1,5 @@
 (in-package #:mud)
 
-;; Global world data structure
-(defvar *world* (make-hash-table :test #'equal)
-  "Hash table storing all rooms in the world, keyed by room ID")
-
 (defvar *players* (make-hash-table :test #'equal)
   "Hash table storing all active players, keyed by player object ID")
 
@@ -45,7 +41,12 @@
 (defun starting-room (system)
   (world-get-room (get-config-key system :starting-room-id)))
 
-(defun world-restore-or-initialize ()
+(defun world-restore-or-initialize (&key force-new)
+  "Restore the world from prevalence or initialize a new one.
+If FORCE-NEW is true, any existing persisted data is cleared first."
+  (when force-new
+    (mud.utils:log-message "Forcing new world generation, clearing existing prevalence data...")
+    (uiop:delete-directory-tree #p"./prevalence/" :validate (constantly t) :if-does-not-exist :ignore))
   (setf *system* (cl-prevalence:make-prevalence-system #p"./prevalence/"))
   (unless (cl-prevalence:get-root-object *system* :rooms)
     (cl-prevalence:execute *system* (cl-prevalence:make-transaction 'tx-create-system))
