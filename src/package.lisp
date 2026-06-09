@@ -26,6 +26,7 @@
    #:get-config-key
    #:mud-room
    #:create-room
+   #:create-room!
    #:room-contents
    #:room-add-object
    #:room-remove-object

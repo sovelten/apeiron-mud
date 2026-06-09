@@ -21,6 +21,10 @@
     (when *debug-mode* (mud.utils:log-message "Starting room is ~A" (object-name room)))
     (setf (gethash :starting-room-id (cl-prevalence:get-root-object system :config)) (object-id room))))
 
+(defun create-room! (room)
+  (cl-prevalence:execute *system* (cl-prevalence:make-transaction 'tx-create-room room))
+  room)
+
 (defun tx-create-system (system)
   (setf (cl-prevalence:get-root-object system :rooms) (make-hash-table))
   (setf (cl-prevalence:get-root-object system :config) (make-hash-table)))
