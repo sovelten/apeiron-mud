@@ -31,7 +31,7 @@
              (session (make-instance 'mud:mud-session :socket accepted-socket)))
         (unwind-protect
              (progn
-               (mud:world-initialize)
+               (mud:world-restore-or-initialize)
                (let ((player (mud:create-character "TestPlayer" session)))
                  (is (not (null player)))
                  ;; Test that we can send a message without crashing

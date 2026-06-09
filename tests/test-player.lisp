@@ -4,7 +4,7 @@
 
 (test player-creation
   "Test that we can create a player"
-  (mud:world-initialize)
+  (mud:world-restore-or-initialize)
   (let ((player (mud:create-character "TestPlayer" (make-instance 'mud:mud-session :socket nil))))
     (is (equal (mud:object-name player) "TestPlayer"))
     (is (typep player 'mud:mud-character))
@@ -12,7 +12,7 @@
 
 (test player-inventory
   "Test player inventory management"
-  (mud:world-initialize)
+  (mud:world-restore-or-initialize)
   (let ((player (mud:create-character "TestPlayer" (make-instance 'mud:mud-session :socket nil)))
         (obj (mud:create-object :name "Test Item")))
     (mud:character-inventory-add player obj)
@@ -23,7 +23,8 @@
 
 (test player-location
   "Test that player has a location"
-  (mud:world-initialize)
+  (mud:world-restore-or-initialize)
   (let ((player (mud:create-character "TestPlayer" (make-instance 'mud:mud-session :socket nil))))
+    (mud:world-new-character player)
     (is (not (null (mud:object-location player))))
     (is (typep (mud:object-location player) 'mud:mud-room))))

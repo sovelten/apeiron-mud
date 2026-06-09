@@ -1,84 +1,43 @@
 (in-package #:mud)
 
-;; Global world data structure
-(defvar *world* (make-hash-table :test #'equal)
-  "Hash table storing all rooms in the world, keyed by room ID")
-
 (defvar *players* (make-hash-table :test #'equal)
   "Hash table storing all active players, keyed by player object ID")
 
-(defvar *start-room* nil
-  "The starting room for new players")
+(defvar *system-location* #p"./prevalence/")
+(defvar *system* nil)
 
-(defun world-add-room (room)
-  "Add a room to the world."
-  (setf (gethash (object-id room) *world*) room)
-  room)
+;; NOT PERSISTED
 
-(defun world-get-room (room-id)
-  "Get a room from the world by ID."
-  (gethash room-id *world*))
+(defun total-players ()
+  (hash-table-count *players*))
 
-(defun world-all-rooms ()
-  "Get all rooms in the world."
-  (loop for room being the hash-values of *world*
-        collect room))
-
-(defun world-initialize ()
-  "Initialize the world with basic structure."
-  (when *debug-mode*
-    (mud.utils:log-message "Initializing world..."))
-  
-  ;; Create starting room
-  (let ((start-room (create-room :name "The Tavern")))
-    (world-add-room start-room)
-    (setf *start-room* start-room))
-  
-  ;; Create a second room
-  (let ((forest (create-room :name "A Dense Forest")))
-    (world-add-room forest)
-    ;; Connect rooms
-    (room-add-exit *start-room* "north" forest)
-    (room-add-exit forest "south" *start-room*))
-  
-  (when *debug-mode*
-    (mud.utils:log-message "World initialized with ~D rooms" 
-                          (hash-table-count *world*)))
-  t)
-
-(defun world-add-player (player)
+(defun add-character (character)
   "Add a player to the world."
-  (setf (gethash (object-id player) *players*) player))
+  (setf (gethash (object-id character) *players*) character))
 
-(defun world-new-character (character)
-  "Add a character to the world."
-  (when *start-room*
-      (room-add-object *start-room* character))
-  (world-add-player character))
-
-(defun world-remove-player (player)
+(defun remove-character (character)
   "Remove a player from the world."
-  (mud.utils:log-message "Character ~A leaving" (object-name player))
-  (let ((room (object-location player)))
+  (mud.utils:log-message "Character ~A leaving" (object-name character))
+  (let ((room (object-location character)))
     (mud.utils:log-message "Removing from ~A" (object-name room))
     ;; Remove from room
     (when (typep room 'mud-room)
-      (room-remove-object room player))
+      (room-remove-object room character))
     ;; Remove from world
-    (mud.utils:log-message "Removing ~A from world" (object-name player))
-    (remhash (object-id player) *players*)
+    (mud.utils:log-message "Removing ~A from world" (object-name character))
+    (remhash (object-id character) *players*)
     (mud.utils:log-message "Removed")))
 
-(defun world-get-player (player-id)
+(defun character-by-id (char-id)
   "Get a player by ID."
-  (gethash player-id *players*))
+  (gethash char-id *players*))
 
-(defun world-all-players ()
+(defun characters ()
   "Get all active players."
   (loop for player being the hash-values of *players*
         collect player))
 
-(defun world-get-player-in-room (room player-name)
+(defun find-character-in-room (room player-name)
   "Find a player in a room by name."
   (loop for obj across (room-contents room)
         when (and (typep obj 'mud-character)
@@ -87,6 +46,83 @@
 
 (defun world-broadcast (message &optional exclude-player)
   "Broadcast a message to all players (optionally excluding one)."
-  (dolist (player (world-all-players))
+  (dolist (player (characters))
     (unless (and exclude-player (eq (object-id player) (object-id exclude-player)))
       (player-send-message player message))))
+
+;; CL-PREVALENCE TRANSACTIONS
+
+(defun tx-create-system (system)
+  (setf (cl-prevalence:get-root-object system :rooms) (make-hash-table))
+  (setf (cl-prevalence:get-root-object system :config) (make-hash-table)))
+
+(defun tx-create-room (system room &optional starting?)
+  (setf (gethash (object-id room) (cl-prevalence:get-root-object system :rooms)) room)
+  (when starting?
+    (when *debug-mode* (mud.utils:log-message "Starting room is ~A" (object-name room)))
+    (setf (gethash :starting-room-id (cl-prevalence:get-root-object system :config)) (object-id room))))
+
+;; CL-PREVALENCE MUTATION
+
+(defun create-room! (room)
+  (cl-prevalence:execute *system* (cl-prevalence:make-transaction 'tx-create-room room))
+  room)
+
+;; CL-PREVALENCE "QUERIES"
+
+(defun total-rooms ()
+  (hash-table-count (cl-prevalence:get-root-object *system* :rooms)))
+
+(defun room-by-id (room-id)
+  "Get a room from the world by ID."
+  (gethash room-id (cl-prevalence:get-root-object *system* :rooms)))
+
+(defun rooms ()
+  "Get all rooms in the world."
+  (let ((rooms (cl-prevalence:get-root-object *system* :rooms)))
+    (if rooms
+        (loop for room being the hash-values of rooms
+              collect room)
+        nil)))
+
+(defun get-config-key (system key)
+  (gethash key (cl-prevalence:get-root-object system :config)))
+
+(defun starting-room (system)
+  (room-by-id (get-config-key system :starting-room-id)))
+
+(defun find-max-id ()
+  "Find the maximum ID among all loaded rooms and their nested contents."
+  (let ((max-id 0))
+    (dolist (room (rooms))
+      (setf max-id (max max-id (object-id room)))
+      (loop for obj across (room-contents room)
+            do (setf max-id (max max-id (object-id obj)))))
+    max-id))
+
+(defun world-restore-or-initialize (&key force-new (location *system-location*))
+  "Restore the world from prevalence or initialize a new one.
+If FORCE-NEW is true, any existing persisted data is cleared first."
+  (when force-new
+    (mud.utils:log-message "Forcing new world generation, clearing existing prevalence data...")
+    (uiop:delete-directory-tree location :validate (constantly t) :if-does-not-exist :ignore))
+  (setf *system* (cl-prevalence:make-prevalence-system location))
+  (unless (cl-prevalence:get-root-object *system* :rooms)
+    (cl-prevalence:execute *system* (cl-prevalence:make-transaction 'tx-create-system))
+    (when *debug-mode* (mud.utils:log-message "Initializing world..."))
+    (let ((tavern (create-room :name "The Tavern"))
+          (forest (create-room :name "A Dense Forest")))
+      (room-add-exit tavern "north" forest)
+      (room-add-exit forest "south" tavern)
+      (cl-prevalence:execute *system* (cl-prevalence:make-transaction 'tx-create-room tavern t))
+      (cl-prevalence:execute *system* (cl-prevalence:make-transaction 'tx-create-room forest))
+      (when *debug-mode* (mud.utils:log-message "Rooms created!"))))
+  ;; Initialize / restore ID counter to the maximum of currently allocated IDs
+  (setf mud.utils::*id-counter* (max mud.utils::*id-counter* (find-max-id))))
+
+(defun world-new-character (character)
+  "Add a character to the world."
+  (let ((room (starting-room *system*)))
+    (setf (object-location character) room)
+    (room-add-object room character)
+    (add-character character)))

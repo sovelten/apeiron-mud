@@ -98,10 +98,10 @@ Exits: north
 Welcome to the MUD!
 >  eval (mud:world-add-room (mud:create-room :name "Valinor")) 
 #<MUD-ROOM Valinor (ID: 5)>
-> eval (mud:world-all-rooms)
+> eval (mud:rooms)
 (#<MUD-ROOM The Tavern (ID: 1)> #<MUD-ROOM A Dense Forest (ID: 2)>
  #<MUD-ROOM Valinor (ID: 5)>)
-> eval (mud:room-add-exits (mud:world-get-room 1) :west (mud:world-get-room 5) :east)
+> eval (mud:room-add-exits (mud:room-by-id 1) :west (mud:room-by-id 5) :east)
 #<MUD-ROOM The Tavern (ID: 1)>
 > look
 
@@ -367,7 +367,7 @@ Use threading for periodic events:
       (loop while mud:*server-running* do
         (sleep interval)
         ;; Update logic here
-        (dolist (room (mud:world-all-rooms))
+        (dolist (room (mud:rooms))
           ;; Do something with each room
           )))
     :name "world-heartbeat"))
@@ -407,10 +407,10 @@ Edit `src/constants.lisp`:
 (mud:status)
 
 ;; Get running players
-(mud:world-all-players)
+(mud:characters)
 
 ;; Get all rooms
-(mud:world-all-rooms)
+(mud:rooms)
 ```
 
 ### Stopping the Server

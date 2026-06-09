@@ -5,7 +5,8 @@
   :license "MIT"
   :depends-on ("usocket"
                "bordeaux-threads"
-               "str")
+               "str"
+               "cl-prevalence")
   :components ((:module "src"
                 :components
                 ((:file "package")

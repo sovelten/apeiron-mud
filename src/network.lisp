@@ -143,7 +143,7 @@
     (mud.utils:log-message "Attempting to remove thread for session ~A" session-id)
     (remhash session-id *player-threads*)
     (when (session-character session)
-      (world-remove-player (session-character session)))
+      (remove-character (session-character session)))
     (session-disconnect session)))
 
 (defun accept-connections ()
@@ -174,7 +174,7 @@
       (when *server-running*
         (mud.utils:log-error "Accept connections error: ~A" e)))))
 
-(defun start-mud-server (&key (host *server-host*) (port *server-port*))
+(defun start-mud-server (&key (host *server-host*) (port *server-port*) force-new)
   "Start the MUD server."
   (bordeaux-threads:with-lock-held (*server-lock*)
     (if *server-running*
@@ -183,20 +183,13 @@
           (return-from start-mud-server nil))
         (progn
           ;; Initialize world
-          (world-initialize)
-          
-          ;; Create server socket
-          (setf *server-socket* (usocket:socket-listen host port 
-                                                       :reuse-address t
-                                                       :backlog 5))
+          (world-restore-or-initialize :force-new force-new)
+          (setf *server-socket*
+                (usocket:socket-listen host port :reuse-address t :backlog 5))
           (setf *server-running* t)
-          
           (mud.utils:log-message "MUD Server started on ~A:~D" host port)
-          
-          ;; Start acceptance thread and store reference
           (setf *acceptance-thread*
                 (bordeaux-threads:make-thread #'accept-connections :name "accept-connections"))
-          
           t))))
 
 (defun stop-mud-server ()
@@ -231,8 +224,8 @@
         (setf *acceptance-thread* nil))
       
       ;; Disconnect all players
-      (dolist (player (world-all-players))
-        (progn (world-remove-player player)
+      (dolist (player (characters))
+        (progn (remove-character player)
                (session-disconnect (character-session player))))
       
       (mud.utils:log-message "MUD Server stopped")
@@ -242,5 +235,5 @@
   "Get the current status of the server."
   (format nil "Server running: ~A~%Players online: ~D~%Rooms in world: ~D~%"
           (if *server-running* "Yes" "No")
-          (hash-table-count *players*)
-          (hash-table-count *world*)))
+          (total-players)
+          (total-rooms)))

@@ -23,8 +23,10 @@
    #:object-describe
    
    ;; World system
+   #:get-config-key
    #:mud-room
    #:create-room
+   #:create-room!
    #:room-contents
    #:room-add-object
    #:room-remove-object
@@ -32,15 +34,15 @@
    #:room-add-exit
    #:room-add-exits
    #:room-get-exit
-   #:world-initialize
+   #:world-restore-or-initialize
    #:world-new-character
    #:world-add-room
-   #:world-get-player
-   #:world-get-room
-   #:world-all-rooms
-   #:*world*
+   #:character-by-id
+   #:room-by-id
+   #:rooms
+   #:total-rooms
    #:*players*
-   #:*start-room*
+   #:*system*
    
    ;; Player system
    #:mud-character
@@ -55,7 +57,7 @@
    #:character-inventory-remove
    #:player-send-message
    #:player-send-prompt
-   #:world-remove-player
+   #:remove-character
    
    ;; Command system
    #:process-command

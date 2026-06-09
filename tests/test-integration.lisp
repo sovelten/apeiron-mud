@@ -6,8 +6,8 @@
   "Test that the server can be initialized without crashing"
   (handler-case
       (progn
-        (is (not (null mud:*start-room*)))
-        (is (> (hash-table-count mud:*world*) 0)))
+        (is (not (null (mud:get-config-key mud:*system* :starting-room-id))))
+        (is (> (mud:total-rooms) 0)))
     (error (e)
       (fail (format nil "Server initialization failed: ~A" e)))))
 
@@ -18,6 +18,7 @@
         ;; Create a player without a real socket
         (let ((session (make-instance 'mud:mud-session :socket nil))
               (player (mud:create-character "TestPlayer" (make-instance 'mud:mud-session :socket nil))))
+          (mud:world-new-character player)
           ;; Test that the player was created
           (is (equal (mud:object-name player) "TestPlayer"))
           ;; Test that the player is in a room
@@ -50,6 +51,7 @@
         ;; Simulate creating and disconnecting a player
         (let* ((session (make-instance 'mud:mud-session :socket nil))
                (player (mud:create-character "DisconnectTest" session)))
+          (mud:world-new-character player)
           ;; Verify player was created
           (is (equal (mud:object-name player) "DisconnectTest"))
           ;; Simulate disconnect by setting socket to nil
@@ -57,7 +59,7 @@
           ;; Try to send message - should not crash or loop
           (mud:player-send-message player "Test after disconnect")
           ;; Player disconnect should work gracefully
-          (mud:world-remove-player player)
+          (mud:remove-character player)
           (is (not (null player)))))
     (error (e)
       (fail (format nil "Graceful disconnection failed: ~A" e)))))
@@ -75,7 +77,7 @@
     (is (find character (mud:room-contents room)))
     (is (gethash (mud:object-id character) mud:*players*))
     
-    (mud:world-remove-player character)
+    (mud:remove-character character)
     
     (is (not (find character (mud:room-contents room))))
     (is (not (gethash (mud:object-id character) mud:*players*)))))
@@ -199,3 +201,45 @@
       (when client-stream (close client-stream))
       (when client-socket (usocket:socket-close client-socket))
       (mud:stop-mud-server))))
+
+(test prevalence-id-conflict-on-restart
+  "Test that verifying id conflicts on restart replicates the bug."
+  (let ((original-id-counter mud.utils::*id-counter*)
+        (original-system mud:*system*))
+    (unwind-protect
+         (progn
+           ;; 1. Start with a clean state and reset id counter
+           (setf mud.utils::*id-counter* 0)
+           (mud:world-restore-or-initialize :force-new t)
+           
+           ;; 2. Record initial room IDs (should be 1 and 2)
+           (let ((initial-ids (mapcar #'mud:object-id (mud:rooms))))
+             (is (member 1 initial-ids))
+             (is (member 2 initial-ids))
+             
+             ;; 3. Simulate a restart: close open streams, reset counter to 0
+             (cl-prevalence:close-open-streams mud:*system*)
+             (setf mud.utils::*id-counter* 0)
+             
+             ;; 4. Restore the world (without force-new, reading back from file)
+             (mud:world-restore-or-initialize :force-new nil)
+             
+             (let ((restored-ids (mapcar #'mud:object-id (mud:rooms))))
+               ;; Ensure the rooms were loaded with their original IDs
+               (is (member 1 restored-ids))
+               (is (member 2 restored-ids))
+               
+               ;; 5. Create a new object post-restart
+               (let* ((new-room (mud:create-room :name "Post-Restart Room"))
+                      (new-id (mud:object-id new-room)))
+                 ;; Assert that the new object ID is UNIQUE and does not collide
+                 ;; with any of the restored room IDs.
+                 ;; Note: This assertion is EXPECTED TO FAIL because of the bug,
+                 ;; proving that the ID counter restarted from 0 and gave us an
+                 ;; ID that was already in use (namely, ID 1).
+                 (is (not (member new-id restored-ids))
+                     "New object ID ~D conflicts with existing loaded room IDs: ~A"
+                     new-id restored-ids))))))
+      ;; Restore original state
+      (setf mud.utils::*id-counter* original-id-counter)
+      (setf mud:*system* original-system)))

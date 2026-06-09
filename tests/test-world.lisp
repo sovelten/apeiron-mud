@@ -4,13 +4,13 @@
 
 (test world-initialization
   "Test that the world initializes properly"
-  (mud:world-initialize)
-  (is (not (null mud:*start-room*)))
-  (is (> (hash-table-count mud:*world*) 0)))
+  (mud:world-restore-or-initialize)
+  (is (not (null (mud:get-config-key mud:*system* :starting-room-id))))
+  (is (> (mud:total-rooms) 0)))
 
 (test room-connectivity
   "Test that rooms are properly connected"
-  (mud:world-initialize)
+  (mud:world-restore-or-initialize)
   (let ((room1 (mud:create-room :name "Room 1"))
         (room2 (mud:create-room :name "Room 2")))
     (mud:room-add-exit room1 "north" room2)
