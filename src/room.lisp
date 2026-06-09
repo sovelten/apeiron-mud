@@ -22,11 +22,24 @@
 
 (defun room-add-object (room obj)
   "Add an object to a room."
-  (vector-push-extend obj (room-contents room)))
+  (let ((contents (room-contents room)))
+    (unless (and (vectorp contents) (array-has-fill-pointer-p contents))
+      (setf contents (make-array (length contents)
+                                 :adjustable t
+                                 :fill-pointer (length contents)
+                                 :initial-contents contents))
+      (setf (room-contents room) contents))
+    (vector-push-extend obj contents)))
 
 (defun room-remove-object (room obj)
   "Remove an object from a room."
   (let ((contents (room-contents room)))
+    (unless (and (vectorp contents) (array-has-fill-pointer-p contents))
+      (setf contents (make-array (length contents)
+                                 :adjustable t
+                                 :fill-pointer (length contents)
+                                 :initial-contents contents))
+      (setf (room-contents room) contents))
     (loop for i from 0 below (fill-pointer contents)
           do (when (eq (aref contents i) obj)
                (loop for j from i below (1- (fill-pointer contents))
