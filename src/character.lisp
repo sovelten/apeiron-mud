@@ -17,7 +17,8 @@
                                   :id (mud.utils:make-id)
                                   :name name
                                   :type +object-type-character+
-                                  :session session)))
+                                  :session session
+                                  :location (and *system* (starting-room *system*)))))
     ;; Link player to session
     (setf (session-character session) character)
     character))

@@ -6,7 +6,7 @@
   "Test that the server can be initialized without crashing"
   (handler-case
       (progn
-        (is (not (null (mud:get-config-key :starting-room-id))))
+        (is (not (null (mud:get-config-key mud:*system* :starting-room-id))))
         (is (> (mud:total-rooms) 0)))
     (error (e)
       (fail (format nil "Server initialization failed: ~A" e)))))
