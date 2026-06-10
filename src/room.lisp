@@ -12,7 +12,7 @@
           :documentation "Map of exit names to target rooms"))
   (:documentation "A location/room in the MUD"))
 
-(defun create-room (&key (name "A Room"))
+(defun new-room (&key (name "A Room"))
   "Create a new room."
   (make-instance 'mud-room
                  :name name

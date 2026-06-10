@@ -17,7 +17,7 @@
       (progn
         ;; Create a player without a real socket
         (let ((session (make-instance 'mud:mud-session :socket nil))
-              (player (mud:create-character "TestPlayer" (make-instance 'mud:mud-session :socket nil))))
+              (player (mud:new-character "TestPlayer" (make-instance 'mud:mud-session :socket nil))))
           (mud:world-new-character player)
           ;; Test that the player was created
           (is (equal (mud:object-name player) "TestPlayer"))
@@ -36,7 +36,7 @@
   (handler-case
       (progn
         (let ((session (make-instance 'mud:mud-session :socket nil))
-              (player (mud:create-character "TestPlayer" (make-instance 'mud:mud-session :socket nil))))
+              (player (mud:new-character "TestPlayer" (make-instance 'mud:mud-session :socket nil))))
           ;; Sending message to player with nil socket should not crash
           (mud:player-send-message player "Test message")
           (is (not (null player)))))
@@ -50,7 +50,7 @@
       (progn
         ;; Simulate creating and disconnecting a player
         (let* ((session (make-instance 'mud:mud-session :socket nil))
-               (player (mud:create-character "DisconnectTest" session)))
+               (player (mud:new-character "DisconnectTest" session)))
           (mud:world-new-character player)
           ;; Verify player was created
           (is (equal (mud:object-name player) "DisconnectTest"))
@@ -66,9 +66,9 @@
 
 (test player-removal-from-world
   "Test that player is removed from world data structures on disconnect"
-  (let* ((room (mud:create-room :name "Test Room"))
+  (let* ((room (mud:new-room :name "Test Room"))
          (session (make-instance 'mud:mud-session :socket nil))
-         (character (mud:create-character "TestRemovePlayer" session)))
+         (character (mud:new-character "TestRemovePlayer" session)))
 
     (mud:world-new-character character)
     (setf (mud:object-location character) room)
@@ -230,7 +230,7 @@
                (is (member 2 restored-ids))
                
                ;; 5. Create a new object post-restart
-               (let* ((new-room (mud:create-room! (mud:create-room :name "Post-Restart Room")))
+               (let* ((new-room (mud:create-room! (mud:new-room :name "Post-Restart Room")))
                       (new-id (mud:object-id new-room)))
                  ;; Assert that the new object ID is UNIQUE and does not collide
                  ;; with any of the restored room IDs.

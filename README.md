@@ -96,7 +96,7 @@ You see:
 Exits: north
 
 Welcome to the MUD!
->  eval (mud:world-add-room (mud:create-room :name "Valinor")) 
+>  eval (mud:world-add-room (mud:new-room :name "Valinor")) 
 #<MUD-ROOM Valinor (ID: 5)>
 > eval (mud:rooms)
 (#<MUD-ROOM The Tavern (ID: 1)> #<MUD-ROOM A Dense Forest (ID: 2)>
@@ -325,8 +325,8 @@ Objects have a flexible property storage system:
 ```lisp
 ;; Create rooms
 (defun build-world ()
-  (let ((tavern (mud:create-room :name "The Tavern"))
-        (forest (mud:create-room :name "A Dense Forest")))
+  (let ((tavern (mud:new-room :name "The Tavern"))
+        (forest (mud:new-room :name "A Dense Forest")))
     
     ;; Register rooms
     (mud:world-add-room tavern)

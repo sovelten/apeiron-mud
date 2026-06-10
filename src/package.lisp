@@ -12,7 +12,7 @@
    
    ;; Object system
    #:mud-object
-   #:create-object
+   #:new-object
    #:object-id
    #:object-name
    #:object-location
@@ -25,7 +25,7 @@
    ;; World system
    #:get-config-key
    #:mud-room
-   #:create-room
+   #:new-room
    #:create-room!
    #:room-contents
    #:room-add-object
@@ -47,7 +47,7 @@
    ;; Player system
    #:mud-character
    #:mud-session
-   #:create-character
+   #:new-character
    #:session-socket
    #:session-input-buffer
    #:character-session
@@ -56,7 +56,6 @@
    #:character-inventory-add
    #:character-inventory-remove
    #:player-send-message
-   #:player-send-prompt
    #:remove-character
    
    ;; Command system

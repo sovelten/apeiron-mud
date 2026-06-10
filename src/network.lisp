@@ -89,7 +89,7 @@
   "Main loop for handling a client connection."
   (let* ((guest-name (format nil "Guest~D" (random 10000)))
          (char-name (ask-name session guest-name))
-         (character (create-character char-name session)))
+         (character (new-character char-name session)))
     (mud.utils:log-message "New connection: ~A" char-name)
     (world-new-character character)
     (session-send-message session (room-describe (object-location character)))

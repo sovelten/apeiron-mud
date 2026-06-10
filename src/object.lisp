@@ -23,7 +23,7 @@
                :documentation "Extensible property storage"))
   (:documentation "Base class for all MUD objects"))
 
-(defun create-object (&key (name "object") (type +object-type-generic+) (location nil))
+(defun new-object (&key (name "object") (type +object-type-generic+) (location nil))
   "Create a new MUD object."
   (make-instance 'mud-object
                  :id (mud.utils:make-id)
