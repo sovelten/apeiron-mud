@@ -96,7 +96,7 @@ You see:
 Exits: north
 
 Welcome to the MUD!
->  eval (mud:world-add-room (mud:new-room :name "Valinor")) 
+>  eval (mud:create-room! (mud:new-room :name "Valinor")) 
 #<MUD-ROOM Valinor (ID: 5)>
 > eval (mud:rooms)
 (#<MUD-ROOM The Tavern (ID: 1)> #<MUD-ROOM A Dense Forest (ID: 2)>
@@ -139,24 +139,20 @@ In the SBCL REPL:
 
 ## Features
 
-### ✅ Currently Implemented (kind of, in a very crappy state)
+### ✅ Currently Implemented
 
 - **In-world REPL** - Execute Lisp code from within the game (at your own risk, no guardrails)
 - **Multi-player networking** - Multiple players connect via telnet simultaneously
 - **Object-oriented world** - Everything is an object with unique IDs and extensible properties
+- **Persistence** - Objects are persisted through cl-prevalence in-memory database. Journaling enables recovery in case server needs to be shutdown.
 - **Room system** - Navigable rooms with directional exits (north, south, east, west)
 - **Player chat** - "say" command for in-room communication
 - **Inventory system** - Foundation for item management
 - **Command system** - 7 built-in commands, easy to add more
-- **Multi-threaded architecture** - Each player runs in its own thread
-- **Thread-safe design** - Locks protect shared state (ID generation, player tracking)
-- **Error handling** - Graceful error handling and recovery
-- **Logging system** - Debug logging throughout the system
 
 ### 🎯 Planned Features
 
-- **Persistence layer** - Save/load world state to disk
-- **Hot code reloading** - Modify code without restarting
+- **Hot code reloading** - Update system without restarting
 - **Item system** - Full item objects with properties (take, drop, examine)
 - **NPC support** - Non-player characters with behaviors
 - **LLM NPCs** - What if we put in some llms armed with some mcp servers to interact in the world?
@@ -186,7 +182,6 @@ Players are specialized objects:
 - **Socket**: Network connection to client
 - **Inventory**: Array of carried objects
 - **Location**: Current room
-- **Input Buffer**: For command processing
 
 #### Command System (`src/command-handler.lisp`)
 Simple macro-based command definition:
@@ -209,28 +204,6 @@ Global state management:
 - Per-player threading
 - Socket management and cleanup
 
-### Threading Model
-
-```
-Main Thread
-  ├─ Accept Connections Thread
-  │   └─ Spawns per-player threads on connection
-  │
-  ├─ Player Thread 1 (Client 1)
-  │   └─ Handle input/output for player 1
-  │
-  ├─ Player Thread 2 (Client 2)
-  │   └─ Handle input/output for player 2
-  │
-  └─ Player Thread N
-      └─ Handle input/output for player N
-```
-
-All threads communicate through:
-- Global player registry (locked)
-- World state (locked for mutations)
-- Thread-safe ID generation
-
 ### Data Flow: Command Processing
 
 ```
@@ -251,12 +224,9 @@ Telnet Output: Room description + prompt
 
 ### Key Design Principles
 
-1. **Everything is an object** - Consistent model throughout
-2. **Extensible properties** - Objects gain properties at runtime
-3. **Command macro system** - Simple DSL for new commands
-4. **Per-player threading** - Concurrent player handling
-5. **Thread-safe design** - Locks protect shared state
-6. **Message broadcasting** - Coordinated multi-player events
+1. **Persistent Objects** - Game objects are persisted and changes are logged to enable recovery.
+2. **All power to the user** - You can eval lisp code directly within the game (could/should be restricted to admins in the future)
+3. **Hot Reloading** - No need to ever shut the server down for maintenance (WIP)
 
 ## Development Guide
 
