@@ -299,8 +299,8 @@ Objects have a flexible property storage system:
         (forest (mud:new-room :name "A Dense Forest")))
     
     ;; Register rooms
-    (mud:world-add-room tavern)
-    (mud:world-add-room forest)
+    (mud:create-room! tavern)
+    (mud:create-room! forest)
     
     ;; Connect rooms
     (mud:room-add-exit tavern "north" forest)
@@ -323,24 +323,6 @@ Send messages to all players:
 
 ;; Message to all except one
 (world-broadcast "A wizard teleports away!" except-player)
-```
-
-### Timed Events
-
-Use threading for periodic events:
-
-```lisp
-(defun start-world-heartbeat (interval)
-  "Update world every INTERVAL seconds."
-  (bordeaux-threads:make-thread
-    (lambda ()
-      (loop while mud:*server-running* do
-        (sleep interval)
-        ;; Update logic here
-        (dolist (room (mud:rooms))
-          ;; Do something with each room
-          )))
-    :name "world-heartbeat"))
 ```
 
 ### Testing Commands
@@ -401,6 +383,7 @@ This:
 
 - **usocket** - Network communication
 - **bordeaux-threads** - Multi-threading
+- **cl-prevalence** - Persistence
 - **fiveam** - Testing framework (optional)
 
 All installed via Quicklisp automatically.
