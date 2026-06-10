@@ -12,7 +12,7 @@
               :documentation "Items the player carries"))
   (:documentation "A player character in the MUD"))
 
-(defun create-character (name session)
+(defun new-character (name session)
   (let ((character (make-instance 'mud-character
                                   :id (mud.utils:make-id)
                                   :name name
@@ -49,7 +49,3 @@
   "Send a message to a player. If NEWLINE is nil, don't add a trailing newline."
   (let ((session (character-session player)))
     (session-send-message session message :newline newline)))
-
-(defun player-send-prompt (player)
-  "Send a prompt to a player on the same line (no newline)."
-  (player-send-message player "> " :newline nil))
