@@ -1,7 +1,7 @@
 (in-package #:mud)
 
 ;; Room class - a specialized mud-object
-(defclass mud-room (mud-object cl-prevalence:object-with-id)
+(defclass mud-room (mud-object)
   ((contents :initarg :contents
              :accessor room-contents
              :initform (make-array 0 :adjustable t :fill-pointer t)
@@ -15,8 +15,8 @@
 (defun create-room (&key (name "A Room"))
   "Create a new room."
   (make-instance 'mud-room
-                 :id (mud.utils:make-id)
                  :name name
+                 :id -1                 ;;Set when persisted
                  :type +object-type-room+
                  :location nil))
 

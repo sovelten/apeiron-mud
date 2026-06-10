@@ -52,15 +52,25 @@
 
 ;; CL-PREVALENCE TRANSACTIONS
 
+(defun tx-persisted-id (system)
+  (let* ((counter (cl-prevalence:get-root-object system :id-counter))
+         (id (incf counter)))
+    (setf (cl-prevalence:get-root-object system :id-counter) id)
+    id))
+
 (defun tx-create-system (system)
   (setf (cl-prevalence:get-root-object system :rooms) (make-hash-table))
-  (setf (cl-prevalence:get-root-object system :config) (make-hash-table)))
+  (setf (cl-prevalence:get-root-object system :config) (make-hash-table))
+  (setf (cl-prevalence:get-root-object system :id-counter) 0))
 
 (defun tx-create-room (system room &optional starting?)
-  (setf (gethash (object-id room) (cl-prevalence:get-root-object system :rooms)) room)
-  (when starting?
-    (when *debug-mode* (mud.utils:log-message "Starting room is ~A" (object-name room)))
-    (setf (gethash :starting-room-id (cl-prevalence:get-root-object system :config)) (object-id room))))
+  (let ((id (tx-persisted-id system)))
+    (setf (object-id room) id)
+    (setf (gethash (object-id room) (cl-prevalence:get-root-object system :rooms)) room)
+    (when starting?
+      (when *debug-mode* (mud.utils:log-message "Starting room is ~A" (object-name room)))
+      (setf (gethash :starting-room-id (cl-prevalence:get-root-object system :config)) (object-id room)))
+    room))
 
 ;; CL-PREVALENCE MUTATION
 

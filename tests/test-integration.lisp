@@ -230,7 +230,7 @@
                (is (member 2 restored-ids))
                
                ;; 5. Create a new object post-restart
-               (let* ((new-room (mud:create-room :name "Post-Restart Room"))
+               (let* ((new-room (mud:create-room! (mud:create-room :name "Post-Restart Room")))
                       (new-id (mud:object-id new-room)))
                  ;; Assert that the new object ID is UNIQUE and does not collide
                  ;; with any of the restored room IDs.
