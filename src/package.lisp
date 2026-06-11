@@ -27,6 +27,7 @@
    #:mud-room
    #:new-room
    #:create-room!
+   #:object-set-name!
    #:room-contents
    #:room-add-object
    #:room-remove-object

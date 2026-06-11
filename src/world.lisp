@@ -72,11 +72,18 @@
       (setf (gethash :starting-room-id (cl-prevalence:get-root-object system :config)) (object-id room)))
     room))
 
+(defun tx-obj-set-name (system id name)
+  (let ((obj (gethash id (cl-prevalence:get-root-object system :rooms))))
+    (setf (object-name obj) name)))
+
 ;; CL-PREVALENCE MUTATION
 
 (defun create-room! (room)
   (cl-prevalence:execute *system* (cl-prevalence:make-transaction 'tx-create-room room))
   room)
+
+(defun object-set-name! (id name)
+  (cl-prevalence:execute *system* (cl-prevalence:make-transaction 'tx-obj-set-name id name)))
 
 ;; CL-PREVALENCE "QUERIES"
 
