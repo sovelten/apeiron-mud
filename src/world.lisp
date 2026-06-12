@@ -28,17 +28,38 @@
               :initform (make-hash-table)
               :documentation "All players")))
 
-(defun new-world (rooms)
-  (make-instance 'mud-world :rooms rooms))
+(defun new-world () (make-instance 'mud-world))
+
+(defun world-gen-id (world)
+  ;; Increment id counter and return new id
+  (incf (world-id-counter world)))
+
+(defun world-add-room (world room)
+  (let ((id (world-gen-id world)))
+    (setf (object-id room) id)
+    (setf (gethash id (world-rooms world)) room)))
+
+(defun world-add-object (world object)
+  (let ((id (world-gen-id world)))
+    (setf (object-id object) id)
+    (setf (gethash id (world-objects world)) object)))
+
+(defun world-set-starting-room (world room)
+  (setf (gethash :starting-room-id (world-config world)) (object-id room)))
 
 (defun initial-world ()
   (let ((tavern (new-room :name "The Tavern" :description "There is a guestbook on top of a table. Hint: type \"write\" to write an entry on the guestbook."))
         (forest (new-room :name "A Dense Forest"))
-        (guestbook (new-guestbook :name "a guestbook")))
+        (guestbook (new-guestbook :name "a guestbook"))
+        (world (new-world)))
     (room-add-object tavern guestbook)
     (room-add-exit tavern "north" forest)
     (room-add-exit forest "south" tavern)
-    (new-world )))
+    (world-add-object world guestbook)
+    (world-add-room world tavern)
+    (world-add-room world forest)
+    (world-set-starting-room world tavern)
+    world))
 
 ;; NOT PERSISTED
 
@@ -97,6 +118,12 @@
   (setf (cl-prevalence:get-root-object system :objects) (make-hash-table))
   (setf (cl-prevalence:get-root-object system :config) (make-hash-table))
   (setf (cl-prevalence:get-root-object system :id-counter) 0))
+
+(defun tx-create-world (system world)
+  (setf (cl-prevalence:get-root-object system :rooms) (world-rooms world))
+  (setf (cl-prevalence:get-root-object system :objects) (world-objects world))
+  (setf (cl-prevalence:get-root-object system :config) (world-config world))
+  (setf (cl-prevalence:get-root-object system :id-counter) (world-id-counter world)))
 
 (defun tx-create-object (system object)
   (let ((id (tx-persisted-id system)))
