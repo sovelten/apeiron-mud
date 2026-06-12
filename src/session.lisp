@@ -115,13 +115,22 @@
          (t
           (return (values nil status)))))))
 
-(defun ask-input (session question &optional (default ""))
-  (session-send-message session question)
-  (let ((socket (session-socket session)))
-    (multiple-value-bind (line status) (read-line-with-timeout socket 300)
-      (if (and line (null status))
-          (let ((trimmed (string-trim '(#\Return #\Newline) line)))
-            (if (and trimmed (> (length trimmed) 0))
-                trimmed
-                default))
-          default))))
+(defgeneric mud-read-line (obj))
+(defgeneric mud-write (obj message &key newline))
+
+(defmethod mud-read-line ((obj mud-session))
+  (let ((socket (session-socket obj)))
+    (read-line-with-timeout socket)))
+
+(defmethod mud-write ((obj mud-session) message &key (newline t))
+  (session-send-message obj message :newline newline))
+
+(defun ask-input (obj question &optional (default ""))
+  (mud-write obj question :newline t)
+  (multiple-value-bind (line status) (mud-read-line obj)
+    (if (and line (null status))
+        (let ((trimmed (string-trim '(#\Return #\Newline) line)))
+          (if (and trimmed (> (length trimmed) 0))
+              trimmed
+              default))
+        default)))
