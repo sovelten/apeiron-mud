@@ -63,6 +63,12 @@
   (setf (cl-prevalence:get-root-object system :config) (make-hash-table))
   (setf (cl-prevalence:get-root-object system :id-counter) 0))
 
+(defun tx-create-object (system object &optional starting?)
+  (let ((id (tx-persisted-id system)))
+    (setf (object-id object) id)
+    (setf (gethash (object-id room) (cl-prevalence:get-root-object system :objects)) object)
+    object))
+
 (defun tx-create-room (system room &optional starting?)
   (let ((id (tx-persisted-id system)))
     (setf (object-id room) id)

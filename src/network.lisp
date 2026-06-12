@@ -7,69 +7,6 @@
 (defvar *player-threads* (make-hash-table :test #'equal))
 (defvar *server-lock* (bordeaux-threads:make-lock "server-lock"))
 
-(defun read-line-with-timeout (socket &optional (timeout 300))
-  "Read a line from socket stream with a timeout in seconds.
-   Returns (values line status), where status is nil for success,
-   :timeout for timeout, and :eof for connection closed."
-  (if (null socket)
-      (values nil :eof)
-      (let ((ready (handler-case (usocket:wait-for-input socket :timeout timeout :ready-only t)
-                     (error () nil))))
-        (if (null ready)
-            (values nil :timeout)
-            (let ((stream (handler-case (usocket:socket-stream socket) (error () nil))))
-              (if (null stream)
-                  (values nil :eof)
-                  (handler-case
-                      (let ((line (read-line stream nil nil)))
-                        (if line
-                            (values line nil)
-                            (values nil :eof)))
-                    (error (e)
-                      (values nil e)))))))))
-
-(defun send-keepalive (socket)
-  "Send a harmless Telnet NOP (No Operation) command to keep the connection alive.
-   This complies with RFC 854 and is ignored by compliant Telnet clients without shifting the cursor.
-   If the socket's connection has been lost, this write or its flush will signal an error."
-  (when socket
-    (let ((stream (usocket:socket-stream socket)))
-      (mud.utils:log-message "Staying alive with Telnet NOP...")
-      (when stream
-        (force-output stream)
-        #+sbcl
-        (let* ((fd (sb-sys:fd-stream-fd stream))
-               (octets (make-array 2 :element-type '(unsigned-byte 8) :initial-contents '(255 241)))
-               (sap (sb-sys:vector-sap octets)))
-          (sb-unix:unix-write fd sap 0 2))
-        #-sbcl
-        (progn
-          (write-char (code-char 255) stream)
-          (write-char (code-char 241) stream)
-          (force-output stream))))))
-
-(defun read-line-with-timeout-loop (socket &key (poll-interval 30) (keepalive-func #'send-keepalive))
-  "Read a line from socket stream by polling with a short timeout (POLL-INTERVAL).
-   If polling times out, it invokes KEEPALIVE-FUNC (e.g., to send a keepalive probe)
-   to verify if the connection is still alive, and then continues waiting.
-   This allows players to stay connected indefinitely while actively detecting broken connections."
-  (loop
-     (multiple-value-bind (line status) (read-line-with-timeout socket poll-interval)
-       (cond
-         ((null status)
-          (return (values line nil)))
-         ((eq status :timeout)
-          (if keepalive-func
-              (handler-case
-                  (progn
-                    (funcall keepalive-func socket)
-                    nil)
-                (error (e)
-                  (return (values nil e))))
-              nil))
-         (t
-          (return (values nil status)))))))
-
 (defun handle-client (session)
   "Main loop for handling a client connection."
   (let* ((guest-name (format nil "Guest~D" (random 10000)))
@@ -141,7 +78,7 @@
                      (when client-socket
                        (if (not *server-running*)
                            (usocket:socket-close client-socket)
-                           (let ((session (create-session client-socket)))
+                           (let ((session (new-session client-socket)))
                              ;; Start session thread
                              (let ((thread (bordeaux-threads:make-thread
                                             (lambda () (handle-client session))
