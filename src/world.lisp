@@ -152,8 +152,7 @@ If FORCE-NEW is true, any existing persisted data is cleared first."
     (when *debug-mode* (mud.utils:log-message "Initializing world..."))
     (let ((tavern (new-room :name "The Tavern" :description "There is a guestbook on top of a table. Hint: type \"write\" to write an entry on the guestbook."))
           (forest (new-room :name "A Dense Forest"))
-          (guestbook (new-guestbook :name "a guestbook"
-                                    :filepath (namestring (uiop:subpathname location "guestbook.csv")))))
+          (guestbook (new-guestbook :name "a guestbook")))
       (room-add-object tavern guestbook)
       (room-add-exit tavern "north" forest)
       (room-add-exit forest "south" tavern)
