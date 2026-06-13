@@ -4,21 +4,49 @@
   ((entries :initarg :entries
             :accessor guestbook-entries
             :initform '()
-            :documentation "A list of plists containing guestbook entries, with keys :author, :message, and :timestamp."))
+            :documentation "A list of plists containing guestbook entries, with keys :author, :message, and :timestamp.")
+   (filepath :initarg :filepath
+             :accessor guestbook-filepath
+             :documentation "File where the guestbook entries will be stored"))
   (:documentation "A guestbook in which characters can read and write messages."))
 
-(defun new-guestbook (&key (name "a dusty guestbook"))
-  "Create a new guestbook object."
-  (make-instance 'mud-guestbook
-                 :id (mud.utils:make-id)
-                 :name name
-                 :type +object-type-item+))
+(defun guestbook-load-from-csv (filepath)
+  "Read a CSV file and return a list of entry plists."
+  (when (probe-file filepath)
+    (mapcar (lambda (row)
+              (list :author    (first row)
+                    :message   (second row)
+                    :timestamp (parse-integer (third row))))
+            (cl-csv:read-csv (pathname filepath)))))
+
+(defun new-guestbook (&key (name "a dusty guestbook") (filepath #p"./guestbook.csv"))
+  (let ((gb (make-instance 'mud-guestbook
+                           :id (mud.utils:make-id)
+                           :name name
+                           :filepath filepath
+                           :type +object-type-item+)))
+    (when filepath
+      (setf (guestbook-entries gb)
+            (guestbook-load-from-csv filepath)))
+    gb))
+
+(defun guestbook-append-entry-to-csv (entry filepath)
+  (with-open-file (stream filepath
+                          :direction :output
+                          :if-exists :append
+                          :if-does-not-exist :create)
+    (cl-csv:write-csv-row
+      (list (getf entry :author)
+            (getf entry :message)
+            (write-to-string (getf entry :timestamp)))
+      :stream stream)))
 
 (defun guestbook-add-entry (guestbook author message)
   "Add a new message to the guestbook."
   (let ((entry (list :author author :message message :timestamp (get-universal-time))))
     (setf (guestbook-entries guestbook)
-          (append (guestbook-entries guestbook) (list entry)))))
+          (append (guestbook-entries guestbook) (list entry)))
+    (guestbook-append-entry-to-csv entry (guestbook-filepath guestbook))))
 
 (defun guestbook-format-entries (guestbook)
   "Format the guestbook entries as a readable string."

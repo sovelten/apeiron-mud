@@ -6,7 +6,8 @@
   :depends-on ("usocket"
                "bordeaux-threads"
                "str"
-               "cl-prevalence")
+               "cl-prevalence"
+               "cl-csv")
   :components ((:module "src"
                 :components
                 ((:file "package")
