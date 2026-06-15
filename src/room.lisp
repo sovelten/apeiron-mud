@@ -1,6 +1,7 @@
 (in-package #:mud)
 
 ;; Room class - a specialized mud-object
+
 (defclass mud-room (mud-object cl-prevalence:object-with-id)
   ((contents :initarg :contents
              :accessor room-contents
@@ -10,6 +11,7 @@
           :accessor room-exits
           :initform (make-hash-table :test #'equal)
           :documentation "Map of exit names to target rooms"))
+  (:metaclass bknr.indices:indexed-class)
   (:documentation "A location/room in the MUD"))
 
 (defun new-room (&key (name "A Room") (description ""))

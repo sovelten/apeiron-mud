@@ -1,11 +1,14 @@
 (in-package #:mud)
-
 ;; Base mud-object class
 (defclass mud-object ()
   ((id :initarg :id
        :accessor object-id
        :documentation "Unique identifier for this object")
    (name :initarg :name
+         :index-type bknr.indices:hash-index
+         :index-initargs (:test #'equal)
+         :index-reader object-with-name
+         :index-values all-objects
          :accessor object-name
          :initform "unnamed object"
          :documentation "Display name of the object")
@@ -25,7 +28,8 @@
                :accessor object-properties
                :initform (make-hash-table :test #'equal)
                :documentation "Extensible property storage"))
-  (:documentation "Base class for all MUD objects"))
+  (:documentation "Base class for all MUD objects")
+  (:metaclass bknr.indices:indexed-class))
 
 (defun new-object (&key (name "object") (type +object-type-generic+) (location nil))
   "Create a new MUD object."

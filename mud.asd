@@ -7,6 +7,9 @@
                "bordeaux-threads"
                "str"
                "cl-prevalence"
+               "bknr.datastore"
+               "bknr.indices"
+               "bknr.utils"
                "cl-csv")
   :components ((:module "src"
                 :components

@@ -1,6 +1,7 @@
 (in-package #:mud)
 
 ;; TODO: split character and player-character for building NPCs
+
 (defclass mud-character (mud-object)
   ((session :initarg :session
             :accessor character-session
@@ -10,6 +11,7 @@
               :accessor player-inventory
               :initform (make-array 0 :adjustable t :fill-pointer t)
               :documentation "Items the player carries"))
+  (:metaclass bknr.indices:indexed-class)
   (:documentation "A player character in the MUD"))
 
 (defun new-character (name session)
