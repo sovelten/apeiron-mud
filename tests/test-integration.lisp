@@ -227,4 +227,38 @@
       (setf mud:*system* original-system
             mud:*world* original-world))))
 
+(test guestbook-persistence
+  "Test that guestbook entries are persistent across world reloads"
+  (let ((original-system mud:*system*)
+        (original-world mud:*world*))
+    (unwind-protect
+         (progn
+           ;; 1. Force a new world initialization
+           (mud:world-restore-or-initialize :force-new t)
+
+           ;; Find the tavern and the guestbook inside it
+           (let* ((tavern (mud:room-by-id 2))
+                  (guestbook (find-if (lambda (obj) (typep obj 'mud::mud-guestbook)) (mud:room-contents tavern))))
+             (is (not (null guestbook)))
+
+             ;; 2. Write a persistent entry directly and sync
+             (mud::guestbook-add-entry guestbook "Sophia" "Persistent message!")
+             (mud:sync-world)
+
+             ;; 3. Close the prevalence system and reload from disk (simulating server restart)
+             (cl-prevalence:close-open-streams mud:*system*)
+             (mud:world-restore-or-initialize :force-new nil)
+
+             ;; 4. Check that the reloaded room contains the guestbook with the message
+             (let* ((reloaded-tavern (mud:room-by-id 2))
+                    (reloaded-guestbook (find-if (lambda (obj) (typep obj 'mud::mud-guestbook)) (mud:room-contents reloaded-tavern))))
+               (is (not (null reloaded-guestbook)))
+               (let ((entries (mud::guestbook-entries reloaded-guestbook)))
+                 (is (= (length entries) 1))
+                 (is (equal (getf (first entries) :author) "Sophia"))
+                 (is (equal (getf (first entries) :message) "Persistent message!"))))))
+      ;; Restore original state
+      (setf mud:*system* original-system
+            mud:*world* original-world))))
+
 
