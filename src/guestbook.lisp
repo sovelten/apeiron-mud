@@ -25,7 +25,6 @@
                            (namestring filepath)
                            filepath))
          (gb (make-instance 'mud-guestbook
-                            :id (mud.utils:make-id)
                             :name name
                             :filepath filepath-str
                             :type +object-type-item+)))

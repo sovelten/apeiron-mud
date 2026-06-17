@@ -192,73 +192,61 @@
       (when client-socket (usocket:socket-close client-socket))
       (mud:stop-mud-server))))
 
-(test prevalence-id-conflict-on-restart
-  "Test that ID conflicts do NOT occur on restart with the snapshot model."
-  (let ((original-system mud:*system*)
-        (original-world mud:*world*))
+(test bknr-id-conflict-on-restart
+  "Test that world-level IDs do NOT conflict after store close/reopen."
+  (let ((original-world mud:*world*))
     (unwind-protect
          (progn
            ;; 1. Start with a clean state
            (mud:world-restore-or-initialize :force-new t)
-
            ;; 2. Record initial room IDs
            (let ((initial-ids (mapcar #'mud:object-id (mud:rooms))))
-             (is (member 2 initial-ids))
-             (is (member 3 initial-ids))
-
-             ;; 3. Simulate a restart: close and restore
-             (cl-prevalence:close-open-streams mud:*system*)
-             (mud:world-restore-or-initialize :force-new nil)
-
+             (is (>= (length initial-ids) 2))
+             ;; 3. Simulate restart: close store and restore
+             (bknr.datastore:close-store)
+             (setf mud:*world* nil)
+             (setf mud:*players* (make-hash-table :test #'equal))
+             (mud:world-restore-or-initialize)
              (let ((restored-ids (mapcar #'mud:object-id (mud:rooms))))
-               ;; Ensure rooms were loaded with their original IDs
+               ;; Ensure rooms were loaded with their original world-level IDs
                (is (= (length initial-ids) (length restored-ids)))
                (is (subsetp initial-ids restored-ids))
-
-               ;; 4. Add a new room post-restart (direct mutation on *world*)
+               ;; 4. Add a new room post-restart
                (let ((new-room (mud:new-room :name "Post-Restart Room")))
                  (mud:world-add-room mud:*world* new-room)
                  (let ((new-id (mud:object-id new-room)))
-                   ;; The new ID must NOT conflict with restored IDs
                    (is (not (member new-id restored-ids))
                        "New object ID ~D conflicts with existing loaded room IDs: ~A"
                        new-id restored-ids))))))
-      ;; Restore original state
-      (setf mud:*system* original-system
-            mud:*world* original-world))))
+      (setf mud:*world* original-world))))
 
-#|
 (test guestbook-persistence
-  "Test that guestbook entries are persistent across world reloads"
-  (let ((original-system mud:*system*)
-        (original-world mud:*world*))
+  "Test that guestbook entries survive store close/reopen via CSV persistence."
+  (let ((original-world mud:*world*))
     (unwind-protect
          (progn
-           ;; 1. Force a new world initialization
            (mud:world-restore-or-initialize :force-new t)
-
-           ;; Find the tavern and the guestbook inside it
-           (let* ((tavern (mud:room-by-id 2))
-                  (guestbook (find-if (lambda (obj) (typep obj 'mud::mud-guestbook)) (mud:room-contents tavern))))
+           ;; Find the guestbook in the starting room
+           (let* ((tavern (mud:starting-room))
+                  (guestbook (find-if (lambda (obj) (typep obj 'mud:mud-guestbook))
+                                      (mud:room-contents tavern))))
              (is (not (null guestbook)))
-
-             ;; 2. Write a persistent entry directly and sync
-             (mud::guestbook-add-entry guestbook "Sophia" "Persistent message!")
+             ;; Add an entry (writes to CSV on disk)
+             (mud:guestbook-add-entry guestbook "Sophia" "Persistent via CSV!")
+             ;; Snapshot
              (mud:sync-world)
-
-             ;; 3. Close the prevalence system and reload from disk (simulating server restart)
-             (cl-prevalence:close-open-streams mud:*system*)
-             (mud:world-restore-or-initialize :force-new nil)
-
-             ;; 4. Check that the reloaded room contains the guestbook with the message
-             (let* ((reloaded-tavern (mud:room-by-id 2))
-                    (reloaded-guestbook (find-if (lambda (obj) (typep obj 'mud::mud-guestbook)) (mud:room-contents reloaded-tavern))))
-               (is (not (null reloaded-guestbook)))
-               (let ((entries (mud::guestbook-entries reloaded-guestbook)))
+             ;; Simulate restart
+             (bknr.datastore:close-store)
+             (setf mud:*world* nil)
+             (setf mud:*players* (make-hash-table :test #'equal))
+             (mud:world-restore-or-initialize)
+             ;; Find the guestbook in the restored world
+             (let* ((reloaded-tavern (mud:starting-room))
+                    (reloaded-gbook (find-if (lambda (obj) (typep obj 'mud:mud-guestbook))
+                                             (mud:room-contents reloaded-tavern))))
+               (is (not (null reloaded-gbook)))
+               (let ((entries (mud:guestbook-entries reloaded-gbook)))
                  (is (= (length entries) 1))
                  (is (equal (getf (first entries) :author) "Sophia"))
-                 (is (equal (getf (first entries) :message) "Persistent message!"))))))
-      ;; Restore original state
-      (setf mud:*system* original-system
-            mud:*world* original-world))))
-|#
+                 (is (equal (getf (first entries) :message) "Persistent via CSV!"))))))
+      (setf mud:*world* original-world))))

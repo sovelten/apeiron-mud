@@ -2,6 +2,7 @@
 
 (defclass mud-object ()
   ((id :initarg :id
+       :initform (mud.utils:make-id)
        :accessor object-id
        :documentation "Unique identifier for this object")
    (name :initarg :name
@@ -68,4 +69,6 @@
   (print-unreadable-object (obj stream :type t)
     (format stream "~A (ID: ~D)"
             (object-name obj)
-            (bknr.datastore:store-object-id obj))))
+            (if (typep obj 'bknr.datastore:store-object)
+                    (bknr.datastore:store-object-id obj)
+                    (object-id obj)))))

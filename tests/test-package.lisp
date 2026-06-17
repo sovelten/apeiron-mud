@@ -7,13 +7,20 @@
 (def-suite mud-tests :description "Tests for the MUD server")
 
 (defun run-tests ()
-  "Run all MUD tests with a clean, isolated temporary prevalence location."
-  (let* ((temp-dir (uiop:subpathname (uiop:default-temporary-directory) "mud-test-prevalence/"))
-         (mud::*system-location* temp-dir))
+  "Run all MUD tests with a clean, isolated temporary BKNR store."
+  (let* ((temp-dir (uiop:subpathname (uiop:default-temporary-directory) "mud-test-bknr/"))
+         (data-dir (uiop:subpathname (uiop:default-temporary-directory) "mud-test-data/"))
+         (mud::*store-directory* temp-dir)
+         (mud::*data-directory* data-dir))
+    (format t "~&Test store directory: ~A~%" temp-dir)
+    (format t "~&Test data directory: ~A~%" data-dir)
     (unwind-protect
          (progn
-           ;; Ensure we clear any pre-existing temp directory
+           ;; Clean previous test data
            (uiop:delete-directory-tree temp-dir :validate (constantly t) :if-does-not-exist :ignore)
+           (uiop:delete-directory-tree data-dir :validate (constantly t) :if-does-not-exist :ignore)
+           (ensure-directories-exist data-dir)
            (run! 'mud-tests))
-      ;; Clean up the temporary directory after the tests finish
-      (uiop:delete-directory-tree temp-dir :validate (constantly t) :if-does-not-exist :ignore))))
+      ;; Clean up after tests
+      (uiop:delete-directory-tree temp-dir :validate (constantly t) :if-does-not-exist :ignore)
+      (uiop:delete-directory-tree data-dir :validate (constantly t) :if-does-not-exist :ignore))))
