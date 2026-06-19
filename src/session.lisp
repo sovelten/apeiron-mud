@@ -13,6 +13,10 @@
               :documentation "Player controlled by this session"))
   (:documentation "A network session in the MUD"))
 
+;; On timeout, should send :timeout on second return value
+(defgeneric mud-read-line (obj &key timeout))
+(defgeneric mud-write (obj message &key newline))
+
 (defun new-session (socket)
   (make-instance 'mud-session
                  :id (mud.utils:make-id)
@@ -73,6 +77,13 @@
                     (error (e)
                       (values nil e)))))))))
 
+(defmethod mud-read-line ((obj mud-session) &key (timeout 300))
+  (let ((socket (session-socket obj)))
+    (read-line-with-timeout socket timeout)))
+
+(defmethod mud-write ((obj mud-session) message &key (newline t))
+  (session-send-message obj message :newline newline))
+
 (defun send-keepalive (socket)
   "Send a harmless Telnet NOP (No Operation) command to keep the connection alive.
    This complies with RFC 854 and is ignored by compliant Telnet clients without shifting the cursor.
@@ -114,16 +125,6 @@
               nil))
          (t
           (return (values nil status)))))))
-
-(defgeneric mud-read-line (obj))
-(defgeneric mud-write (obj message &key newline))
-
-(defmethod mud-read-line ((obj mud-session))
-  (let ((socket (session-socket obj)))
-    (read-line-with-timeout socket)))
-
-(defmethod mud-write ((obj mud-session) message &key (newline t))
-  (session-send-message obj message :newline newline))
 
 (defun ask-input (obj question &optional (default ""))
   "Asks input from the user"

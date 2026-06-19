@@ -14,8 +14,8 @@
          (character (new-character char-name session)))
     (mud.utils:log-message "New connection: ~A" char-name)
     (world-add-character! world character)
-    (session-send-message session (room-describe (object-location character)))
-    (session-send-message session "Welcome to the MUD!")
+    (mud-write session (room-describe (object-location character)))
+    (mud-write session "Welcome to the MUD!")
     (handler-case
         (let ((socket (session-socket session)))
           (loop while *server-running*
@@ -28,7 +28,7 @@
                          (multiple-value-bind (line status) (read-line-with-timeout-loop socket)
                            (cond
                              ((eq status :timeout)
-                              (session-send-message session "Timed out due to inactivity.")
+                              (mud-write session "Timed out due to inactivity.")
                               (mud.utils:log-message "Client ~A timed out due to inactivity" char-name)
                               (return))
                              ((or (eq status :eof) (typep status 'error))
