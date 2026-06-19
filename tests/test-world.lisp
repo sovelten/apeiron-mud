@@ -4,9 +4,9 @@
 
 (test world-initialization
   "Test that the world initializes properly"
-  (mud:world-restore-or-initialize)
-  (is (not (null (mud:get-config-key :starting-room-id))))
-  (is (> (mud:total-rooms) 0)))
+  (let ((world (mud:world-restore-or-initialize)))
+    (is (not (null (mud:get-config-key world :starting-room-id))))
+    (is (> (mud:total-rooms) 0))))
 
 (test room-connectivity
   "Test that rooms are properly connected"

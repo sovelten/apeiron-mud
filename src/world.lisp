@@ -36,7 +36,7 @@
 
 (defun starting-room (world)
   "Get the starting room of the world."
-  (room-by-id (get-config-key :starting-room-id)))
+  (room-by-id (get-config-key world :starting-room-id)))
 
 (defun world-new-character (world character)
   "Add a character to the world, placing them in the starting room."
