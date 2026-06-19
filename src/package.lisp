@@ -47,7 +47,6 @@
    #:total-rooms
    #:starting-room
    #:sync-world
-   #:*players*
    #:*system*
    
    ;; Player system

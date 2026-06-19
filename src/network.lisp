@@ -37,7 +37,7 @@
                              (line
                               (let ((trimmed (string-trim '(#\Return #\Newline) line)))
                                 (when (and trimmed (> (length trimmed) 0))
-                                  (process-command character trimmed))))
+                                  (process-command world character trimmed))))
                              (t
                               (return)))))
                      (end-of-file ()
@@ -145,9 +145,10 @@
         (setf *acceptance-thread* nil))
       
       ;; Disconnect all players
-      (dolist (player (characters))
-        (progn (world-remove-character (get-persistent-world) player)
-               (session-disconnect (character-session player))))
+      (let ((world (get-persistent-world)))
+        (dolist (player (characters world))
+          (world-remove-character world player)
+          (session-disconnect (character-session player))))
       
       (mud.utils:log-message "MUD Server stopped")
       t)))

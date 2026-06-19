@@ -62,13 +62,13 @@
     (remhash (object-id character) (world-players world))
     (mud.utils:log-message "Removed")))
 
-(defun character-by-id (char-id)
+(defun character-by-id (world char-id)
   "Get a player by ID."
-  (gethash char-id *players*))
+  (gethash char-id (world-players world)))
 
-(defun characters ()
+(defun characters (world)
   "Get all active players."
-  (loop for player being the hash-values of *players*
+  (loop for player being the hash-values of (world-players world)
         collect player))
 
 (defun find-character-in-room (room player-name)
@@ -78,9 +78,9 @@
                   (string-equal (object-name obj) player-name))
         return obj))
 
-(defun world-broadcast (message &optional exclude-player)
+(defun world-broadcast (world message &optional exclude-player)
   "Broadcast a message to all players (optionally excluding one)."
-  (dolist (player (characters))
+  (dolist (player (characters world))
     (unless (and exclude-player (eq (object-id player) (object-id exclude-player)))
       (player-send-message player message))))
 

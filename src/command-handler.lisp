@@ -4,22 +4,24 @@
 (defvar *commands* (make-hash-table :test #'equal)
   "Hash table of command handlers")
 
-(defmacro define-command (name (player args) &body body)
-  "Define a command handler. ARGS is a raw string that the handler can parse as needed."
+(defmacro define-command (name (world player args) &body body)
+  "Define a command handler. WORLD is the mud-world instance,
+PLAYER is the character, ARGS is a raw string that the handler can parse as needed."
   `(setf (gethash ,name *commands*)
-         (lambda (,player ,args)
+         (lambda (,world ,player ,args)
            ,@body)))
 
 ;; Built-in commands
 
-(define-command "look" (player args)
-  (declare (ignore args))
+(define-command "look" (world player args)
+  (declare (ignore world args))
   (let ((room (object-location player)))
     (if room
         (player-send-message player (room-describe room))
         (player-send-message player "You are in a void!"))))
 
-(define-command "go" (player args)
+(define-command "go" (world player args)
+  (declare (ignore world))
   (let ((direction args)
         (room (object-location player)))
     (if (zerop (length direction))
@@ -32,7 +34,8 @@
                 (player-send-message player (room-describe target-room)))
               (player-send-message player "You can't go that way."))))))
 
-(define-command "eval" (player args)
+(define-command "eval" (world player args)
+  (declare (ignore world))
   (let ((code-str args))
     (if (zerop (length code-str))
         (player-send-message player "Eval what? Usage: eval <code>")
@@ -49,8 +52,8 @@
           (error (e)
             (player-send-message player (format nil "Error: ~A" e)))))))
 
-(define-command "exits" (player args)
-  (declare (ignore args))
+(define-command "exits" (world player args)
+  (declare (ignore world args))
   (let ((room (object-location player)))
     (let ((exits (loop for key being the hash-keys of (room-exits room)
                        collect key)))
@@ -58,8 +61,8 @@
           (player-send-message player (format nil "Exits: ~{~A~^, ~}" exits))
           (player-send-message player "There are no exits here.")))))
 
-(define-command "inventory" (player args)
-  (declare (ignore args))
+(define-command "inventory" (world player args)
+  (declare (ignore world args))
   (let ((inv (player-inventory player)))
     (if (zerop (length inv))
         (player-send-message player "You are not carrying anything.")
@@ -67,7 +70,8 @@
                              (format nil "You are carrying:~%~{  - ~A~%~}"
                                      (map 'list #'object-describe inv))))))
 
-(define-command "say" (player args)
+(define-command "say" (world player args)
+  (declare (ignore world))
   (let ((message args))
     (if (zerop (length message))
         (player-send-message player "Say what?")
@@ -80,7 +84,8 @@
                                   (format nil "~A says: ~A" 
                                           (object-name player) message))))))))
 
-(define-command "read" (player args)
+(define-command "read" (world player args)
+  (declare (ignore world))
   (let* ((room (object-location player))
          (guestbook (or (find-if (lambda (obj) (typep obj 'mud-guestbook)) (room-contents room))
                         (find-if (lambda (obj) (typep obj 'mud-guestbook)) (player-inventory player)))))
@@ -94,7 +99,8 @@
       (t
        (player-send-message player (guestbook-format-entries guestbook))))))
 
-(define-command "write" (player args)
+(define-command "write" (world player args)
+  (declare (ignore world))
   (let* ((room (object-location player))
          (guestbook (or (find-if (lambda (obj) (typep obj 'mud-guestbook)) (room-contents room))
                         (find-if (lambda (obj) (typep obj 'mud-guestbook)) (player-inventory player)))))
@@ -114,8 +120,8 @@
                                                      (object-name player)
                                                      (object-name guestbook)))))))))))
 
-(define-command "help" (player args)
-  (declare (ignore args))
+(define-command "help" (world player args)
+  (declare (ignore world args))
   (let ((help-text "Available commands:~%~{  ~A~%~}~%Type 'help <command>' for more info."))
     (player-send-message player 
                          (format nil help-text 
@@ -123,10 +129,10 @@
                                              collect key)
                                        #'string<)))))
 
-(define-command "quit" (player args)
+(define-command "quit" (world player args)
   (declare (ignore args))
   (player-send-message player "Goodbye!")
-  (world-remove-character player)
+  (world-remove-character world player)
   (session-disconnect (character-session player)))
 
 (defun parse-command (input)
@@ -141,7 +147,7 @@
                       (string-trim '(#\Space #\Tab) (subseq trimmed (1+ space-pos))))
               (values (string-downcase trimmed) ""))))))
 
-(defun process-command (player command-string)
+(defun process-command (world player command-string)
   "Process a command from a player."
   (when (> (length command-string) +max-command-length+)
     (player-send-message player "Command too long.")
@@ -154,7 +160,7 @@
     (let ((handler (gethash command *commands*)))
       (if handler
           (handler-case
-              (funcall handler player args)
+              (funcall handler world player args)
             (error (e)
               (mud.utils:log-error "Command error for ~A: ~A" (object-name player) e)
               (player-send-message player "Error executing command.")))

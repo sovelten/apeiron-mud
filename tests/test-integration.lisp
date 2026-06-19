@@ -43,7 +43,8 @@
              (is (equal prompt "> ")))
            
            ;; Verify player exists in the world
-           (let ((player (loop for p being the hash-values of mud::*players*
+           (let* ((world (mud::get-persistent-world))
+                  (player (loop for p being the hash-values of (mud::world-players world)
                                when (equal (mud:object-name p) "QuitTestPlayer")
                                  return p)))
              (is (not (null player)))
@@ -59,7 +60,7 @@
              (sleep 0.2)
              
              ;; Verify player is removed from the world
-             (is (not (gethash (mud:object-id player) mud::*players*)))))
+             (is (not (gethash (mud:object-id player) (mud::world-players world))))))
       ;; Cleanup
       (when client-stream (close client-stream))
       (when client-socket (usocket:socket-close client-socket))
@@ -91,7 +92,8 @@
            (sleep 0.1)
            
            ;; Verify player is in world
-           (let ((player (loop for p being the hash-values of mud::*players*
+           (let* ((world (mud::get-persistent-world))
+                  (player (loop for p being the hash-values of (mud::world-players world)
                                when (equal (mud:object-name p) "AbruptPlayer")
                                  return p)))
              (is (not (null player)))
@@ -106,7 +108,7 @@
              (sleep 0.3)
              
              ;; Verify player is cleaned up from the world
-             (is (not (gethash (mud:object-id player) mud::*players*)))))
+             (is (not (gethash (mud:object-id player) (mud::world-players world))))))
       ;; Cleanup
       (when client-stream (close client-stream))
       (when client-socket (usocket:socket-close client-socket))

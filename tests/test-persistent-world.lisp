@@ -12,7 +12,7 @@
 
              ;; Simulate restart: close store and restore
              (bknr.datastore:close-store)
-             (setf mud:*players* (make-hash-table :test #'equal))
+             ;; players is a transient slot — auto-initialized on restore
 
              (let* ((new-world (mud:world-restore-or-initialize))
                     (restored-ids (mapcar #'mud:object-id (mud:rooms))))
@@ -46,7 +46,7 @@
 
          ;; Simulate restart
          (bknr.datastore:close-store)
-         (setf mud:*players* (make-hash-table :test #'equal))
+         ;; players is a transient slot — auto-initialized on restore
          ;; Find the guestbook in the restored world
          (let* ((new-world (mud:world-restore-or-initialize))
                 (reloaded-tavern (mud:starting-room new-world))
