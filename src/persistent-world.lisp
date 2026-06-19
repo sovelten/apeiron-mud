@@ -8,7 +8,7 @@
 
 (defwrapping-persistent-class persistent-room (mud-room)
   ()
-  (:transient-slots properties))
+  (:transient-slots properties contents))
 
 (defwrapping-persistent-class persistent-guestbook (mud-guestbook)
   ()
@@ -24,7 +24,7 @@
 
 (defwrapping-persistent-class persistent-world (mud-world)
   ()
-  (:transient-slots players))
+  (:transient-slots players objects rooms))
 
 ;; ─── Persistent factory functions ───────────────────────────────────────────
 
@@ -71,13 +71,12 @@
   "Directory for the BKNR data store.  Bound to a temp dir during tests.")
 
 (defun open-mud-store ()
-  "Open (or reopen) the BKNR data store for MUD persistence."
+  "Open the BKNR data store for MUD persistence.
+If the store is already open it is reused to avoid unnecessary
+close/reopen cycles that trigger BKNR transaction log replay warnings."
   (ensure-directories-exist *data-directory*)
-  (when (and (boundp 'bknr.datastore:*store*)
-             bknr.datastore:*store*)
-    (bknr.datastore:close-store))
-  (makunbound 'bknr.datastore:*store*)
-  (let ((*trace-output* (make-broadcast-stream)))
+  (unless (and (boundp 'bknr.datastore:*store*)
+               bknr.datastore:*store*)
     (setf bknr.datastore:*store*
           (make-instance 'bknr.datastore:mp-store
                          :directory *store-directory*
@@ -131,6 +130,24 @@ When FORCE-NEW is true any existing store data is wiped first."
             (world-set-object-id! world obj))
           (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-guestbook))
             (world-set-object-id! world obj))
+          ;; Reset room contents (transient) before rebuilding from persistent
+          ;; object locations, so transient objects from previous sessions
+          ;; (e.g. characters added in earlier tests) don't accumulate.
+          (dolist (r (bknr.datastore:store-objects-with-class 'persistent-room))
+            (setf (room-contents r) (make-array 0 :adjustable t :fill-pointer t)))
+          ;; Rebuild room contents from persistent object locations.
+          ;; Wrapped in a single transaction to avoid per-object auto-wrap overhead.
+          (bknr.datastore:with-transaction ("rebuild-room-contents")
+            (flet ((rebuild-room-contents (obj)
+                     (let ((loc (object-location obj)))
+                       (when (typep loc 'persistent-room)
+                         (room-add-object loc obj)))))
+              (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-object))
+                (rebuild-room-contents obj))
+              (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-room))
+                (rebuild-room-contents obj))
+              (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-guestbook))
+                (rebuild-room-contents obj))))
           (when *debug-mode*
             (mud.utils:log-message "World restored from BKNR datastore."))
           world)

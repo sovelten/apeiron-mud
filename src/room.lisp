@@ -30,7 +30,7 @@
                  :location nil))
 
 (defun room-add-object (room obj)
-  "Add an object to a room."
+  "Add an object to a room and set its location."
   (let ((contents (room-contents room)))
     (unless (and (vectorp contents) (array-has-fill-pointer-p contents))
       (setf contents (make-array (length contents)
@@ -38,10 +38,11 @@
                                  :fill-pointer (length contents)
                                  :initial-contents contents))
       (setf (room-contents room) contents))
-    (vector-push-extend obj contents)))
+    (vector-push-extend obj contents))
+  (setf (object-location obj) room))
 
 (defun room-remove-object (room obj)
-  "Remove an object from a room."
+  "Remove an object from a room and clear its location."
   (let ((contents (room-contents room)))
     (unless (and (vectorp contents) (array-has-fill-pointer-p contents))
       (setf contents (make-array (length contents)
@@ -54,7 +55,9 @@
                (loop for j from i below (1- (fill-pointer contents))
                      do (setf (aref contents j) (aref contents (1+ j))))
                (decf (fill-pointer contents))
-               (return)))))
+               (return))))
+  (when (eq (object-location obj) room)
+    (setf (object-location obj) nil)))
 
 (defun room-add-exit (room direction target-room)
   "Add an exit from a room to another room."
