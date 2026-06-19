@@ -8,8 +8,11 @@
                 :components
                 ((:file "test-package")
                  (:file "test-object" :depends-on ("test-package"))
+                 (:file "test-room" :depends-on ("test-package"))
+                 (:file "test-guestbook" :depends-on ("test-package"))
                  (:file "test-world" :depends-on ("test-package"))
                  (:file "test-character" :depends-on ("test-package"))
                  (:file "test-commands" :depends-on ("test-package"))
                  (:file "test-network" :depends-on ("test-package"))
-                 (:file "test-integration" :depends-on ("test-package"))))))
+                 (:file "test-integration" :depends-on ("test-package"))
+                 (:file "test-persistent-world" :depends-on ("test-package"))))))
