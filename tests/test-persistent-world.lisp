@@ -3,29 +3,29 @@
 (in-suite mud-tests)
 
 (test bknr-id-conflict-on-restart
-      "Test that world-level IDs do NOT conflict after store close/reopen."
-      (unwind-protect
-           (let* ((world (mud:world-restore-or-initialize :force-new t))
-                  (initial-ids (mapcar #'mud:object-id (mud:rooms))))
+  "Test that world-level IDs do NOT conflict after store close/reopen."
+  (unwind-protect
+       (let* ((world (mud:world-restore-or-initialize :force-new t))
+              (initial-ids (mapcar #'mud:object-id (mud:rooms))))
 
-             (is (>= (length initial-ids) 2))
+         (is (>= (length initial-ids) 2))
 
-             ;; Simulate restart: close store and restore
-             (bknr.datastore:close-store)
-             ;; players is a transient slot — auto-initialized on restore
+         ;; Simulate restart: close store and restore
+         (bknr.datastore:close-store)
+         ;; players is a transient slot — auto-initialized on restore
 
-             (let* ((new-world (mud:world-restore-or-initialize))
-                    (restored-ids (mapcar #'mud:object-id (mud:rooms))))
-               ;; Ensure rooms were loaded with their original world-level IDs
-               (is (= (length initial-ids) (length restored-ids)))
-               (is (subsetp initial-ids restored-ids))
-               ;; Add a new room post-restart
-               (let ((new-room (mud:new-room :name "Post-Restart Room")))
-                 (mud:world-set-object-id! new-world new-room)
-                 (let ((new-id (mud:object-id new-room)))
-                   (is (not (member new-id restored-ids))
-                       "New object ID ~D conflicts with existing loaded room IDs: ~A"
-                       new-id restored-ids)))))))
+         (let* ((new-world (mud:world-restore-or-initialize))
+                (restored-ids (mapcar #'mud:object-id (mud:rooms))))
+           ;; Ensure rooms were loaded with their original world-level IDs
+           (is (= (length initial-ids) (length restored-ids)))
+           (is (subsetp initial-ids restored-ids))
+           ;; Add a new room post-restart
+           (let ((new-room (mud:new-room :name "Post-Restart Room")))
+             (mud:world-set-object-id! new-world new-room)
+             (let ((new-id (mud:object-id new-room)))
+               (is (not (member new-id restored-ids))
+                   "New object ID ~D conflicts with existing loaded room IDs: ~A"
+                   new-id restored-ids)))))))
 
 (test guestbook-persistence
   "Test that guestbook entries survive store close/reopen via CSV persistence."
