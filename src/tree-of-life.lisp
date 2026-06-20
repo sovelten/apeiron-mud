@@ -14,8 +14,12 @@
 (defclass path (name-mixin number-mixin)
   ((letter :initarg :letter
            :accessor path-letter)
-   (key :initarg :letter
-        :accessor path-key)))
+   (key :initarg :key
+        :accessor path-key)
+   (from :initarg :from
+         :accessor path-from)
+   (to :initarg :to
+         :accessor path-to)))
 
 (defun sephiroth-room (sephiroth)
   (new-room :name (name sephiroth)
@@ -32,18 +36,60 @@
 (defvar yesod (make-instance 'sephiroth :name "Yesod" :number 9))
 (defvar malkuth (make-instance 'sephiroth :name "Malkuth" :number 10))
 
-(defvar path1 (make-instance 'path :name "The Magician" :number 1 :letter "Beth"))
-(defvar path11 (make-instance 'path :name "The Fool" :number 11 :letter "Aleph"))
+(defvar paths
+  (list (make-instance 'path
+                       :name "The Magician"
+                       :number 1
+                       :key 1
+                       :letter "Beth"
+                       :from keter
+                       :to binah)
+        (make-instance 'path
+                       :name "The Fool"
+                       :number 11
+                       :key 0
+                       :letter "Aleph"
+                       :from keter
+                       :to chokmah)
+        (make-instance 'path
+                       :name "The High Priestess"
+                       :number 13
+                       :key 2
+                       :letter "Gimel"
+                       :from keter
+                       :to tiphareth)
+        (make-instance 'path
+                       :name "The Empress"
+                       :number 14
+                       :key 3
+                       :letter "Daleth"
+                       :from chokmah
+                       :to binah)))
+
+(defun paths-from (sephiroth)
+  (loop for path in paths
+        when (equal (path-from path) sephiroth)
+          collect path))
 
 (defun tree-of-life ()
   (let ((world (make-instance 'new-world))
-        (keter (new-room :name "Keter" :description "1"))
-        (chokmah (new-room :name "Chokmah" :description "2"))
-        (binah (new-room :name "Binah" :description "3"))
-        (chesed (new-room :name "Chesed" :description "4"))
-        (geburah (new-room :name "Geburah" :description "5"))
-        (tiphareth (new-room :name "Tiphareth" :description "6"))
-        (netzach (new-room :name "Netzach" :description "7"))
-        (hod (new-room :name "Hod" :description "8"))
-        (yesod (new-room :name "Yesod" :description "9"))
-        (malkuth (new-room :name "Malkuth" :description "10")))))
+        (keter-room (sephiroth-room keter))
+        (chokmah-room (sephiroth-room chokmah))
+        (binah-room (sephiroth-room binah))
+        (chesed-room (sephiroth-room chesed))
+        (geburah-room (sephiroth-room geburah))
+        (tiphareth-room (sephiroth-room tiphareth))
+        (netzach-room (sephiroth-room netzach))
+        (hod-room (sephiroth-room hod))
+        (yesod-room (sephiroth-room yesod))
+        (malkuth-room (sephiroth-room malkuth)))
+    (world-set-object-id! world keter-room)
+    (world-set-object-id! world chokmah-room)
+    (world-set-object-id! world binah-room)
+    (world-set-object-id! world chesed-room)
+    (world-set-object-id! world geburah-room)
+    (world-set-object-id! world tiphareth-room)
+    (world-set-object-id! world netzach-room)
+    (world-set-object-id! world hod-room)
+    (world-set-object-id! world yesod-room)
+    (world-set-object-id! world malkuth-room)))
