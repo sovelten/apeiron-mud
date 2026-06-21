@@ -8,39 +8,42 @@
   (is (mud:start-mud-server :host "127.0.0.1" :port 0))
   (let* ((port (usocket:get-local-port mud::*server-socket*))
          (client-socket nil)
-         (client-stream nil))
+         (client-conn nil))
     (unwind-protect
          (progn
-           ;; Connect client
+           ;; Connect client using telnet-aware connection
            (setf client-socket (usocket:socket-connect "127.0.0.1" port))
-           (setf client-stream (usocket:socket-stream client-socket))
+           (setf client-conn (telnet:make-telnet-connection client-socket))
            
-           ;; Wait a moment for connection to establish and handshaking to begin
-           (sleep 0.1)
+           ;; Wait a moment for connection to establish and negotiation to complete
+           (sleep 0.5)
            
-           ;; Server should ask for name
-           (let ((line1 (read-line client-stream nil nil)))
-             (is (equal line1 "What is your name?")))
+           ;; Server should ask for name (telnet-read-line strips IAC negotiation)
+           (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)
+             (is (not (null line)))
+             (is (equal line "What is your name?")))
            
            ;; Send player name
-           (write-line "QuitTestPlayer" client-stream)
-           (force-output client-stream)
+           (telnet:telnet-write-string client-conn "QuitTestPlayer")
            
            ;; Server should create character and send room description and greeting
-           (sleep 0.1)
+           (sleep 0.2)
            ;; Read until we see the "Welcome to the MUD!" greeting
            (let ((greeting-found nil))
-             (loop for line = (read-line client-stream nil nil)
-                   while line
-                   do (when (search "Welcome" line)
-                        (setf greeting-found t)
-                        (return)))
+             (loop
+               (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 1)
+                 (unless line (return))
+                 (when (search "Welcome" line)
+                   (setf greeting-found t)
+                   (return))))
              (is (not (null greeting-found))))
            
            ;; Read next prompt "> "
-           (let ((prompt (make-string 2)))
-             (read-sequence prompt client-stream)
-             (is (equal prompt "> ")))
+           (let ((prompt-char nil))
+             (setf prompt-char (telnet:telnet-read-char client-conn :timeout 2))
+             (is (char= prompt-char #\>))
+             (setf prompt-char (telnet:telnet-read-char client-conn :timeout 2))
+             (is (char= prompt-char #\Space)))
            
            ;; Verify player exists in the world
            (let* ((world (mud::get-persistent-world))
@@ -50,19 +53,20 @@
              (is (not (null player)))
              
              ;; Now send "quit"
-             (write-line "quit" client-stream)
-             (force-output client-stream)
+             (telnet:telnet-write-string client-conn "quit")
              
              ;; Server should send "Goodbye!"
-             (is (equal (read-line client-stream nil nil) "Goodbye!"))
+             (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)
+               (declare (ignore status))
+               (is (string= line "Goodbye!")))
              
              ;; Wait for session thread to cleanup
-             (sleep 0.2)
+             (sleep 0.5)
              
              ;; Verify player is removed from the world
              (is (not (gethash (mud:object-id player) (mud::world-players world))))))
       ;; Cleanup
-      (when client-stream (close client-stream))
+      (when client-conn (telnet:telnet-connection-close client-conn))
       (when client-socket (usocket:socket-close client-socket))
       (mud:stop-mud-server))))
 
@@ -72,24 +76,24 @@
   (is (mud:start-mud-server :host "127.0.0.1" :port 0))
   (let* ((port (usocket:get-local-port mud::*server-socket*))
          (client-socket nil)
-         (client-stream nil))
+         (client-conn nil))
     (unwind-protect
          (progn
-           ;; Connect client
+           ;; Connect client using telnet-aware connection
            (setf client-socket (usocket:socket-connect "127.0.0.1" port))
-           (setf client-stream (usocket:socket-stream client-socket))
+           (setf client-conn (telnet:make-telnet-connection client-socket))
            
-           (sleep 0.1)
+           (sleep 0.5)
            
            ;; Server should ask for name
-           (let ((line1 (read-line client-stream nil nil)))
-             (is (equal line1 "What is your name?")))
+           (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)
+             (is (not (null line)))
+             (is (equal line "What is your name?")))
            
            ;; Send player name
-           (write-line "AbruptPlayer" client-stream)
-           (force-output client-stream)
+           (telnet:telnet-write-string client-conn "AbruptPlayer")
            
-           (sleep 0.1)
+           (sleep 0.3)
            
            ;; Verify player is in world
            (let* ((world (mud::get-persistent-world))
@@ -98,18 +102,18 @@
                                  return p)))
              (is (not (null player)))
              
-             ;; Now close client socket abruptly without quitting!
-             (close client-stream)
+             ;; Now close client connection abruptly without quitting!
+             (telnet:telnet-connection-close client-conn)
              (usocket:socket-close client-socket)
-             (setf client-stream nil
+             (setf client-conn nil
                    client-socket nil)
              
              ;; Wait for server loop to detect EOF / socket error and run cleanup
-             (sleep 0.3)
+             (sleep 0.5)
              
              ;; Verify player is cleaned up from the world
              (is (not (gethash (mud:object-id player) (mud::world-players world))))))
       ;; Cleanup
-      (when client-stream (close client-stream))
+      (when client-conn (telnet:telnet-connection-close client-conn))
       (when client-socket (usocket:socket-close client-socket))
       (mud:stop-mud-server))))

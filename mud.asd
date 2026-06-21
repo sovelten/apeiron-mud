@@ -5,6 +5,7 @@
   :license "MIT"
   :depends-on ("usocket"
                "bordeaux-threads"
+               "flexi-streams"
                "str"
                "bknr.datastore"
                "bknr.indices"
@@ -15,6 +16,11 @@
                 ((:file "package")
                  (:file "constants" :depends-on ("package"))
                  (:file "utils" :depends-on ("constants"))
+                 (:module "telnet"
+                  :components
+                  ((:file "package")
+                   (:file "protocol" :depends-on ("package"))
+                   (:file "connection" :depends-on ("package" "protocol"))))
                  (:file "session" :depends-on ("utils"))
                  (:file "object" :depends-on ("utils"))
                  (:file "room" :depends-on ("object"))

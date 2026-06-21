@@ -77,7 +77,7 @@
                      (when client-socket
                        (if (not *server-running*)
                            (usocket:socket-close client-socket)
-                           (let ((session (new-session client-socket)))
+                           (let ((session (new-telnet-session client-socket)))
                              ;; Start session thread
                              (let ((thread (bordeaux-threads:make-thread
                                             (lambda () (handle-client world session))

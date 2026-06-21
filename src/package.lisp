@@ -56,7 +56,7 @@
    #:sync-world
    #:*system*
    
-   ;; Player system
+   ;; Player / Session system
    #:mud-character
    #:mud-session
    #:new-character
@@ -69,10 +69,16 @@
    #:character-inventory-remove
    #:player-send-message
    #:world-remove-character!
+   ;; Session types
    #:stream-session
+   #:telnet-session
+   #:session-telnet-connection
    #:session-stream
    #:session-keepalive
    #:session-disconnect
+   ;; Session constructors
+   #:new-session
+   #:new-telnet-session
    
    ;; Command system
    #:process-command

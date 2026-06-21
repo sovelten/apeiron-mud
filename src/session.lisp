@@ -22,6 +22,14 @@
                  :id (mud.utils:make-id)
                  :socket socket))
 
+(defun new-telnet-session (usocket)
+  "Create a new telnet-session from an accepted usocket.
+Performs initial RFC 854 telnet option negotiation and returns
+a session ready for I/O."
+  (make-instance 'telnet-session
+                 :id (mud.utils:make-id)
+                 :telnet-conn (telnet:make-telnet-connection usocket)))
+
 (defgeneric session-stream (session)
   (:documentation "Return the stream backing this session, or nil."))
 
@@ -30,21 +38,10 @@
 The default method is a no-op."))
 
 (defmethod session-keepalive ((session mud-session))
-  "Send a Telnet NOP to keep the connection alive."
-  (let ((stream (session-stream session)))
-    (when stream
-      (mud.utils:log-message "Staying alive with Telnet NOP...")
-      (force-output stream)
-      #+sbcl
-      (let* ((fd (sb-sys:fd-stream-fd stream))
-             (octets (make-array 2 :element-type '(unsigned-byte 8) :initial-contents '(255 241)))
-             (sap (sb-sys:vector-sap octets)))
-        (sb-unix:unix-write fd sap 0 2))
-      #-sbcl
-      (progn
-        (write-char (code-char 255) stream)
-        (write-char (code-char 241) stream)
-        (force-output stream)))))
+  "Default keepalive is a no-op.  Subclasses (e.g. telnet-session)
+should override this to send protocol-specific heartbeats."
+  (declare (ignore session))
+  nil)
 
 (defmethod session-stream ((session mud-session))
   (let ((socket (session-socket session)))
@@ -133,6 +130,16 @@ The default method is a no-op."))
 Useful for testing with string streams, or for Telnet-like backends
 that provide their own stream abstraction."))
 
+(defclass telnet-session (mud-session)
+  ((telnet-conn :initarg :telnet-conn
+                :reader session-telnet-connection
+                :documentation "The telnet:telnet-connection backing this session."))
+  (:documentation "A session backed by a telnet:telnet-connection.
+
+This session implements RFC 854-compliant telnet I/O with proper
+IAC command processing, option negotiation, and keepalive via NOP.
+The telnet subsystem is fully decoupled from MUD game logic."))
+
 (defmethod mud-read-line ((session stream-session) &key (timeout 300))
   (declare (ignore timeout))
   (let ((stream (session-stream session)))
@@ -160,6 +167,56 @@ that provide their own stream abstraction."))
   ;; No keepalive needed for stream-based sessions
   (declare (ignore session))
   nil)
+
+(progn
+  ;; --- telnet-session methods ---
+  (defmethod session-stream ((session telnet-session))
+    "Telnet sessions do not expose a raw CL stream.
+Use telnet:telnet-read-line / telnet:telnet-write-string instead."
+    nil)
+
+  (defmethod session-keepalive ((session telnet-session))
+    "Send a Telnet NOP (RFC 854) to keep the connection alive."
+    (telnet:telnet-send-nop (session-telnet-connection session)))
+
+  (defmethod mud-read-line ((session telnet-session) &key (timeout 300))
+    "Read a line from the telnet session using RFC 854-compliant I/O."
+    (let ((conn (session-telnet-connection session)))
+      (if conn
+          (handler-case
+              (telnet:telnet-read-line conn :timeout timeout :poll-interval 0.1)
+            (telnet:telnet-connection-lost (e)
+              (declare (ignore e))
+              (values nil :connection-lost))
+            (telnet:telnet-error (e)
+              (mud.utils:log-error "Telnet read error: ~A" (telnet:telnet-error-message e))
+              (values nil :eof)))
+          (values nil :eof))))
+
+  (defmethod mud-write ((session telnet-session) message &key (newline t))
+    "Write a message to the telnet session using RFC 854-compliant I/O."
+    (let ((conn (session-telnet-connection session)))
+      (when conn
+        (handler-case
+            (telnet:telnet-write-string conn message
+                                        :end (if newline :crlf nil))
+          (telnet:telnet-connection-lost (e)
+            (declare (ignore e))
+            nil)
+          (telnet:telnet-error (e)
+            (mud.utils:log-error "Telnet write error: ~A" (telnet:telnet-error-message e))
+            nil)))))
+
+  (defmethod session-disconnect ((session telnet-session))
+    "Disconnect the telnet session, releasing all resources."
+    (when (session-character session)
+      (setf (session-character session) nil))
+    (let ((conn (session-telnet-connection session)))
+      (when conn
+        (handler-case
+            (telnet:telnet-connection-close conn)
+          (error (e)
+            (mud.utils:log-error "Error closing telnet connection: ~A" e)))))))
 
 (defun ask-input (obj question &optional (default ""))
   "Asks input from the user"
