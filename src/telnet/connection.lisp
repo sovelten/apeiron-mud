@@ -261,7 +261,9 @@ appending them to the line buffer.  Uses flexi-streams for UTF-8 decode."
                       (flexi-streams:octets-to-string bytes :external-format :utf-8)
                     (error ()
                       (flexi-streams:octets-to-string
-                       bytes :external-format '(:utf-8 :replacement #\?))))))
+                       bytes
+                       :external-format (flexi-streams:make-external-format
+                                         :utf-8 :replacement #\?))))))
         (setf (fill-pointer buf) 0)
         (loop for c across str do (vector-push-extend c line))))))
 
@@ -348,6 +350,7 @@ Returns (values nil :connection-lost) on fatal error."
                  (%handle-telnet-command conn cmd 0)))))
 
             ;; Not IAC — data byte, already in buf, decode it
+            (setf (fill-pointer buf) 1)
             (%flush-read-buffer conn)))
 
       ;; Try to return a character from the line buffer
@@ -406,7 +409,7 @@ Returns (values nil :connection-lost) on error."
                (setf (fill-pointer line) 0)
                (return (values result nil))))
 
-            ((and saw-cr (char= char #\Null))
+            ((and saw-cr (char= char #\Nul))
              (let ((result (coerce line 'string)))
                (setf (fill-pointer line) 0)
                (return (values result nil))))
