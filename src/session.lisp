@@ -1,5 +1,20 @@
 (in-package :mud)
 
+;; Necessary protocols for user session interaction
+
+;; On timeout, should send :timeout on second return value
+(defgeneric mud-read-line (obj &key timeout))
+(defgeneric mud-write (obj message &key newline))
+(defgeneric session-stream (session)
+  (:documentation "Return the stream backing this session, or nil."))
+(defgeneric session-keepalive (session)
+  (:documentation "Send a keepalive heartbeat for this session.
+The default method is a no-op."))
+
+;;
+;; MUD Session basic implementation of protocols
+;;
+
 (defclass mud-session ()
   ((id :initarg :id
        :accessor session-id
@@ -13,10 +28,6 @@
               :documentation "Player controlled by this session"))
   (:documentation "A network session in the MUD"))
 
-;; On timeout, should send :timeout on second return value
-(defgeneric mud-read-line (obj &key timeout))
-(defgeneric mud-write (obj message &key newline))
-
 (defun new-session (socket)
   (make-instance 'mud-session
                  :id (mud.utils:make-id)
@@ -29,13 +40,6 @@ a session ready for I/O."
   (make-instance 'telnet-session
                  :id (mud.utils:make-id)
                  :telnet-conn (telnet:make-telnet-connection usocket)))
-
-(defgeneric session-stream (session)
-  (:documentation "Return the stream backing this session, or nil."))
-
-(defgeneric session-keepalive (session)
-  (:documentation "Send a keepalive heartbeat for this session.
-The default method is a no-op."))
 
 (defmethod session-keepalive ((session mud-session))
   "Default keepalive is a no-op.  Subclasses (e.g. telnet-session)
@@ -121,14 +125,21 @@ should override this to send protocol-specific heartbeats."
          (t
           (return (values nil status)))))))
 
-(defclass stream-session (mud-session)
-  ((stream :initarg :stream
-           :reader session-stream
-           :initform nil
-           :documentation "The stream backing this session"))
-  (:documentation "A session backed by a plain Common Lisp stream.
-Useful for testing with string streams, or for Telnet-like backends
-that provide their own stream abstraction."))
+(defun ask-input (obj question &optional (default ""))
+  "Asks input from the user"
+  (mud-write obj question :newline t)
+  (multiple-value-bind (line status) (mud-read-line obj)
+    (if (and line (null status))
+        (let ((trimmed (string-trim '(#\Return #\Newline) line)))
+          (if (and trimmed (> (length trimmed) 0))
+              trimmed
+              default))
+        default)))
+
+;;
+;; Implementation of mud-session using the telnet server module
+;; (attempts to respect RFC 854)
+;;
 
 (defclass telnet-session (mud-session)
   ((telnet-conn :initarg :telnet-conn
@@ -139,34 +150,6 @@ that provide their own stream abstraction."))
 This session implements RFC 854-compliant telnet I/O with proper
 IAC command processing, option negotiation, and keepalive via NOP.
 The telnet subsystem is fully decoupled from MUD game logic."))
-
-(defmethod mud-read-line ((session stream-session) &key (timeout 300))
-  (declare (ignore timeout))
-  (let ((stream (session-stream session)))
-    (if (null stream)
-        (values nil :eof)
-        (handler-case
-            (let ((line (read-line stream nil nil)))
-              (if line
-                  (values line nil)
-                  (values nil :eof)))
-          (error (e)
-            (values nil e))))))
-
-(defmethod session-disconnect ((session stream-session))
-  (when (session-character session)
-    (setf (session-character session) nil))
-  (when (session-stream session)
-    (handler-case
-        (close (session-stream session))
-      (error (e)
-        (mud.utils:log-error "Error closing stream for ~A: ~A"
-                             (session-stream session) e)))))
-
-(defmethod session-keepalive ((session stream-session))
-  ;; No keepalive needed for stream-based sessions
-  (declare (ignore session))
-  nil)
 
 (progn
   ;; --- telnet-session methods ---
@@ -218,13 +201,43 @@ Use telnet:telnet-read-line / telnet:telnet-write-string instead."
           (error (e)
             (mud.utils:log-error "Error closing telnet connection: ~A" e)))))))
 
-(defun ask-input (obj question &optional (default ""))
-  "Asks input from the user"
-  (mud-write obj question :newline t)
-  (multiple-value-bind (line status) (mud-read-line obj)
-    (if (and line (null status))
-        (let ((trimmed (string-trim '(#\Return #\Newline) line)))
-          (if (and trimmed (> (length trimmed) 0))
-              trimmed
-              default))
-        default)))
+;;
+;; Basic Stream Session
+;;
+
+(defclass stream-session (mud-session)
+  ((stream :initarg :stream
+           :reader session-stream
+           :initform nil
+           :documentation "The stream backing this session"))
+  (:documentation "A session backed by a plain Common Lisp stream.
+Useful for testing with string streams, or for Telnet-like backends
+that provide their own stream abstraction."))
+
+(defmethod mud-read-line ((session stream-session) &key (timeout 300))
+  (declare (ignore timeout))
+  (let ((stream (session-stream session)))
+    (if (null stream)
+        (values nil :eof)
+        (handler-case
+            (let ((line (read-line stream nil nil)))
+              (if line
+                  (values line nil)
+                  (values nil :eof)))
+          (error (e)
+            (values nil e))))))
+
+(defmethod session-disconnect ((session stream-session))
+  (when (session-character session)
+    (setf (session-character session) nil))
+  (when (session-stream session)
+    (handler-case
+        (close (session-stream session))
+      (error (e)
+        (mud.utils:log-error "Error closing stream for ~A: ~A"
+                             (session-stream session) e)))))
+
+(defmethod session-keepalive ((session stream-session))
+  ;; No keepalive needed for stream-based sessions
+  (declare (ignore session))
+  nil)
