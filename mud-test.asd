@@ -16,4 +16,7 @@
                  (:file "test-commands" :depends-on ("test-package"))
                  (:file "test-network" :depends-on ("test-package"))
                  (:file "test-integration" :depends-on ("test-package"))
-                 (:file "test-persistent-world" :depends-on ("test-package"))))))
+                 (:file "test-persistent-world" :depends-on ("test-package")))))
+  :perform (test-op :after (op c)
+             (declare (ignore op c))
+             (funcall (find-symbol "RUN-TESTS" :mud-test))))
