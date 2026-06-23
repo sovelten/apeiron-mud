@@ -6,7 +6,7 @@ Very simple and raw at the moment, but the fact that it runs on lisp gives it so
 
 ## Key Design Principles
 
-1. **Persistent Objects** - Game objects are persisted and changes are logged to enable recovery.
+1. **Persistent Objects** - Game objects are persisted and changes are logged to enable recovery (using BKNR.Datastore).
 2. **All power to the user** - You can eval lisp code directly within the game (could/should be restricted to admins in the future)
 3. **Hot Reloading** - No need to ever shut the server down for maintenance (WIP)
 
