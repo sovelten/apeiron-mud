@@ -310,6 +310,18 @@ Returns a list of byte-vectors that should be written in response, or NIL."))
   nil)
 
 ;;; ----------------------------------------------------------------
+;;; Default handler registration
+;;; ----------------------------------------------------------------
+
+(defmethod initialize-instance :after ((p telnet-protocol) &key)
+  "Register the built-in subnegotiation handlers (NAWS, TERMINAL-TYPE)
+on every protocol instance.  This guarantees these options are
+interpreted out of the box, independent of whether the application
+calls TELNET-INIT-NEGOTIATION."
+  (telnet-register-option-handler p +telnet-opt-naws+ #'%handle-naws)
+  (telnet-register-option-handler p +telnet-opt-terminal-type+ #'%handle-terminal-type))
+
+;;; ----------------------------------------------------------------
 ;;; Initial negotiation setup
 ;;; ----------------------------------------------------------------
 
@@ -324,9 +336,8 @@ We request:
   - DO Terminal Type        (we want to know the terminal type)
 
 The commands are a list of byte-vectors ready to be written to the socket."
-  ;; Register built-in handlers
-  (telnet-register-option-handler protocol +telnet-opt-naws+ #'%handle-naws)
-  (telnet-register-option-handler protocol +telnet-opt-terminal-type+ #'%handle-terminal-type)
+  ;; Built-in subnegotiation handlers (NAWS, TERMINAL-TYPE) are registered
+  ;; automatically by INITIALIZE-INSTANCE on the protocol object.
 
   ;; Mark options we want
   ;; Local: we WILL do these

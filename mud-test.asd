@@ -7,6 +7,7 @@
   :components ((:module "tests"
                 :components
                 ((:file "test-package")
+                 (:file "test-telnet" :depends-on ("test-package"))
                  (:file "test-object" :depends-on ("test-package"))
                  (:file "test-room" :depends-on ("test-package"))
                  (:file "test-guestbook" :depends-on ("test-package"))
