@@ -49,4 +49,4 @@
 (defun player-send-message (player message &key (newline t))
   "Send a message to a player. If NEWLINE is nil, don't add a trailing newline."
   (let ((session (character-session player)))
-    (session-send-message session message :newline newline)))
+    (mud-write session message :newline newline)))

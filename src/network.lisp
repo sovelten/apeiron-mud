@@ -14,49 +14,48 @@
          (character (new-character char-name session)))
     (mud.utils:log-message "New connection: ~A" char-name)
     (world-add-character! world character)
-    (session-send-message session (room-describe (object-location character)))
-    (session-send-message session "Welcome to the MUD!")
+    (mud-write session (room-describe (object-location character)))
+    (mud-write session "Welcome to the MUD!")
     (handler-case
-        (let ((socket (session-socket session)))
-          (loop while *server-running*
-                do
-                   (handler-case
-                       (progn
-                         ;; Send prompt
-                         (session-send-prompt session)
+        (loop while *server-running*
+              do
+                 (handler-case
+                     (progn
+                       ;; Send prompt
+                       (session-send-prompt session)
 
-                         (multiple-value-bind (line status) (read-line-with-timeout-loop socket)
-                           (cond
-                             ((eq status :timeout)
-                              (session-send-message session "Timed out due to inactivity.")
-                              (mud.utils:log-message "Client ~A timed out due to inactivity" char-name)
-                              (return))
-                             ((or (eq status :eof) (typep status 'error))
-                              (mud.utils:log-message "Client ~A disconnected ~A" char-name status)
-                              (return))
-                             (line
-                              (let ((trimmed (string-trim '(#\Return #\Newline) line)))
-                                (when (and trimmed (> (length trimmed) 0))
-                                  (process-command world character trimmed))))
-                             (t
-                              (return)))))
-                     (end-of-file ()
-                       ;; Connection closed by client
-                       (mud.utils:log-message "Client ~A disconnected end-of-file" char-name)
-                       (return))
-                     (error (e)
-                       ;; Check if this is a "broken pipe" or similar connection error
-                       (let ((error-str (format nil "~A" e)))
-                         (if (or (search "Broken pipe" error-str)
-                                 (search "closed" error-str))
-                             ;; Connection error, exit gracefully
-                             (progn
-                               (mud.utils:log-message "Client ~A connection lost" char-name)
-                               (return))
-                             ;; Other error, log it
-                             (progn
-                               (mud.utils:log-error "Error in client handler: ~A" e)
-                               (return))))))))
+                       (multiple-value-bind (line status) (read-line-with-timeout-loop session)
+                         (cond
+                           ((eq status :timeout)
+                            (mud-write session "Timed out due to inactivity.")
+                            (mud.utils:log-message "Client ~A timed out due to inactivity" char-name)
+                            (return))
+                           ((or (eq status :eof) (typep status 'error))
+                            (mud.utils:log-message "Client ~A disconnected ~A" char-name status)
+                            (return))
+                           (line
+                            (let ((trimmed (string-trim '(#\Return #\Newline) line)))
+                              (when (and trimmed (> (length trimmed) 0))
+                                (process-command world character trimmed))))
+                           (t
+                            (return)))))
+                   (end-of-file ()
+                     ;; Connection closed by client
+                     (mud.utils:log-message "Client ~A disconnected end-of-file" char-name)
+                     (return))
+                   (error (e)
+                     ;; Check if this is a "broken pipe" or similar connection error
+                     (let ((error-str (format nil "~A" e)))
+                       (if (or (search "Broken pipe" error-str)
+                               (search "closed" error-str))
+                           ;; Connection error, exit gracefully
+                           (progn
+                             (mud.utils:log-message "Client ~A connection lost" char-name)
+                             (return))
+                           ;; Other error, log it
+                           (progn
+                             (mud.utils:log-error "Error in client handler: ~A" e)
+                             (return)))))))
       (error (e)
         (mud.utils:log-error "Client handler error for ~A: ~A" char-name e))))
 
@@ -78,7 +77,7 @@
                      (when client-socket
                        (if (not *server-running*)
                            (usocket:socket-close client-socket)
-                           (let ((session (new-session client-socket)))
+                           (let ((session (new-telnet-session client-socket)))
                              ;; Start session thread
                              (let ((thread (bordeaux-threads:make-thread
                                             (lambda () (handle-client world session))

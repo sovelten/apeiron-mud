@@ -13,14 +13,46 @@
               :documentation "Player controlled by this session"))
   (:documentation "A network session in the MUD"))
 
+;; On timeout, should send :timeout on second return value
+(defgeneric mud-read-line (obj &key timeout))
+(defgeneric mud-write (obj message &key newline))
+
 (defun new-session (socket)
   (make-instance 'mud-session
                  :id (mud.utils:make-id)
                  :socket socket))
 
-(defun session-disconnect (session)
-  ;; Unlink character from session before disconnecting
-  ;; Is this the best approach?
+(defun new-telnet-session (usocket)
+  "Create a new telnet-session from an accepted usocket.
+Performs initial RFC 854 telnet option negotiation and returns
+a session ready for I/O."
+  (make-instance 'telnet-session
+                 :id (mud.utils:make-id)
+                 :telnet-conn (telnet:make-telnet-connection usocket)))
+
+(defgeneric session-stream (session)
+  (:documentation "Return the stream backing this session, or nil."))
+
+(defgeneric session-keepalive (session)
+  (:documentation "Send a keepalive heartbeat for this session.
+The default method is a no-op."))
+
+(defmethod session-keepalive ((session mud-session))
+  "Default keepalive is a no-op.  Subclasses (e.g. telnet-session)
+should override this to send protocol-specific heartbeats."
+  (declare (ignore session))
+  nil)
+
+(defmethod session-stream ((session mud-session))
+  (let ((socket (session-socket session)))
+    (when socket
+      (handler-case (usocket:socket-stream socket)
+        (error () nil)))))
+
+(defgeneric session-disconnect (session)
+  (:documentation "Clean up and disconnect this session."))
+
+(defmethod session-disconnect ((session mud-session))
   (when (session-character session)
     (setf (session-character session) nil))
   (when (and session (session-socket session))
@@ -30,100 +62,161 @@
         (mud.utils:log-error "Error closing socket for ~A: ~A"
                              (session-socket session) e)))))
 
-(defun session-send-message (session message &key (newline t))
-  "Send a message to a session. If NEWLINE is nil, don't add a trailing newline."
-  (when (and session (session-socket session))
-    (handler-case
-        (let ((stream (usocket:socket-stream (session-socket session))))
-          (when stream
+(defmethod mud-write ((obj mud-session) message &key (newline t))
+  (let ((stream (session-stream obj)))
+    (when stream
+      (handler-case
+          (progn
             (if newline
                 (format stream "~A~%" message)
                 (format stream "~A" message))
-            (force-output stream)))
-      (error (e)
-        ;; Only log if it's not a connection error
-        (let ((error-str (format nil "~A" e)))
-          (unless (or (search "Broken pipe" error-str)
-                      (search "closed" error-str))
-            (mud.utils:log-error "Failed to send message to session ~A: ~A"
-                                 (session-socket session) e)))))))
+            (force-output stream))
+        (error (e)
+          (let ((error-str (format nil "~A" e)))
+            (unless (or (search "Broken pipe" error-str)
+                        (search "closed" error-str))
+              (mud.utils:log-error "Failed to send message to session ~A: ~A"
+                                   (session-socket obj) e))))))))
 
 (defun session-send-prompt (session)
   "Send a prompt to a player on the same line (no newline)."
-  (session-send-message session "> " :newline nil))
+  (mud-write session "> " :newline nil))
 
-(defun read-line-with-timeout (socket &optional (timeout 300))
-  "Read a line from socket stream with a timeout in seconds.
-   Returns (values line status), where status is nil for success,
-   :timeout for timeout, and :eof for connection closed."
-  (if (null socket)
-      (values nil :eof)
-      (let ((ready (handler-case (usocket:wait-for-input socket :timeout timeout :ready-only t)
-                     (error () nil))))
-        (if (null ready)
-            (values nil :timeout)
-            (let ((stream (handler-case (usocket:socket-stream socket) (error () nil))))
-              (if (null stream)
-                  (values nil :eof)
-                  (handler-case
-                      (let ((line (read-line stream nil nil)))
-                        (if line
-                            (values line nil)
-                            (values nil :eof)))
-                    (error (e)
-                      (values nil e)))))))))
+(defmethod mud-read-line ((obj mud-session) &key (timeout 300))
+  (let ((socket (session-socket obj)))
+    (if (null socket)
+        (values nil :eof)
+        (let ((ready (handler-case (usocket:wait-for-input socket :timeout timeout :ready-only t)
+                       (error () nil))))
+          (if (null ready)
+              (values nil :timeout)
+              (let ((stream (session-stream obj)))
+                (if (null stream)
+                    (values nil :eof)
+                    (handler-case
+                        (let ((line (read-line stream nil nil)))
+                          (if line
+                              (values line nil)
+                              (values nil :eof)))
+                      (error (e)
+                        (values nil e))))))))))
 
-(defun send-keepalive (socket)
-  "Send a harmless Telnet NOP (No Operation) command to keep the connection alive.
-   This complies with RFC 854 and is ignored by compliant Telnet clients without shifting the cursor.
-   If the socket's connection has been lost, this write or its flush will signal an error."
-  (when socket
-    (let ((stream (usocket:socket-stream socket)))
-      (mud.utils:log-message "Staying alive with Telnet NOP...")
-      (when stream
-        (force-output stream)
-        #+sbcl
-        (let* ((fd (sb-sys:fd-stream-fd stream))
-               (octets (make-array 2 :element-type '(unsigned-byte 8) :initial-contents '(255 241)))
-               (sap (sb-sys:vector-sap octets)))
-          (sb-unix:unix-write fd sap 0 2))
-        #-sbcl
-        (progn
-          (write-char (code-char 255) stream)
-          (write-char (code-char 241) stream)
-          (force-output stream))))))
-
-(defun read-line-with-timeout-loop (socket &key (poll-interval 30) (keepalive-func #'send-keepalive))
-  "Read a line from socket stream by polling with a short timeout (POLL-INTERVAL).
-   If polling times out, it invokes KEEPALIVE-FUNC (e.g., to send a keepalive probe)
-   to verify if the connection is still alive, and then continues waiting.
-   This allows players to stay connected indefinitely while actively detecting broken connections."
+(defun read-line-with-timeout-loop (session &key (poll-interval 30))
+  "Read a line from SESSION by polling with a short timeout (POLL-INTERVAL).
+   If polling times out, it sends a keepalive heartbeat to verify the
+   connection is still alive, then continues waiting.
+   Returns (values line status)."
   (loop
-     (multiple-value-bind (line status) (read-line-with-timeout socket poll-interval)
+     (multiple-value-bind (line status) (mud-read-line session :timeout poll-interval)
        (cond
          ((null status)
           (return (values line nil)))
          ((eq status :timeout)
-          (if keepalive-func
-              (handler-case
-                  (progn
-                    (funcall keepalive-func socket)
-                    nil)
-                (error (e)
-                  (return (values nil e))))
-              nil))
+          (handler-case
+              (progn
+                (session-keepalive session)
+                nil)
+            (error (e)
+              (return (values nil e)))))
          (t
           (return (values nil status)))))))
 
-(defgeneric mud-read-line (obj))
-(defgeneric mud-write (obj message &key newline))
+(defclass stream-session (mud-session)
+  ((stream :initarg :stream
+           :reader session-stream
+           :initform nil
+           :documentation "The stream backing this session"))
+  (:documentation "A session backed by a plain Common Lisp stream.
+Useful for testing with string streams, or for Telnet-like backends
+that provide their own stream abstraction."))
 
-(defmethod mud-read-line ((obj mud-session))
-  (let ((socket (session-socket obj)))
-    (read-line-with-timeout socket)))
+(defclass telnet-session (mud-session)
+  ((telnet-conn :initarg :telnet-conn
+                :reader session-telnet-connection
+                :documentation "The telnet:telnet-connection backing this session."))
+  (:documentation "A session backed by a telnet:telnet-connection.
 
-(defmethod mud-write ((obj mud-session) message &key (newline t))
-  (session-send-message obj message :newline newline))
+This session implements RFC 854-compliant telnet I/O with proper
+IAC command processing, option negotiation, and keepalive via NOP.
+The telnet subsystem is fully decoupled from MUD game logic."))
+
+(defmethod mud-read-line ((session stream-session) &key (timeout 300))
+  (declare (ignore timeout))
+  (let ((stream (session-stream session)))
+    (if (null stream)
+        (values nil :eof)
+        (handler-case
+            (let ((line (read-line stream nil nil)))
+              (if line
+                  (values line nil)
+                  (values nil :eof)))
+          (error (e)
+            (values nil e))))))
+
+(defmethod session-disconnect ((session stream-session))
+  (when (session-character session)
+    (setf (session-character session) nil))
+  (when (session-stream session)
+    (handler-case
+        (close (session-stream session))
+      (error (e)
+        (mud.utils:log-error "Error closing stream for ~A: ~A"
+                             (session-stream session) e)))))
+
+(defmethod session-keepalive ((session stream-session))
+  ;; No keepalive needed for stream-based sessions
+  (declare (ignore session))
+  nil)
+
+(progn
+  ;; --- telnet-session methods ---
+  (defmethod session-stream ((session telnet-session))
+    "Telnet sessions do not expose a raw CL stream.
+Use telnet:telnet-read-line / telnet:telnet-write-string instead."
+    nil)
+
+  (defmethod session-keepalive ((session telnet-session))
+    "Send a Telnet NOP (RFC 854) to keep the connection alive."
+    (telnet:telnet-send-nop (session-telnet-connection session)))
+
+  (defmethod mud-read-line ((session telnet-session) &key (timeout 300))
+    "Read a line from the telnet session using RFC 854-compliant I/O."
+    (let ((conn (session-telnet-connection session)))
+      (if conn
+          (handler-case
+              (telnet:telnet-read-line conn :timeout timeout :poll-interval 0.1)
+            (telnet:telnet-connection-lost (e)
+              (declare (ignore e))
+              (values nil :connection-lost))
+            (telnet:telnet-error (e)
+              (mud.utils:log-error "Telnet read error: ~A" (telnet:telnet-error-message e))
+              (values nil :eof)))
+          (values nil :eof))))
+
+  (defmethod mud-write ((session telnet-session) message &key (newline t))
+    "Write a message to the telnet session using RFC 854-compliant I/O."
+    (let ((conn (session-telnet-connection session)))
+      (when conn
+        (handler-case
+            (telnet:telnet-write-string conn message
+                                        :end (if newline :crlf nil))
+          (telnet:telnet-connection-lost (e)
+            (declare (ignore e))
+            nil)
+          (telnet:telnet-error (e)
+            (mud.utils:log-error "Telnet write error: ~A" (telnet:telnet-error-message e))
+            nil)))))
+
+  (defmethod session-disconnect ((session telnet-session))
+    "Disconnect the telnet session, releasing all resources."
+    (when (session-character session)
+      (setf (session-character session) nil))
+    (let ((conn (session-telnet-connection session)))
+      (when conn
+        (handler-case
+            (telnet:telnet-connection-close conn)
+          (error (e)
+            (mud.utils:log-error "Error closing telnet connection: ~A" e)))))))
 
 (defun ask-input (obj question &optional (default ""))
   "Asks input from the user"
