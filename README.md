@@ -1,6 +1,6 @@
-# Musical Guacamole - A Common Lisp MUD Server
+# Apeiron MUD - A Common Lisp MUD Server
 
-A MUD (Multi-User Dungeon) server written in Common Lisp, inspired by Dworkin's Game Driver (DGD) and LMUD, with the added reckless capability of running lisp code at your own risk and peril (don't start a real server with this on the internet). The name was inspired by the first repository name that github suggested to me.
+A MUD (Multi-User Dungeon) server written in Common Lisp, inspired by Dworkin's Game Driver (DGD) and LMUD, with the added reckless capability of running lisp code at your own risk and peril (don't start a real server with this on the internet).
 
 Very simple and raw at the moment, but the fact that it runs on lisp gives it some super powers, such as the ability to update the running image within the session.
 
@@ -102,12 +102,12 @@ You see:
 Exits: north
 
 Welcome to the MUD!
->  eval (mud:create-room! (mud:new-room :name "Valinor")) 
+>  eval (mud:new-persistent-room! :name "Valinor")) 
 #<MUD-ROOM Valinor (ID: 5)>
 > eval (mud:rooms)
 (#<MUD-ROOM The Tavern (ID: 1)> #<MUD-ROOM A Dense Forest (ID: 2)>
  #<MUD-ROOM Valinor (ID: 5)>)
-> eval (mud:room-add-exits (mud:room-by-id 1) :west (mud:room-by-id 5) :east)
+> eval (mud:room-add-exits (mud:room-by-id 1) "west" (mud:room-by-id 5) "east")
 #<MUD-ROOM The Tavern (ID: 1)>
 > look
 
