@@ -95,17 +95,32 @@ close/reopen cycles that trigger BKNR transaction log replay warnings."
    All persistent objects are created within a single transaction."
   (let ((world (make-instance 'persistent-world)))
     (bknr.datastore:with-transaction ("initial-world")
-      (let ((tavern (new-persistent-room :name "The Tavern"
-                              :description "There is a guestbook on top of a table. Hint: type \"write\" to write an entry on the guestbook."))
-            (forest (new-persistent-room :name "A Dense Forest"))
-            (guestbook (new-persistent-guestbook :name "a guestbook")))
-        (room-add-object tavern guestbook)
-        (room-add-exit tavern "north" forest)
-        (room-add-exit forest "south" tavern)
+      (let ((gathering (new-persistent-room :name "The Gathering"
+                                            :description "A warm, circular hall with a high domed ceiling. Torches flicker along the stone walls, casting dancing shadows. Four archways stand at the cardinal points, each bearing a carved symbol: a leaf (north), a sun (east), a droplet (west), and a flame (south). A sturdy oak guestbook sits on a pedestal in the centre."))
+            (forest (new-persistent-room :name "A Whispering Forest"
+                                         :description "Ancient trees tower overhead, their leaves rustling secrets in the wind. Shafts of golden sunlight pierce the canopy, illuminating patches of moss and wildflowers. A faint path winds deeper into the woods."))
+            (desert (new-persistent-room :name "A Sun-Bleached Desert"
+                                         :description "Endless dunes of golden sand stretch to the horizon under a blinding sun. The heat shimmers in waves, and the silence is broken only by the occasional skitter of a unseen creature. The bleached bones of a long-dead beast protrude from a nearby dune."))
+            (swamp (new-persistent-room :name "A Murky Swamp"
+                                        :description "Stagnant water laps at gnarled tree roots as thick mist curls around your ankles. The air is heavy with the smell of decay and damp earth. Somewhere in the distance, a bullfrog croaks and something large splashes."))
+            (volcano (new-persistent-room :name "A Rumbling Volcano"
+                                          :description "The ground trembles beneath your feet. Glowing lava flows through cracks in the black, jagged rock, casting an eerie red glow across the cavern. Heat shimmers violently and the air reeks of sulphur. The mountain groans above you."))
+            (guestbook (new-persistent-guestbook :name "an oak guestbook")))
+        ;; Place the guestbook in The Gathering
+        (room-add-object gathering guestbook)
+        ;; Connect The Gathering (hub) to the four biomes
+        (room-add-exits gathering "north" forest "south")
+        (room-add-exits gathering "east" desert "west")
+        (room-add-exits gathering "west" swamp "east")
+        (room-add-exits gathering "south" volcano "north")
+        ;; Register all objects in the world
         (world-set-object-id! world guestbook)
-        (world-set-object-id! world tavern)
+        (world-set-object-id! world gathering)
         (world-set-object-id! world forest)
-        (world-set-starting-room! world tavern)))
+        (world-set-object-id! world desert)
+        (world-set-object-id! world swamp)
+        (world-set-object-id! world volcano)
+        (world-set-starting-room! world gathering)))
     world))
 
 (defun world-restore-or-initialize (&key force-new)
