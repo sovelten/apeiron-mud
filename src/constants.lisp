@@ -20,9 +20,11 @@
 (defconstant +command-timeout+ 30)
 
 ;; TLS configuration
-(defparameter *server-tls-port* 992
-  "Port for TLS-encrypted telnet connections (IANA-registered for
-telnet-over-TLS, also commonly used by MUDs for SSL/TLS).")
+(defparameter *server-tls-port* 8889
+  "Port for TLS-encrypted telnet connections.  The IANA-registered port
+for telnet-over-TLS is 992, but ports below 1024 require root
+privileges.  8889 is the default for development and matches the
+common MUD + 1 pattern (plain-text 8888 → TLS 8889).")
 
 (defparameter *server-ssl-certificate* nil
   "Path to the PEM-encoded SSL/TLS certificate file.
