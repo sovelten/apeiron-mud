@@ -22,13 +22,71 @@
                  :id (mud.utils:make-id)
                  :socket socket))
 
-(defun new-telnet-session (usocket)
+(defun new-telnet-session (usocket &key start-tls certificate key password)
   "Create a new telnet-session from an accepted usocket.
 Performs initial RFC 854 telnet option negotiation and returns
-a session ready for I/O."
+a session ready for I/O.
+
+When START-TLS is true, the START_TLS telnet option (46) is offered
+during initial negotiation.  If the client responds DO START_TLS, the
+connection is automatically upgraded to TLS in-band.  CERTIFICATE,
+KEY, and PASSWORD are required when START-TLS is true."
+  (let* ((protocol (if start-tls
+                       (telnet:telnet-register-start-tls
+                        (make-instance 'telnet:telnet-protocol))
+                       (make-instance 'telnet:telnet-protocol)))
+         (conn (telnet:make-telnet-connection usocket :protocol protocol)))
+    ;; Install START_TLS upgrade callback if requested
+    (when start-tls
+      (setf (telnet:telnet-conn-tls-upgrade-fn conn)
+            (let ((cert certificate)
+                  (key key)
+                  (pwd password))
+              (lambda ()
+                (handler-case
+                    (progn
+                      (telnet:telnet-start-tls conn
+                                               :certificate cert
+                                               :key key
+                                               :password pwd)
+                      (mud.utils:log-message
+                       "Connection upgraded to TLS via START_TLS"))
+                  (telnet:telnet-tls-error (e)
+                    (mud.utils:log-error
+                     "START_TLS upgrade failed: ~A"
+                     (telnet:telnet-error-message e))))))))
+    (make-instance 'telnet-session
+                   :id (mud.utils:make-id)
+                   :telnet-conn conn)))
+
+(defun new-telnet-tls-session (usocket &key certificate key password)
+  "Create a new telnet-session with immediate TLS encryption from an
+accepted usocket.  Performs the TLS handshake (SSL_accept) and then
+initial RFC 854 telnet option negotiation.
+
+CERTIFICATE and KEY are paths to PEM-encoded certificate and private
+key files.  PASSWORD is the optional decryption password for the key.
+
+Returns a telnet-session ready for I/O — all traffic is encrypted."
   (make-instance 'telnet-session
                  :id (mud.utils:make-id)
-                 :telnet-conn (telnet:make-telnet-connection usocket)))
+                 :telnet-conn
+                 (telnet:make-telnet-tls-connection usocket
+                                                    :certificate certificate
+                                                    :key key
+                                                    :password password)))
+
+(defun new-telnet-session-with-start-tls (usocket &key certificate key password)
+  "Create a telnet-session that offers the START_TLS telnet option (46).
+The initial connection is plain-text.  If the client negotiates START_TLS,
+the connection is upgraded to TLS in-band using the provided credentials.
+
+This is a convenience wrapper around NEW-TELNET-SESSION with :START-TLS T."
+  (new-telnet-session usocket
+                      :start-tls t
+                      :certificate certificate
+                      :key key
+                      :password password))
 
 (defgeneric session-stream (session)
   (:documentation "Return the stream backing this session, or nil."))

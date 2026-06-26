@@ -79,6 +79,8 @@
    ;; Session constructors
    #:new-session
    #:new-telnet-session
+   #:new-telnet-tls-session
+   #:new-telnet-session-with-start-tls
    
    ;; Command system
    #:process-command
@@ -87,7 +89,14 @@
    #:start-mud-server
    #:stop-mud-server
    #:get-server-status
-   #:*server-running*))
+   #:*server-running*
+
+   ;; TLS / SSL configuration
+   #:*server-tls-port*
+   #:*server-ssl-certificate*
+   #:*server-ssl-key*
+   #:*server-ssl-password*
+   #:*server-tls-prefer-start-tls*))
 
 (defpackage #:mud.utils
   (:use #:cl)

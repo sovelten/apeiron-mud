@@ -109,6 +109,14 @@ endpoints are different streams.")
     :initform t
     :accessor telnet-connection-alive-p
     :documentation "NIL when the connection has been closed or lost.")
+   (tls-upgrade-fn
+    :initform nil
+    :accessor telnet-conn-tls-upgrade-fn
+    :documentation "When non-NIL, a function of no arguments that upgrades
+this connection to TLS.  Called from %HANDLE-TELNET-COMMAND when the
+START_TLS option (46) is successfully negotiated (we receive DO START_TLS
+after offering WILL START_TLS).  Set by the network layer when the server
+wants to offer START_TLS on the plain-text port.")
    ;; Read-side state
    (read-buffer
     :initform (make-array 256 :element-type '(unsigned-byte 8)
@@ -131,7 +139,8 @@ Provides:
 - RFC 854 option negotiation
 - IAC command processing (NOP keepalives, etc.)
 - UTF-8 character encoding/decoding via flexi-streams
-- Thread-safe read and write operations"))
+- Thread-safe read and write operations
+- Optional START_TLS upgrade support"))
 
 ;;; ----------------------------------------------------------------
 ;;; Effective output stream
@@ -150,7 +159,7 @@ full-duplex socket case where the same stream is read and written)."
 ;;; Construction
 ;;; ----------------------------------------------------------------
 
-(defun make-telnet-connection (usocket)
+(defun make-telnet-connection (usocket &key (protocol (make-instance 'telnet-protocol)))
   "Create a new telnet-connection from a usocket.
 
 Duplicates the socket FD to create a dedicated binary stream, keeping
@@ -158,7 +167,11 @@ the usocket's character stream open only for compatibility (it is
 never read from).  Performs initial RFC 854 option negotiation.
 
 USOCKET must be a usocket:stream-usocket from usocket:socket-accept
-or usocket:socket-connect."
+or usocket:socket-connect.
+
+When PROTOCOL is provided, it is used instead of creating a fresh
+telnet-protocol instance.  This is useful for pre-configuring option
+handlers (e.g. registering the START_TLS option)."
   (let* ((fd (%socket-fd usocket))
          ;; Use SEPARATE input and output streams, each on its own dup'd
          ;; file descriptor.  Two reasons:
@@ -171,7 +184,6 @@ or usocket:socket-connect."
          ;;      stealing bytes from the shared socket receive queue.
          (in-stream  (%make-binary-fd-stream (sb-posix:dup fd) :input t :output nil))
          (out-stream (%make-binary-fd-stream (sb-posix:dup fd) :input nil :output t))
-         (protocol (make-instance 'telnet-protocol))
          (conn (make-instance 'telnet-connection
                               :usocket usocket
                               :raw-stream in-stream
@@ -205,18 +217,22 @@ negotiation): a one-shot wait can miss bytes that land just after the
 first check.  Each iteration:
 
   * LISTEN covers data already sitting in the stream's input buffer.
+    On SSL streams (cl+ssl:ssl-server-stream) LISTEN also checks the
+    SSL read buffer and the underlying socket via the SSL BIO layer.
   * On SBCL a non-blocking readiness probe on the underlying file
     descriptor covers data that has reached the kernel but not yet the
     stream buffer, AND end-of-file — LISTEN returns NIL at EOF, so the
     fd-level probe is what lets a closed peer be observed promptly
-    (a subsequent READ-BYTE then returns :EOF)."
+    (a subsequent READ-BYTE then returns :EOF).  This only applies to
+    native fd-streams; SSL streams rely on LISTEN alone."
   (let ((deadline (+ (get-internal-real-time)
                      (* timeout-seconds internal-time-units-per-second))))
     (loop
       (when (listen stream) (return t))
       #+sbcl
-      (when (sb-sys:wait-until-fd-usable (sb-sys:fd-stream-fd stream) :input 0)
-        (return t))
+      (when (typep stream 'sb-sys:fd-stream)
+        (when (sb-sys:wait-until-fd-usable (sb-sys:fd-stream-fd stream) :input 0)
+          (return t)))
       (when (>= (get-internal-real-time) deadline) (return nil))
       (sleep 0.02))))
 
@@ -302,7 +318,10 @@ Side-effects: may write negotiation responses to the output stream."
 
 (defun %handle-telnet-command (conn command option)
   "Process a telnet command (IAC COMMAND [OPTION]).
-Writes any negotiation responses to the output stream."
+Writes any negotiation responses to the output stream.
+When a TLS upgrade callback is installed on CONN and the START_TLS
+option (46) is accepted (we receive DO after offering WILL), the
+callback is invoked to trigger the TLS handshake."
   (let ((protocol (telnet-conn-protocol conn))
         (raw-stream (telnet-conn-out-stream conn)))
     (cond
@@ -316,7 +335,14 @@ Writes any negotiation responses to the output stream."
          (dolist (resp responses)
            (handler-case (write-sequence resp raw-stream)
              (error () nil)))
-         (when responses (force-output raw-stream))))
+         (when responses (force-output raw-stream))
+         ;; If START_TLS was just accepted (DO START_TLS after our WILL
+         ;; offer), trigger the in-band TLS upgrade.  The protocol
+         ;; :around method for DO 46 prevents any response being sent,
+         ;; so the TLS handshake can begin immediately.
+         (when (and (= command do) (= option +telnet-opt-start-tls+)
+                    (slot-value conn 'tls-upgrade-fn))
+           (funcall (slot-value conn 'tls-upgrade-fn)))))
       (t nil))))
 
 ;;; ----------------------------------------------------------------

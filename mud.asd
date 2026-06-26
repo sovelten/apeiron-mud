@@ -10,7 +10,8 @@
                "bknr.datastore"
                "bknr.indices"
                "bknr.utils"
-               "cl-csv")
+               "cl-csv"
+               "cl+ssl")
   :components ((:module "src"
                 :components
                 ((:file "package")
@@ -20,7 +21,8 @@
                   :components
                   ((:file "package")
                    (:file "protocol" :depends-on ("package"))
-                   (:file "connection" :depends-on ("package" "protocol"))))
+                   (:file "connection" :depends-on ("package" "protocol"))
+                   (:file "tls" :depends-on ("package" "protocol" "connection"))))
                  (:file "session" :depends-on ("utils"))
                  (:file "object" :depends-on ("utils"))
                  (:file "room" :depends-on ("object"))

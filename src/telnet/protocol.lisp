@@ -73,6 +73,8 @@
 (defconstant +telnet-opt-terminal-speed+     32 "Terminal Speed (RFC 1079).")
 (defconstant +telnet-opt-new-environ+        39 "New Environment (RFC 1572).")
 
+(defconstant +telnet-opt-start-tls+         46 "START_TLS — upgrade to TLS (IETF draft).")
+
 ;;; ----------------------------------------------------------------
 ;;; Option State
 ;;; ----------------------------------------------------------------

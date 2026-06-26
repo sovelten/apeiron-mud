@@ -13,6 +13,7 @@
    #:telnet-error
    #:telnet-error-message
    #:telnet-connection-lost
+   #:telnet-tls-error
 
    ;; Protocol engine
    #:telnet-protocol
@@ -55,9 +56,21 @@
    #:+telnet-opt-suppress-go-ahead+
    #:+telnet-opt-naws+
    #:+telnet-opt-terminal-type+
+   #:+telnet-opt-start-tls+
    ;; +telnet-opt-naws+ above is the NAWS (window size) option
 
    ;; Option negotiation API
    #:telnet-local-option
    #:telnet-remote-option
-   #:telnet-register-option-handler))
+   #:telnet-register-option-handler
+
+   ;; Connection internals (for TLS upgrade)
+   #:telnet-conn-tls-upgrade-fn
+   #:telnet-conn-protocol
+
+   ;; TLS support
+   #:telnet-tls-connection
+   #:make-telnet-tls-connection
+   #:telnet-start-tls
+   #:telnet-tls-connection-p
+   #:telnet-register-start-tls))
