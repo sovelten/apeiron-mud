@@ -1,51 +1,66 @@
-(defpackage #:mud-test
-  (:use #:cl #:fiveam)
-  (:export #:run-tests #:mud-tests
+(defpackage #:apeiron-test
+  (:use #:cl #:fiveam
+        #:apeiron.core
+        #:apeiron.core.utils
+        #:apeiron.persistence
+        #:apeiron.server)
+  (:export #:run-tests #:apeiron-tests
+           #:core-suite
+           #:telnet-suite
+           #:persistence-suite
+           #:server-suite
            #:setup-test-environment
            #:teardown-test-environment))
 
-(in-package #:mud-test)
+(in-package #:apeiron-test)
 
-(def-suite mud-tests :description "Tests for the MUD server")
+(def-suite apeiron-tests
+    :description "All Apeiron MUD tests")
 
-;; Ensure test isolation even when FiveAM's RUN is called directly
-;; (e.g. via MCP test runner) without going through RUN-TESTS.
-;; Silence BKNR progress output (writes to *trace-output*) and
-;; point store directories at temporary paths.
+(def-suite core-suite
+    :in apeiron-tests
+    :description "Core module tests — objects, rooms, guestbook, characters, world, commands")
+
+(def-suite telnet-suite
+    :in apeiron-tests
+    :description "Telnet protocol tests")
+
+(def-suite persistence-suite
+    :in apeiron-tests
+    :description "Persistence module tests — BKNR datastore, world restore")
+
+(def-suite server-suite
+    :in apeiron-tests
+    :description "Server module tests — network, integration")
+
 (eval-when (:load-toplevel :execute)
-  (setf mud:*debug-mode* nil)
+  (setf *debug-mode* nil)
   (setf bknr.datastore::*store-verbose* nil)
   (let ((temp-dir (uiop:subpathname (uiop:default-temporary-directory) "mud-test-bknr/"))
         (data-dir (uiop:subpathname (uiop:default-temporary-directory) "mud-test-data/")))
-    (ensure-directories-exist temp-dir)
-    (ensure-directories-exist data-dir)
-    (setf mud::*store-directory* temp-dir)
-    (setf mud::*data-directory* data-dir)))
-
-;; Ensure test isolation even when FiveAM's RUN is called directly
-;; (e.g. via MCP test runner) without going through RUN-TESTS.
-;; Also disable debug-mode to prevent BROKEN-PIPE from log-message
-;; writing to the worker's actual stdout fd-stream.
-
-(defun setup-test-environment ()
-  "Set up a clean, isolated temporary BKNR store for test runs.
-Also closes any open store from a previous run and resets debug mode."
-  (setf mud:*debug-mode* nil)
-  (setf bknr.datastore::*store-verbose* nil)
-  (let ((temp-dir (uiop:subpathname (uiop:default-temporary-directory) "mud-test-bknr/"))
-        (data-dir (uiop:subpathname (uiop:default-temporary-directory) "mud-test-data/")))
-    ;; Close any open store from prior runs
-    (when (and (boundp 'bknr.datastore:*store*)
-               bknr.datastore:*store*)
-      (ignore-errors (bknr.datastore:close-store))
-      (makunbound 'bknr.datastore:*store*))
-    ;; Clean previous test data
     (uiop:delete-directory-tree temp-dir :validate (constantly t) :if-does-not-exist :ignore)
     (uiop:delete-directory-tree data-dir :validate (constantly t) :if-does-not-exist :ignore)
     (ensure-directories-exist temp-dir)
     (ensure-directories-exist data-dir)
-    (setf mud::*store-directory* temp-dir)
-    (setf mud::*data-directory* data-dir)
+    (setf *store-directory* temp-dir)
+    (setf *data-directory* data-dir)))
+
+(defun setup-test-environment ()
+  "Set up a clean, isolated temporary BKNR store for test runs."
+  (setf *debug-mode* nil)
+  (setf bknr.datastore::*store-verbose* nil)
+  (let ((temp-dir (uiop:subpathname (uiop:default-temporary-directory) "mud-test-bknr/"))
+        (data-dir (uiop:subpathname (uiop:default-temporary-directory) "mud-test-data/")))
+    (when (and (boundp 'bknr.datastore:*store*)
+               bknr.datastore:*store*)
+      (ignore-errors (bknr.datastore:close-store))
+      (makunbound 'bknr.datastore:*store*))
+    (uiop:delete-directory-tree temp-dir :validate (constantly t) :if-does-not-exist :ignore)
+    (uiop:delete-directory-tree data-dir :validate (constantly t) :if-does-not-exist :ignore)
+    (ensure-directories-exist temp-dir)
+    (ensure-directories-exist data-dir)
+    (setf *store-directory* temp-dir)
+    (setf *data-directory* data-dir)
     (format t "~&Test store directory: ~A~%" temp-dir)
     (format t "~&Test data directory: ~A~%" data-dir)))
 
@@ -53,26 +68,21 @@ Also closes any open store from a previous run and resets debug mode."
   "Clean up temporary test directories and close any open store."
   (let ((temp-dir (uiop:subpathname (uiop:default-temporary-directory) "mud-test-bknr/"))
         (data-dir (uiop:subpathname (uiop:default-temporary-directory) "mud-test-data/")))
-    ;; Close any open store
     (when (and (boundp 'bknr.datastore:*store*)
                bknr.datastore:*store*)
       (ignore-errors (bknr.datastore:close-store))
       (makunbound 'bknr.datastore:*store*))
-    ;; Clean up temp dirs
     (uiop:delete-directory-tree temp-dir :validate (constantly t) :if-does-not-exist :ignore)
     (uiop:delete-directory-tree data-dir :validate (constantly t) :if-does-not-exist :ignore)
-    (setf mud:*debug-mode* nil)
+    (setf *debug-mode* nil)
     (setf bknr.datastore::*store-verbose* nil)))
 
 (defun run-tests ()
-  "Run all MUD tests with a clean, isolated temporary BKNR store.
-Uses Fiveam's RUN (not RUN!) to avoid BROKEN-PIPE in subprocess contexts."
+  "Run all MUD tests with a clean, isolated temporary BKNR store."
   (setup-test-environment)
   (unwind-protect
        (let ((*trace-output* (make-broadcast-stream))
-             (results (run 'mud-tests)))
-         ;; Count results using dynamic class resolution to avoid
-         ;; package-lock issues with FiveAM internal symbols.
+             (results (run 'apeiron-tests)))
          (let* ((fiveam-pkg (find-package :fiveam))
                 (passed-class (and fiveam-pkg
                                    (find-class (find-symbol "TEST-PASSED" fiveam-pkg) nil)))

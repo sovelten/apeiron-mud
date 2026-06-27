@@ -1,5 +1,5 @@
 (push #p"./" asdf:*central-registry*)
-(ql:quickload :mud)
+(ql:quickload :apeiron)
 
 ;; Check command-line options to force a new world
 (let ((force-new (member "--force-new-world" sb-ext:*posix-argv*

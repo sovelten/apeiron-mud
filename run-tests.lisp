@@ -4,16 +4,16 @@
 (push #p"./" asdf:*central-registry*)
 
 ;; Explicitly load the ASDF system definitions
-(asdf:load-asd #P"./mud.asd")
-(asdf:load-asd #P"./mud-test.asd")
-(ql:quickload :mud)
+(asdf:load-asd #P"./apeiron.asd")
+(asdf:load-asd #P"./apeiron-test.asd")
+(ql:quickload :apeiron)
 
 ;; Now load the tests
-(ql:quickload :mud-test)
+(ql:quickload :apeiron-test)
 
 ;; Run the tests
-(format t "~%=== Running MUD Tests ===~%~%")
-(mud-test:run-tests)
+(format t "~%=== Running Apeiron Tests ===~%~%")
+(apeiron-test:run-tests)
 (format t "~%=== Tests Complete ===~%~%")
 
 ;; Exit cleanly

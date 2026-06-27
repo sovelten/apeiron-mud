@@ -1,4 +1,4 @@
-(in-package #:mud)
+(in-package #:apeiron.core)
 
 (defclass mud-object ()
   ((id :initarg :id
@@ -64,6 +64,4 @@
   (print-unreadable-object (obj stream :type t)
     (format stream "~A (ID: ~D)"
             (object-name obj)
-            (if (typep obj 'bknr.datastore:store-object)
-                    (bknr.datastore:store-object-id obj)
-                    (object-id obj)))))
+            (object-id obj))))

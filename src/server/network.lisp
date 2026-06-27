@@ -1,4 +1,4 @@
-(in-package #:mud)
+(in-package #:apeiron.server)
 
 (defvar *server-running* nil)
 (defvar *server-socket* nil)
@@ -19,7 +19,7 @@
   (let* ((guest-name (format nil "Guest~D" (random 10000)))
          (char-name (ask-input session "What is your name?" guest-name))
          (character (new-character char-name session)))
-    (mud.utils:log-message "New connection: ~A" char-name)
+    (log-message "New connection: ~A" char-name)
     (world-add-character! world character)
     (mud-write session (room-describe (object-location character)))
     (mud-write session "Welcome to the MUD!")
@@ -35,10 +35,10 @@
                          (cond
                            ((eq status :timeout)
                             (mud-write session "Timed out due to inactivity.")
-                            (mud.utils:log-message "Client ~A timed out due to inactivity" char-name)
+                            (log-message "Client ~A timed out due to inactivity" char-name)
                             (return))
                            ((or (eq status :eof) (typep status 'error))
-                            (mud.utils:log-message "Client ~A disconnected ~A" char-name status)
+                            (log-message "Client ~A disconnected ~A" char-name status)
                             (return))
                            (line
                             (let ((trimmed (string-trim '(#\Return #\Newline) line)))
@@ -48,7 +48,7 @@
                             (return)))))
                    (end-of-file ()
                      ;; Connection closed by client
-                     (mud.utils:log-message "Client ~A disconnected end-of-file" char-name)
+                     (log-message "Client ~A disconnected end-of-file" char-name)
                      (return))
                    (error (e)
                      ;; Check if this is a "broken pipe" or similar connection error
@@ -58,18 +58,18 @@
                                (search "reset" error-str))
                            ;; Connection error, exit gracefully
                            (progn
-                             (mud.utils:log-message "Client ~A connection lost" char-name)
+                             (log-message "Client ~A connection lost" char-name)
                              (return))
                            ;; Other error, log it
                            (progn
-                             (mud.utils:log-error "Error in client handler: ~A" e)
+                             (log-error "Error in client handler: ~A" e)
                              (return)))))))
       (error (e)
-        (mud.utils:log-error "Client handler error for ~A: ~A" char-name e))))
+        (log-error "Client handler error for ~A: ~A" char-name e))))
 
   ;; Cleanup when disconnected
   (let ((session-id (session-id session)))
-    (mud.utils:log-message "Attempting to remove thread for session ~A" session-id)
+    (log-message "Attempting to remove thread for session ~A" session-id)
     (remhash session-id *player-threads*)
     (when (session-character session)
       (world-remove-character! world (session-character session)))
@@ -103,7 +103,7 @@ is offered on each connection, allowing clients to upgrade to TLS."
                                          (lambda () (handle-client world session))
                                          :name (format nil "session-~A"
                                                        (session-id session)))))
-                            (mud.utils:log-message
+                            (log-message
                              "Thread for session ~A created" (session-id session))
                             (setf (gethash (session-id session) *player-threads*)
                                   thread))))))
@@ -113,10 +113,10 @@ is offered on each connection, allowing clients to upgrade to TLS."
               (error (e)
                 ;; If the server is stopping, ignore socket errors from closed listening socket
                 (when *server-running*
-                  (mud.utils:log-error "Error accepting connection: ~A" e)))))
+                  (log-error "Error accepting connection: ~A" e)))))
     (error (e)
       (when *server-running*
-        (mud.utils:log-error "Accept connections error: ~A" e)))))
+        (log-error "Accept connections error: ~A" e)))))
 
 (defun accept-tls-connections (world)
   "Accept incoming TLS-encrypted client connections."
@@ -129,7 +129,7 @@ is offered on each connection, allowing clients to upgrade to TLS."
                     (if (not *server-running*)
                         (usocket:socket-close client-socket)
                         (progn
-                          (mud.utils:log-message "New TLS connection accepted")
+                          (log-message "New TLS connection accepted")
                           (let ((session
                                   (handler-case
                                       (new-telnet-tls-session
@@ -138,7 +138,7 @@ is offered on each connection, allowing clients to upgrade to TLS."
                                        :key *server-ssl-key*
                                        :password *server-ssl-password*)
                                     (telnet:telnet-tls-error (e)
-                                      (mud.utils:log-error
+                                      (log-error
                                        "TLS handshake failed: ~A"
                                        (telnet:telnet-error-message e))
                                       (usocket:socket-close client-socket)
@@ -149,7 +149,7 @@ is offered on each connection, allowing clients to upgrade to TLS."
                                        (lambda () (handle-client world session))
                                        :name (format nil "session-tls-~A"
                                                      (session-id session)))))
-                                (mud.utils:log-message
+                                (log-message
                                  "Thread for TLS session ~A created"
                                  (session-id session))
                                 (setf (gethash (session-id session)
@@ -159,11 +159,11 @@ is offered on each connection, allowing clients to upgrade to TLS."
                 nil)
               (error (e)
                 (when *server-running*
-                  (mud.utils:log-error
+                  (log-error
                    "Error accepting TLS connection: ~A" e)))))
     (error (e)
       (when *server-running*
-        (mud.utils:log-error "Accept TLS connections error: ~A" e)))))
+        (log-error "Accept TLS connections error: ~A" e)))))
 
 (defun start-mud-server (&key (host *server-host*) (port *server-port*)
                            force-new
@@ -184,7 +184,7 @@ connection to TLS in-band."
   (bordeaux-threads:with-lock-held (*server-lock*)
     (if *server-running*
         (progn
-          (mud.utils:log-error "Server is already running!")
+          (log-error "Server is already running!")
           (return-from start-mud-server nil))
         ;; Initialize world
         (let ((world (world-restore-or-initialize :force-new force-new)))
@@ -192,7 +192,7 @@ connection to TLS in-band."
           (setf *server-socket*
                 (usocket:socket-listen host port :reuse-address t :backlog 5))
           (setf *server-running* t)
-          (mud.utils:log-message "MUD Server started on ~A:~D" host port)
+          (log-message "MUD Server started on ~A:~D" host port)
 
           ;; Start TLS listener (if certificate configured)
           (when (and tls-certificate tls-key)
@@ -201,13 +201,13 @@ connection to TLS in-band."
                   (setf *server-tls-socket*
                         (usocket:socket-listen host tls-port
                                                :reuse-address t :backlog 5))
-                  (mud.utils:log-message "TLS listener started on ~A:~D" host tls-port)
+                  (log-message "TLS listener started on ~A:~D" host tls-port)
                   (setf *tls-acceptance-thread*
                         (bordeaux-threads:make-thread
                          (lambda () (accept-tls-connections world))
                          :name "accept-tls-connections")))
               (error (e)
-                (mud.utils:log-error "Failed to start TLS listener: ~A" e))))
+                (log-error "Failed to start TLS listener: ~A" e))))
 
           ;; Start plain-text acceptance thread
           (setf *acceptance-thread*
@@ -217,7 +217,7 @@ connection to TLS in-band."
 
           ;; Signal whether START_TLS is available
           (when prefer-start-tls
-            (mud.utils:log-message
+            (log-message
              "START_TLS option (46) enabled on plain-text port"))
           t))))
 
@@ -244,7 +244,7 @@ connection to TLS in-band."
         (handler-case
             (usocket:socket-close *server-tls-socket*)
           (error (e)
-            (mud.utils:log-error "Error closing TLS socket: ~A" e)))
+            (log-error "Error closing TLS socket: ~A" e)))
         (setf *server-tls-socket* nil))
 
       ;; Close plain server socket
@@ -252,7 +252,7 @@ connection to TLS in-band."
         (handler-case
             (usocket:socket-close *server-socket*)
           (error (e)
-            (mud.utils:log-error "Error closing server socket: ~A" e)))
+            (log-error "Error closing server socket: ~A" e)))
         (setf *server-socket* nil))
 
       ;; Wait for TLS acceptance thread to exit
@@ -260,7 +260,7 @@ connection to TLS in-band."
         (handler-case
             (bordeaux-threads:join-thread *tls-acceptance-thread*)
           (error (e)
-            (mud.utils:log-error "Error joining TLS acceptance thread: ~A" e)))
+            (log-error "Error joining TLS acceptance thread: ~A" e)))
         (setf *tls-acceptance-thread* nil))
 
       ;; Wait for plain-text acceptance thread to exit
@@ -268,7 +268,7 @@ connection to TLS in-band."
         (handler-case
             (bordeaux-threads:join-thread *acceptance-thread*)
           (error (e)
-            (mud.utils:log-error "Error joining acceptance thread: ~A" e)))
+            (log-error "Error joining acceptance thread: ~A" e)))
         (setf *acceptance-thread* nil))
 
       ;; Disconnect all players
@@ -277,7 +277,7 @@ connection to TLS in-band."
           (world-remove-character! world player)
           (session-disconnect (character-session player))))
 
-      (mud.utils:log-message "MUD Server stopped")
+      (log-message "MUD Server stopped")
       t)))
 
 (defun get-server-status ()

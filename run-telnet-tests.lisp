@@ -3,11 +3,11 @@
 
 (push #p"./" asdf:*central-registry*)
 
-(asdf:load-asd #P"./mud.asd")
-(asdf:load-asd #P"./mud-test.asd")
-(ql:quickload :mud-test)
+(asdf:load-asd #P"./apeiron.asd")
+(asdf:load-asd #P"./apeiron-test.asd")
+(ql:quickload :apeiron-test)
 
-(in-package #:mud-test)
+(in-package #:apeiron-test)
 
 ;; Run only the telnet unit tests
 (let ((tests '(telnet-read-char-plain-ascii

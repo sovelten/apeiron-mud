@@ -1,4 +1,4 @@
-(in-package #:mud)
+(in-package #:apeiron.core)
 
 (defclass mud-world ()
   ((id-counter :initarg :id-counter
@@ -71,7 +71,7 @@ indices, and return the object."
       (room-remove-object room character))
     ;; Remove from world
     (remhash (object-id character) (world-players world))
-    (mud.utils:log-message "~A removed from world" (object-name character))))
+    (log-message "~A removed from world" (object-name character))))
 
 (defun character-by-id (world char-id)
   "Get a player by ID."

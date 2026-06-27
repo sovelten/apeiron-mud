@@ -1,4 +1,4 @@
-(in-package #:mud)
+(in-package #:apeiron.core)
 
 ;; Command processor
 (defvar *commands* (make-hash-table :test #'equal)
@@ -162,6 +162,6 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
           (handler-case
               (funcall handler world player args)
             (error (e)
-              (mud.utils:log-error "Command error for ~A: ~A" (object-name player) e)
+              (log-error "Command error for ~A: ~A" (object-name player) e)
               (player-send-message player "Error executing command.")))
           (player-send-message player "Unknown command. Type 'help' for available commands.")))))

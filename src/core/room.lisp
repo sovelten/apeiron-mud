@@ -1,4 +1,4 @@
-(in-package #:mud)
+(in-package #:apeiron.core)
 
 ;; Room class - a specialized mud-object
 
@@ -16,14 +16,6 @@
 (defun new-room (&key (name "A Room") (description ""))
   "Create a new room."
   (make-instance 'mud-room
-                 :name name
-                 :description description
-                 :type +object-type-room+
-                 :location nil))
-
-(defun new-persistent-room (&key (name "A Room") (description ""))
-  "Create a new persistent room that will be stored in the BKNR datastore."
-  (make-instance 'persistent-room
                  :name name
                  :description description
                  :type +object-type-room+

@@ -1,6 +1,6 @@
-(in-package #:mud-test)
+(in-package #:apeiron-test)
 
-(in-suite mud-tests)
+(in-suite telnet-suite)
 
 ;; ---------------------------------------------------------------
 ;; Helpers: create a telnet-connection backed by a pipe,

@@ -1,15 +1,17 @@
-(in-package #:mud-test)
+(in-package #:apeiron-test)
 
-(in-suite mud-tests)
+(in-suite server-suite)
 
 (test socket-stream-error-handling
   "Test that socket errors are handled gracefully"
   (handler-case
       (progn
-        (let ((session (make-instance 'mud:mud-session :socket nil))
-              (player (mud:new-character "TestPlayer" (make-instance 'mud:mud-session :socket nil))))
+        (let ((session (make-instance 'apeiron.core:stream-session
+                                      :stream (make-string-output-stream)))
+              (player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+                                                                              :stream (make-string-output-stream)))))
           ;; Sending message to player with nil socket should not crash
-          (mud:player-send-message player "Test message")
+          (apeiron.core:player-send-message player "Test message")
           (is (not (null player)))))
     (error (e)
       ;; Error is expected, just check it doesn't crash the test
@@ -34,6 +36,27 @@
       (when accepted-socket (usocket:socket-close accepted-socket))
       (when server-socket (usocket:socket-close server-socket)))))
 
+(test session-thread-tracking
+  "Test that sessions can be tracked in a hash table keyed by
+session-id, mirroring the *player-threads* pattern in network.lisp."
+  (let ((table (make-hash-table :test #'equal))
+        (session-1 (make-instance 'apeiron.core:stream-session
+                                  :stream (make-string-output-stream)))
+        (session-2 (make-instance 'apeiron.core:stream-session
+                                  :stream (make-string-output-stream))))
+    ;; Store sessions keyed by session-id (as network.lisp does
+    ;; with *player-threads*)
+    (setf (gethash (apeiron.core:session-id session-1) table) :thread-a)
+    (setf (gethash (apeiron.core:session-id session-2) table) :thread-b)
+    ;; Retrieve and verify
+    (is (eq (gethash (apeiron.core:session-id session-1) table) :thread-a))
+    (is (eq (gethash (apeiron.core:session-id session-2) table) :thread-b))
+    ;; Remove and verify cleanup (as handle-client does)
+    (remhash (apeiron.core:session-id session-1) table)
+    (is (null (gethash (apeiron.core:session-id session-1) table)))
+    (is (eq (gethash (apeiron.core:session-id session-2) table) :thread-b)
+        "Other entries survive removal")))
+
 (test player-message-with-mock-socket
   "Test sending messages to a player with a real socket"
   (handler-case
@@ -41,14 +64,14 @@
              (port (usocket:get-local-port server-socket))
              (client-socket (usocket:socket-connect "127.0.0.1" port))
              (accepted-socket (usocket:socket-accept server-socket))
-             (session (make-instance 'mud:mud-session :socket accepted-socket)))
+             (session (make-instance 'apeiron.core:stream-session
+                                     :stream (usocket:socket-stream accepted-socket))))
         (unwind-protect
              (progn
-               (mud:world-restore-or-initialize)
-               (let ((player (mud:new-character "TestPlayer" session)))
+               (apeiron.persistence:world-restore-or-initialize)
+               (let ((player (apeiron.core:new-character "TestPlayer" session)))
                  (is (not (null player)))
-                 ;; Test that we can send a message without crashing
-                 (mud:player-send-message player "Test message")
+                 (apeiron.core:player-send-message player "Test message")
                  (is (not (null player)))))
           (when client-socket (usocket:socket-close client-socket))
           (when accepted-socket (usocket:socket-close accepted-socket))

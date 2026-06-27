@@ -1,4 +1,4 @@
-(in-package #:mud)
+(in-package #:apeiron.core)
 
 ;; TODO: split character and player-character for building NPCs
 
@@ -15,7 +15,7 @@
 
 (defun new-character (name session)
   (let ((character (make-instance 'mud-character
-                                  :id (mud.utils:make-id)
+                                  :id (make-id)
                                   :name name
                                   :type +object-type-character+
                                   :session session)))
