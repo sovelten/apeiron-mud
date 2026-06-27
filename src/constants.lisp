@@ -38,7 +38,12 @@ Set to a path string (e.g. \"/etc/ssl/private/mud-server.key\") to enable TLS.")
 (defparameter *server-ssl-password* nil
   "Password for the SSL private key, if encrypted.")
 
-(defparameter *server-tls-prefer-start-tls* t
-  "When true, also offer the START_TLS telnet option (option 46) on the
-plain-text port, allowing clients to upgrade the connection in place.
-When nil, TLS is only available via the dedicated TLS port.")
+(defparameter *server-tls-prefer-start-tls* nil
+  "When true, offer the START_TLS telnet option (option 46) on the
+plain-text port, allowing clients to upgrade to TLS in-band.
+
+Default is NIL because START_TLS has very limited client support in
+practice (TinTin++ does not implement it, Mudlet has partial support).
+The dedicated TLS port (controlled by *SERVER-TLS-PORT*) is the
+reliable way to provide encrypted connections.  Set this to T only
+if you know your client supports option 46.")

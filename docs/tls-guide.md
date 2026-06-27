@@ -6,7 +6,8 @@ TLS mechanisms** following MUD community standards:
 
 1. **Direct TLS (dedicated port)** — the client connects on a separate
    port and the server immediately performs a TLS handshake (`SSL_accept`)
-   before any telnet negotiation.
+   before any telnet negotiation. This is the approach that virtually all
+   MUD clients support.
 
 2. **START_TLS (in-band upgrade)** — the client connects on the standard
    plain-text port.  The server advertises the `START_TLS` telnet option
@@ -14,7 +15,13 @@ TLS mechanisms** following MUD community standards:
    connection is upgraded to TLS in-place, preserving all previously
    negotiated options (NAWS window size, terminal type, etc.).
 
-Both mechanisms can be used simultaneously.
+   **Note:** START_TLS has limited real-world client support. Most MUD
+   clients (including TinTin++) do not implement option 46. Direct TLS
+   on a dedicated port is the practical choice.
+
+Both mechanisms can be used simultaneously, though START_TLS is
+disabled by default — set `*server-tls-prefer-start-tls*` to `t` to
+enable it.
 
 ---
 
@@ -55,7 +62,7 @@ The following parameters are defined in `src/constants.lisp` (in the
 | `*server-ssl-certificate*`    | `nil`   | Path to the PEM-encoded TLS certificate.       |
 | `*server-ssl-key*`            | `nil`   | Path to the PEM-encoded TLS private key.       |
 | `*server-ssl-password*`       | `nil`   | Password for the private key (if encrypted).   |
-| `*server-tls-prefer-start-tls*` | `t`   | Offer START_TLS on the plain-text port.         |
+| `*server-tls-prefer-start-tls*` | `nil` | Offer START_TLS on the plain-text port (disabled by default; limited client support). |
 
 ---
 
@@ -71,9 +78,10 @@ The following parameters are defined in `src/constants.lisp` (in the
 
 This starts:
 
-- A plain-text listener on port `8888` (default `*server-port*`) with the
-  `START_TLS` option offered.
-- A dedicated TLS listener on port `992` (default `*server-tls-port*`) with
+- A plain-text listener on port `8888` (default `*server-port*`).  The
+  `START_TLS` option is offered only if `*server-tls-prefer-start-tls*`
+  has been set to `t`.
+- A dedicated TLS listener on port `8889` (default `*server-tls-port*`) with
   immediate TLS encryption.
 
 ### Via global variables
@@ -97,37 +105,45 @@ Set the globals before calling `start-mud-server`:
   :tls-key "/etc/ssl/private/mud-server.key")
 ```
 
-### Disabling START_TLS on the plain-text port
+### Enabling START_TLS on the plain-text port
+
+START_TLS is disabled by default. To enable it:
 
 ```lisp
-(setf mud:*server-tls-prefer-start-tls* nil)
+(setf mud:*server-tls-prefer-start-tls* t)
 (mud:start-mud-server
   :tls-certificate "/etc/ssl/certs/mud-server.pem"
   :tls-key "/etc/ssl/private/mud-server.key")
 ```
 
-With this setting, TLS is only available via the dedicated TLS port.
+With this setting, the server also offers the START_TLS option (46)
+on the plain-text port. Note that most clients (including TinTin++)
+do not support this option.
 
 ---
 
 ## Client connection
 
-### Direct TLS (port 992)
+### Direct TLS (port 8889)
 
 ```bash
-# Using a TLS-aware telnet client (e.g., TinTin++, Mudlet):
-# Connect to port 992 with TLS/SSL enabled.
+# TinTin++:
+#ssl {session-name} {your-server} 8889
+
+# Mudlet:
+#   Connect to port 8889 with TLS/SSL enabled.
 
 # Using OpenSSL as a test client:
-openssl s_client -connect your-server:992 -crlf
+openssl s_client -connect your-server:8889 -crlf
 ```
 
 ### START_TLS (port 8888)
 
 Clients that support the `START_TLS` telnet option (option 46) can
 connect to the standard telnet port and negotiate TLS after the initial
-telnet option exchange. Most modern MUD clients (Mudlet, TinTin++,
-MUSHclient) support this.
+telnet option exchange. **Note:** Most MUD clients (including TinTin++)
+do **not** implement option 46. Mudlet has partial support. Direct TLS
+is the more widely compatible approach.
 
 ```bash
 # Using telnet to see the START_TLS advertisement:
