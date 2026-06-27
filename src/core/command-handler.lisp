@@ -144,6 +144,16 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
                                   (format nil "~A says: ~A" 
                                           (object-name player) message))))))))
 
+(define-command "shout" (world player args)
+  (let ((message args))
+    (if (zerop (length message))
+        (player-send-message player "Shout what? Usage: shout <message>")
+        (progn
+          (world-broadcast world
+                           (format nil "~A shouts: ~A" (object-name player) message)
+                           player)
+          (player-send-message player (format nil "You shout: ~A" message))))))
+
 (define-command "read" (world player args)
   (declare (ignore world))
   (let* ((room (object-location player))
