@@ -35,6 +35,10 @@
 
 (test guestbook-persistence
   "Test that guestbook entries survive store close/reopen via CSV persistence."
+  ;; Clean up any leftover CSV from earlier runs
+  (let ((csv-path (merge-pathnames "guestbook.csv" mud::*data-directory*)))
+    (when (probe-file csv-path)
+      (delete-file csv-path)))
   (unwind-protect
        ;; Find the guestbook in the starting room
        (let* ((world (mud:world-restore-or-initialize :force-new t))
@@ -62,4 +66,8 @@
            (let ((entries (mud:guestbook-entries reloaded-gbook)))
              (is (= (length entries) 1))
              (is (equal (getf (first entries) :author) "Sophia"))
-             (is (equal (getf (first entries) :message) "Persistent via CSV!")))))))
+             (is (equal (getf (first entries) :message) "Persistent via CSV!")))))
+    ;; Clean up CSV file after test
+    (let ((csv-path (merge-pathnames "guestbook.csv" mud::*data-directory*)))
+      (when (probe-file csv-path)
+        (ignore-errors (delete-file csv-path))))))

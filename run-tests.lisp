@@ -4,7 +4,7 @@
 (push #p"./" asdf:*central-registry*)
 
 ;; Explicitly load the ASDF system definitions
-(asdf:load-asd #P"./mud.asd")
+(asdf:load-asd #P"./apeiron.asd")
 (asdf:load-asd #P"./mud-test.asd")
 (ql:quickload :apeiron)
 

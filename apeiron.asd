@@ -10,9 +10,8 @@
 ;;;;   apeiron-server     — Server that wires telnet I/O, persistence, and
 ;;;;                         game logic together.
 ;;;;
-;;;; Two convenience aliases are provided:
+;;;; One convenience alias is provided:
 ;;;;   apeiron            — depends on all four modules above.
-;;;;   mud                — backward-compatible alias for apeiron.
 
 (defsystem "apeiron-core"
   :version "0.0.1"
@@ -94,9 +93,3 @@
                "apeiron-server"))
 
 ;; Backward-compatible alias
-(defsystem "mud"
-  :version "0.0.1"
-  :description "Backward-compatible alias for the apeiron system."
-  :author "Sophia Velten"
-  :license "MIT"
-  :depends-on ("apeiron"))

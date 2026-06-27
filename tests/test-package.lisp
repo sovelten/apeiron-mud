@@ -17,6 +17,11 @@
   (setf bknr.datastore::*store-verbose* nil)
   (let ((temp-dir (uiop:subpathname (uiop:default-temporary-directory) "mud-test-bknr/"))
         (data-dir (uiop:subpathname (uiop:default-temporary-directory) "mud-test-data/")))
+    ;; Clean any leftover data from previous test runs so that
+    ;; individual tests run directly (e.g. via MCP test runner)
+    ;; start with a fresh slate without going through run-tests.
+    (uiop:delete-directory-tree temp-dir :validate (constantly t) :if-does-not-exist :ignore)
+    (uiop:delete-directory-tree data-dir :validate (constantly t) :if-does-not-exist :ignore)
     (ensure-directories-exist temp-dir)
     (ensure-directories-exist data-dir)
     (setf mud::*store-directory* temp-dir)

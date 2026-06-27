@@ -62,12 +62,12 @@
 ;; ─── Store lifecycle ────────────────────────────────────────────────────────
 
 (defvar *data-directory*
-  (merge-pathnames #p"data/" (asdf:system-source-directory :mud))
+  (merge-pathnames #p"data/" (asdf:system-source-directory :apeiron))
   "Directory for run-time data files (guestbook CSV, etc.).
    Separate from the BKNR store directory to avoid polluting snapshots.")
 
 (defvar *store-directory*
-  (merge-pathnames #p"bknr/" (asdf:system-source-directory :mud))
+  (merge-pathnames #p"bknr/" (asdf:system-source-directory :apeiron))
   "Directory for the BKNR data store.  Bound to a temp dir during tests.")
 
 (defun open-mud-store ()

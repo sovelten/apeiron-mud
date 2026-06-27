@@ -3,7 +3,7 @@
 
 (push #p"./" asdf:*central-registry*)
 
-(asdf:load-asd #P"./mud.asd")
+(asdf:load-asd #P"./apeiron.asd")
 (asdf:load-asd #P"./mud-test.asd")
 (ql:quickload :mud-test)
 
