@@ -1,5 +1,5 @@
 ;;;;
-;;;; mud.asd — ASDF system definitions for the Apeiron MUD
+;;;; apeiron.asd — ASDF system definitions for the Apeiron MUD
 ;;;;
 ;;;; The project is organised into four modules, each with its own system:
 ;;;;
@@ -63,7 +63,8 @@
                "bknr.utils")
   :components ((:module "src/persistence"
                 :components
-                ((:file "store")
+                ((:file "package")
+                 (:file "store")
                  (:file "persistent-world" :depends-on ("store"))))))
 
 (defsystem "apeiron-server"
@@ -79,8 +80,9 @@
   :components ((:module "src/server"
                 :components
                 ((:file "package")
+                 (:file "constants")
                  (:file "session-telnet")
-                 (:file "network" :depends-on ("command-handler"))))))
+                 (:file "network" :depends-on ("session-telnet"))))))
 
 ;; Convenience meta-system — loads everything
 (defsystem "apeiron"
@@ -93,4 +95,4 @@
                "apeiron-persistence"
                "apeiron-server"))
 
-;; Backward-compatible alias
+

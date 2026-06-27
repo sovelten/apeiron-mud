@@ -43,7 +43,7 @@ Use telnet:telnet-read-line / telnet:telnet-write-string instead."
             (declare (ignore e))
             (values nil :connection-lost))
           (telnet:telnet-error (e)
-            (mud.utils:log-error "Telnet read error: ~A" (telnet:telnet-error-message e))
+            (log-error "Telnet read error: ~A" (telnet:telnet-error-message e))
             (values nil :eof)))
         (values nil :eof))))
 
@@ -58,7 +58,7 @@ Use telnet:telnet-read-line / telnet:telnet-write-string instead."
           (declare (ignore e))
           nil)
         (telnet:telnet-error (e)
-          (mud.utils:log-error "Telnet write error: ~A" (telnet:telnet-error-message e))
+          (log-error "Telnet write error: ~A" (telnet:telnet-error-message e))
           nil)))))
 
 (defmethod session-disconnect ((session telnet-session))
@@ -70,7 +70,7 @@ Use telnet:telnet-read-line / telnet:telnet-write-string instead."
       (handler-case
           (telnet:telnet-connection-close conn)
         (error (e)
-          (mud.utils:log-error "Error closing telnet connection: ~A" e))))))
+          (log-error "Error closing telnet connection: ~A" e))))))
 
 ;; ─── Telnet session constructors ────────────────────────────────────────────
 
@@ -101,14 +101,14 @@ KEY, and PASSWORD are required when START-TLS is true."
                                                :certificate cert
                                                :key key
                                                :password pwd)
-                      (mud.utils:log-message
+                      (log-message
                        "Connection upgraded to TLS via START_TLS"))
                   (telnet:telnet-tls-error (e)
-                    (mud.utils:log-error
+                    (log-error
                      "START_TLS upgrade failed: ~A"
                      (telnet:telnet-error-message e))))))))
     (make-instance 'telnet-session
-                   :id (mud.utils:make-id)
+                   :id (make-id)
                    :telnet-conn conn)))
 
 (defun new-telnet-tls-session (usocket &key certificate key password)
@@ -121,7 +121,7 @@ key files.  PASSWORD is the optional decryption password for the key.
 
 Returns a telnet-session ready for I/O — all traffic is encrypted."
   (make-instance 'telnet-session
-                 :id (mud.utils:make-id)
+                 :id (make-id)
                  :telnet-conn
                  (telnet:make-telnet-tls-connection usocket
                                                     :certificate certificate

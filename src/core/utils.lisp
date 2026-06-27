@@ -14,7 +14,7 @@
 
 (defun log-message (format-string &rest args)
   "Log an informational message."
-  (when mud:*debug-mode*
+  (when apeiron.core:*debug-mode*
     (format t "[INFO] ~A~%" (apply #'format-message format-string args)))
   nil)
 

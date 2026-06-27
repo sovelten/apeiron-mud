@@ -1,4 +1,4 @@
-(in-package #:mud)
+(in-package #:apeiron.core)
 
 (defclass mud-guestbook (mud-object)
   ((entries :initarg :entries
@@ -28,7 +28,7 @@
                             :filepath filepath-str
                             :type +object-type-item+)))
     (when filepath-str
-      (mud.utils:log-message "Loading csv from ~A" filepath-str)
+      (log-message "Loading csv from ~A" filepath-str)
       (setf (guestbook-entries gb)
             (guestbook-load-from-csv (pathname filepath-str))))
     gb))

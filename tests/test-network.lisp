@@ -6,10 +6,10 @@
   "Test that socket errors are handled gracefully"
   (handler-case
       (progn
-        (let ((session (make-instance 'mud:mud-session :socket nil))
-              (player (mud:new-character "TestPlayer" (make-instance 'mud:mud-session :socket nil))))
+        (let ((session (make-instance 'apeiron.core:mud-session :socket nil))
+              (player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:mud-session :socket nil))))
           ;; Sending message to player with nil socket should not crash
-          (mud:player-send-message player "Test message")
+          (apeiron.core:player-send-message player "Test message")
           (is (not (null player)))))
     (error (e)
       ;; Error is expected, just check it doesn't crash the test
@@ -41,14 +41,14 @@
              (port (usocket:get-local-port server-socket))
              (client-socket (usocket:socket-connect "127.0.0.1" port))
              (accepted-socket (usocket:socket-accept server-socket))
-             (session (make-instance 'mud:mud-session :socket accepted-socket)))
+             (session (make-instance 'apeiron.core:mud-session :socket accepted-socket)))
         (unwind-protect
              (progn
-               (mud:world-restore-or-initialize)
-               (let ((player (mud:new-character "TestPlayer" session)))
+               (apeiron.persistence:world-restore-or-initialize)
+               (let ((player (apeiron.core:new-character "TestPlayer" session)))
                  (is (not (null player)))
                  ;; Test that we can send a message without crashing
-                 (mud:player-send-message player "Test message")
+                 (apeiron.core:player-send-message player "Test message")
                  (is (not (null player)))))
           (when client-socket (usocket:socket-close client-socket))
           (when accepted-socket (usocket:socket-close accepted-socket))

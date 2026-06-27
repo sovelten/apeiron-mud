@@ -4,27 +4,27 @@
 
 (test player-creation
   "Test that we can create a player"
-  (mud:world-restore-or-initialize)
-  (let ((player (mud:new-character "TestPlayer" (make-instance 'mud:mud-session :socket nil))))
-    (is (equal (mud:object-name player) "TestPlayer"))
-    (is (typep player 'mud:mud-character))
-    (is (vectorp (mud:player-inventory player)))))
+  (apeiron.persistence:world-restore-or-initialize)
+  (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:mud-session :socket nil))))
+    (is (equal (apeiron.core:object-name player) "TestPlayer"))
+    (is (typep player 'apeiron.core:mud-character))
+    (is (vectorp (apeiron.core:player-inventory player)))))
 
 (test player-inventory
   "Test player inventory management"
-  (mud:world-restore-or-initialize)
-  (let ((player (mud:new-character "TestPlayer" (make-instance 'mud:mud-session :socket nil)))
-        (obj (mud:new-room :name "Test Item")))
-    (mud:character-inventory-add player obj)
-    (is (> (length (mud:player-inventory player)) 0))
-    (is (equal (aref (mud:player-inventory player) 0) obj))
-    (mud:character-inventory-remove player obj)
-    (is (= (length (mud:player-inventory player)) 0))))
+  (apeiron.persistence:world-restore-or-initialize)
+  (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:mud-session :socket nil)))
+        (obj (apeiron.core:new-room :name "Test Item")))
+    (apeiron.core:character-inventory-add player obj)
+    (is (> (length (apeiron.core:player-inventory player)) 0))
+    (is (equal (aref (apeiron.core:player-inventory player) 0) obj))
+    (apeiron.core:character-inventory-remove player obj)
+    (is (= (length (apeiron.core:player-inventory player)) 0))))
 
 (test player-location
   "Test that player has a location"
-  (let ((world (mud:world-restore-or-initialize))
-        (player (mud:new-character "TestPlayer" (make-instance 'mud:mud-session :socket nil))))
-    (mud:world-add-character! world player)
-    (is (not (null (mud:object-location player))))
-    (is (typep (mud:object-location player) 'mud:mud-room))))
+  (let ((world (apeiron.persistence:world-restore-or-initialize))
+        (player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:mud-session :socket nil))))
+    (apeiron.core:world-add-character! world player)
+    (is (not (null (apeiron.core:object-location player))))
+    (is (typep (apeiron.core:object-location player) 'apeiron.core:mud-room))))

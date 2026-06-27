@@ -4,7 +4,7 @@
 ;;;; any dependency on the telnet subsystem.  The telnet-specific session
 ;;;; subclass lives in the server module (src/server/session-telnet.lisp).
 
-(in-package :mud)
+(in-package #:apeiron.core)
 
 ;; Necessary protocols for user session interaction
 
@@ -36,8 +36,8 @@ The default method is a no-op."))
 
 (defun new-session (socket)
   (make-instance 'mud-session
-                 :id (mud.utils:make-id)
-                 :socket socket))
+                                  :id (make-id)
+                          :socket socket))
 
 (defmethod session-keepalive ((session mud-session))
   "Default keepalive is a no-op.  Subclasses (e.g. telnet-session)
@@ -61,7 +61,7 @@ should override this to send protocol-specific heartbeats."
     (handler-case
         (usocket:socket-close (session-socket session))
       (error (e)
-        (mud.utils:log-error "Error closing socket for ~A: ~A"
+        (log-error "Error closing socket for ~A: ~A"
                              (session-socket session) e)))))
 
 (defmethod mud-write ((obj mud-session) message &key (newline t))
@@ -77,7 +77,7 @@ should override this to send protocol-specific heartbeats."
           (let ((error-str (format nil "~A" e)))
             (unless (or (search "Broken pipe" error-str)
                         (search "closed" error-str))
-              (mud.utils:log-error "Failed to send message to session ~A: ~A"
+              (log-error "Failed to send message to session ~A: ~A"
                                    (session-socket obj) e))))))))
 
 (defun session-send-prompt (session)
@@ -167,7 +167,7 @@ that provide their own stream abstraction."))
     (handler-case
         (close (session-stream session))
       (error (e)
-        (mud.utils:log-error "Error closing stream for ~A: ~A"
+        (log-error "Error closing stream for ~A: ~A"
                              (session-stream session) e)))))
 
 (defmethod session-keepalive ((session stream-session))

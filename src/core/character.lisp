@@ -15,7 +15,7 @@
 
 (defun new-character (name session)
   (let ((character (make-instance 'mud-character
-                                  :id (mud.utils:make-id)
+                                  :id (make-id)
                                   :name name
                                   :type +object-type-character+
                                   :session session)))

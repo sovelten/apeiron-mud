@@ -1,4 +1,4 @@
-(in-package :mud)
+(in-package :apeiron.persistence)
 
 ;; ─── Persistent wrapper classes ──────────────────────────────────────────────
 
@@ -54,7 +54,7 @@
                             :filepath filepath-str
                             :type +object-type-item+)))
     (when filepath-str
-      (mud.utils:log-message "Loading csv from ~A" filepath-str)
+      (log-message "Loading csv from ~A" filepath-str)
       (setf (guestbook-entries gb)
             (guestbook-load-from-csv (pathname filepath-str))))
     gb))
@@ -127,7 +127,7 @@ close/reopen cycles that trigger BKNR transaction log replay warnings."
   "Restore the world from the BKNR datastore, or initialise a new one.
 When FORCE-NEW is true any existing store data is wiped first."
   (when force-new
-    (mud.utils:log-message "Forcing new world, clearing existing datastore…")
+    (log-message "Forcing new world, clearing existing datastore…")
     (when (and (boundp 'bknr.datastore:*store*) bknr.datastore:*store*)
       (bknr.datastore:close-store))
     (uiop:delete-directory-tree *store-directory*
@@ -164,12 +164,12 @@ When FORCE-NEW is true any existing store data is wiped first."
               (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-guestbook))
                 (rebuild-room-contents obj))))
           (when *debug-mode*
-            (mud.utils:log-message "World restored from BKNR datastore."))
+            (log-message "World restored from BKNR datastore."))
           world)
         (let ((world (initial-world)))
           (sync-world)
           (when *debug-mode*
-            (mud.utils:log-message "New world created and persisted."))
+            (log-message "New world created and persisted."))
           world))))
 
 ;; ─── World queries ──────────────────────────────────────────────────────────

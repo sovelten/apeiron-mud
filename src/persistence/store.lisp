@@ -1,4 +1,4 @@
-(in-package :mud)
+(in-package :apeiron.persistence)
 
 (defclass wrapping-persistent-class (bknr.datastore:persistent-class)
   ((transient-slots :initarg :transient-slots

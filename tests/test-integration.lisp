@@ -4,9 +4,9 @@
 
 (test network-quit-command-integration
   "Test a real client connecting, naming themselves, and executing the quit command."
-  (mud:stop-mud-server)
-  (is (mud:start-mud-server :host "127.0.0.1" :port 0))
-  (let* ((port (usocket:get-local-port mud::*server-socket*))
+  (apeiron.server:stop-mud-server)
+  (is (apeiron.server:start-mud-server :host "127.0.0.1" :port 0))
+  (let* ((port (usocket:get-local-port apeiron.server:*server-socket*))
          (client-socket nil)
          (client-conn nil))
     (unwind-protect
@@ -46,9 +46,9 @@
              (is (char= prompt-char #\Space)))
            
            ;; Verify player exists in the world
-           (let* ((world (mud::get-persistent-world))
-                  (player (loop for p being the hash-values of (mud::world-players world)
-                               when (equal (mud:object-name p) "QuitTestPlayer")
+           (let* ((world (apeiron.persistence:get-persistent-world))
+                  (player (loop for p being the hash-values of (apeiron.core:world-players world)
+                               when (equal (apeiron.core:object-name p) "QuitTestPlayer")
                                  return p)))
              (is (not (null player)))
              
@@ -64,17 +64,17 @@
              (sleep 0.5)
              
              ;; Verify player is removed from the world
-             (is (not (gethash (mud:object-id player) (mud::world-players world))))))
+             (is (not (gethash (apeiron.core:object-id player) (apeiron.core:world-players world))))))
       ;; Cleanup
       (when client-conn (telnet:telnet-connection-close client-conn))
       (when client-socket (usocket:socket-close client-socket))
-      (mud:stop-mud-server))))
+      (apeiron.server:stop-mud-server))))
 
 (test network-unexpected-disconnect-integration
   "Test a real client connecting, naming themselves, and abruptly disconnecting."
-  (mud:stop-mud-server)
-  (is (mud:start-mud-server :host "127.0.0.1" :port 0))
-  (let* ((port (usocket:get-local-port mud::*server-socket*))
+  (apeiron.server:stop-mud-server)
+  (is (apeiron.server:start-mud-server :host "127.0.0.1" :port 0))
+  (let* ((port (usocket:get-local-port apeiron.server:*server-socket*))
          (client-socket nil)
          (client-conn nil))
     (unwind-protect
@@ -96,9 +96,9 @@
            (sleep 0.3)
            
            ;; Verify player is in world
-           (let* ((world (mud::get-persistent-world))
-                  (player (loop for p being the hash-values of (mud::world-players world)
-                               when (equal (mud:object-name p) "AbruptPlayer")
+           (let* ((world (apeiron.persistence:get-persistent-world))
+                  (player (loop for p being the hash-values of (apeiron.core:world-players world)
+                               when (equal (apeiron.core:object-name p) "AbruptPlayer")
                                  return p)))
              (is (not (null player)))
              
@@ -112,8 +112,8 @@
              (sleep 0.5)
              
              ;; Verify player is cleaned up from the world
-             (is (not (gethash (mud:object-id player) (mud::world-players world))))))
+             (is (not (gethash (apeiron.core:object-id player) (apeiron.core:world-players world))))))
       ;; Cleanup
       (when client-conn (telnet:telnet-connection-close client-conn))
       (when client-socket (usocket:socket-close client-socket))
-      (mud:stop-mud-server))))
+      (apeiron.server:stop-mud-server))))

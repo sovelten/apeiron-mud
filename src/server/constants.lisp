@@ -1,23 +1,15 @@
-(in-package #:apeiron.server)
+;;;; src/server/constants.lisp — Server-specific configuration
+;;;;
+;;;; Shared game constants (object types, *debug-mode*, etc.) are in
+;;;; src/core/constants.lisp and inherited via the apeiron.core package.
 
-(defparameter *mud-version* "0.0.1")
-(defparameter *debug-mode* t)
+(in-package #:apeiron.server)
 
 ;; Server configuration
 (defparameter *server-host* "0.0.0.0")
 (defparameter *server-port* 8888)
 (defparameter *max-connections* 100)
 (defparameter *buffer-size* 4096)
-
-;; Object type constants
-(defconstant +object-type-generic+ 'generic)
-(defconstant +object-type-room+ 'room)
-(defconstant +object-type-character+ 'character)
-(defconstant +object-type-item+ 'item)
-
-;; Command constants
-(defconstant +max-command-length+ 256)
-(defconstant +command-timeout+ 30)
 
 ;; TLS configuration
 (defparameter *server-tls-port* 8889
