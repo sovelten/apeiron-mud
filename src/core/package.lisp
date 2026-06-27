@@ -11,7 +11,6 @@
 (defpackage #:apeiron.core
   (:use #:cl
         #:apeiron.core.utils
-        #:usocket
         #:bordeaux-threads
         #:cl-csv)
   (:export

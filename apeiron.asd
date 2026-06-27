@@ -19,7 +19,6 @@
   :author "Sophia Velten"
   :license "MIT"
   :depends-on ("bordeaux-threads"
-               "usocket"
                "cl-csv")
   :components ((:module "src/core"
                 :components

@@ -46,23 +46,20 @@ should override this to send protocol-specific heartbeats."
   nil)
 
 (defmethod session-stream ((session mud-session))
-  (let ((socket (session-socket session)))
-    (when socket
-      (handler-case (usocket:socket-stream socket)
-        (error () nil)))))
+  "Base implementation returns nil.  Subclasses backed by a
+stream should override this method."
+  (declare (ignore session))
+  nil)
 
 (defgeneric session-disconnect (session)
   (:documentation "Clean up and disconnect this session."))
 
 (defmethod session-disconnect ((session mud-session))
+  "Disconnect the session — only clears the character link.
+Subclasses should close their own resources first and then
+call CALL-NEXT-METHOD to clear the character link."
   (when (session-character session)
-    (setf (session-character session) nil))
-  (when (and session (session-socket session))
-    (handler-case
-        (usocket:socket-close (session-socket session))
-      (error (e)
-        (log-error "Error closing socket for ~A: ~A"
-                             (session-socket session) e)))))
+    (setf (session-character session) nil)))
 
 (defmethod mud-write ((obj mud-session) message &key (newline t))
   (let ((stream (session-stream obj)))
@@ -78,30 +75,17 @@ should override this to send protocol-specific heartbeats."
             (unless (or (search "Broken pipe" error-str)
                         (search "closed" error-str))
               (log-error "Failed to send message to session ~A: ~A"
-                                   (session-socket obj) e))))))))
+                         (session-socket obj) e))))))))
 
 (defun session-send-prompt (session)
   "Send a prompt to a player on the same line (no newline)."
   (mud-write session "> " :newline nil))
 
 (defmethod mud-read-line ((obj mud-session) &key (timeout 300))
-  (let ((socket (session-socket obj)))
-    (if (null socket)
-        (values nil :eof)
-        (let ((ready (handler-case (usocket:wait-for-input socket :timeout timeout :ready-only t)
-                       (error () nil))))
-          (if (null ready)
-              (values nil :timeout)
-              (let ((stream (session-stream obj)))
-                (if (null stream)
-                    (values nil :eof)
-                    (handler-case
-                        (let ((line (read-line stream nil nil)))
-                          (if line
-                              (values line nil)
-                              (values nil :eof)))
-                      (error (e)
-                        (values nil e))))))))))
+  "Base implementation returns :eof.  Subclasses should override
+this method to provide their own line-reading implementation."
+  (declare (ignore timeout))
+  (values nil :eof))
 
 (defun read-line-with-timeout-loop (session &key (poll-interval 30))
   "Read a line from SESSION by polling with a short timeout (POLL-INTERVAL).
@@ -161,14 +145,13 @@ that provide their own stream abstraction."))
             (values nil e))))))
 
 (defmethod session-disconnect ((session stream-session))
-  (when (session-character session)
-    (setf (session-character session) nil))
   (when (session-stream session)
     (handler-case
         (close (session-stream session))
       (error (e)
         (log-error "Error closing stream for ~A: ~A"
-                             (session-stream session) e)))))
+                   (session-stream session) e))))
+  (call-next-method))
 
 (defmethod session-keepalive ((session stream-session))
   ;; No keepalive needed for stream-based sessions

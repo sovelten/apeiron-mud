@@ -62,15 +62,15 @@ Use telnet:telnet-read-line / telnet:telnet-write-string instead."
           nil)))))
 
 (defmethod session-disconnect ((session telnet-session))
-  "Disconnect the telnet session, releasing all resources."
-  (when (session-character session)
-    (setf (session-character session) nil))
+  "Disconnect the telnet session — close the telnet connection,
+then clear the character link via CALL-NEXT-METHOD."
   (let ((conn (session-telnet-connection session)))
     (when conn
       (handler-case
           (telnet:telnet-connection-close conn)
         (error (e)
-          (log-error "Error closing telnet connection: ~A" e))))))
+          (log-error "Error closing telnet connection: ~A" e)))))
+  (call-next-method))
 
 ;; ─── Telnet session constructors ────────────────────────────────────────────
 
