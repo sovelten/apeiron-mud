@@ -29,73 +29,7 @@
                          (format nil "gate-~A-message" (string-downcase exit-direction))
                          message)))
 
-(defun initial-world ()
-  "Create a fresh world with default rooms and guestbook.
-   All persistent objects are created within a single transaction."
-  (let ((world (make-instance 'mud-world)))
-    (let ((gathering (new-room :name "The Gathering"
-                                          :description "A warm, circular hall with a high domed ceiling. Torches flicker along the stone walls, casting dancing shadows. Four archways stand at the cardinal points, each bearing a carved symbol: a leaf (north), a sun (east), a droplet (west), and a flame (south). A sturdy oak guestbook sits on a pedestal in the centre."))
-          (forest (new-room :name "A Whispering Forest"
-                                       :description "Ancient trees tower overhead, their leaves rustling secrets in the wind. Shafts of golden sunlight pierce the canopy, illuminating patches of moss and wildflowers. A faint path winds deeper into the woods."))
-          (desert (new-room :name "A Sun-Bleached Desert"
-                                       :description "Endless dunes of golden sand stretch to the horizon under a blinding sun. The heat shimmers in waves, and the silence is broken only by the occasional skitter of a unseen creature. The bleached bones of a long-dead beast protrude from a nearby dune."))
-          (swamp (new-room :name "A Murky Swamp"
-                                      :description "Stagnant water laps at gnarled tree roots as thick mist curls around your ankles. The air is heavy with the smell of decay and damp earth. Somewhere in the distance, a bullfrog croaks and something large splashes."))
-          (volcano (new-room :name "A Rumbling Volcano"
-                                        :description "The ground trembles beneath your feet. Glowing lava flows through cracks in the black, jagged rock, casting an eerie red glow across the cavern. Heat shimmers violently and the air reeks of sulphur. The mountain groans above you."))
-          (guestbook (new-guestbook :name "an oak guestbook")))
-      ;; Place the guestbook in The Gathering
-      (room-add-object gathering guestbook)
-      ;; Connect The Gathering (hub) to the four biomes
-      (room-add-exits gathering "north" forest "south")
-      (room-add-exits gathering "east" desert "west")
-      (room-add-exits gathering "west" swamp "east")
-      (room-add-exits gathering "south" volcano "north")
-      ;; Desert door → shopping mall → Team Rocket cavern maze
-      (build-shopping-mall world desert)
-      ;; Register all objects in the world
-      (world-set-object-id! world guestbook)
-      (world-set-object-id! world gathering)
-      (world-set-object-id! world forest)
-      (world-set-object-id! world desert)
-      (world-set-object-id! world swamp)
-      (world-set-object-id! world volcano)
-      (world-set-starting-room! world gathering))
-    world))
-
 ;; ─── Desert Oasis Mall ───────────────────────────────────────────────────────
-
-(defun build-shopping-mall (world desert)
-  "Add the Desert Oasis Mall, linked from the desert via a shimmering door."
-  (let* ((door-flavor " A shimmering glass door materializes from the heat haze — frosted letters read 'DESERT OASIS MALL'.")
-         (mall (new-room
-                :name "Desert Oasis Mall"
-                :description
-                "A gleaming air-conditioned shopping mall defies the desert outside. Escalators hum, pop music echoes off polished tile, and neon signs advertise everything from potions to plush monsters. Shoppers wander between kiosks while a fountain burbles in the centre."))
-         (food-court (new-room
-                      :name "Food Court"
-                      :description
-                      "Rows of fast-food counters line this open plaza. The smell of fried Magikarp sticks and berry smoothies fills the air. Picnic tables are packed with tired trainers on lunch break."))
-         (arcade (new-room
-                  :name "Arcade Zone"
-                  :description
-                  "Flashing cabinets and claw machines dominate this wing. A 'Team Rocket Cavern Adventure' ride sits behind a velvet rope — a maintenance hatch beside it is slightly ajar, leaking cold underground air."))
-         (fashion (new-room
-                   :name "Fashion Wing"
-                   :description
-                   "Mannequins display the latest trainer gear: cargo shorts, fingerless gloves, and hats that somehow never fall off during battle. A sale banner screams '50% OFF REPEL!'.")))
-    (setf (object-description desert)
-          (concatenate 'string (object-description desert) door-flavor))
-    (room-add-exits desert "door" mall "desert")
-    (room-add-exits mall "north" food-court "south")
-    (room-add-exits mall "east" arcade "west")
-    (room-add-exits mall "west" fashion "east")
-    (room-add-exits arcade "maintenance" (build-team-rocket-cavern world) "mall")
-    (dolist (room (list mall food-court arcade fashion))
-      (register-room world room))
-    mall))
-
-;; ─── Team Rocket Cavern Maze ─────────────────────────────────────────────────
 
 (defun build-team-rocket-cavern (world)
   "Build the Team Rocket cavern maze with fights and challenges."
@@ -214,9 +148,65 @@
     (register-room world treasure)
     entrance))
 
+(defun build-shopping-mall (world desert)
+  "Add the Desert Oasis Mall, linked from the desert via a shimmering door."
+  (let* ((door-flavor " A shimmering glass door materializes from the heat haze — frosted letters read 'DESERT OASIS MALL'.")
+         (mall (new-room
+                :name "Desert Oasis Mall"
+                :description
+                "A gleaming air-conditioned shopping mall defies the desert outside. Escalators hum, pop music echoes off polished tile, and neon signs advertise everything from potions to plush monsters. Shoppers wander between kiosks while a fountain burbles in the centre."))
+         (food-court (new-room
+                      :name "Food Court"
+                      :description
+                      "Rows of fast-food counters line this open plaza. The smell of fried Magikarp sticks and berry smoothies fills the air. Picnic tables are packed with tired trainers on lunch break."))
+         (arcade (new-room
+                  :name "Arcade Zone"
+                  :description
+                  "Flashing cabinets and claw machines dominate this wing. A 'Team Rocket Cavern Adventure' ride sits behind a velvet rope — a maintenance hatch beside it is slightly ajar, leaking cold underground air."))
+         (fashion (new-room
+                   :name "Fashion Wing"
+                   :description
+                   "Mannequins display the latest trainer gear: cargo shorts, fingerless gloves, and hats that somehow never fall off during battle. A sale banner screams '50% OFF REPEL!'.")))
+    (setf (object-description desert)
+          (concatenate 'string (object-description desert) door-flavor))
+    (room-add-exits desert "door" mall "desert")
+    (room-add-exits mall "north" food-court "south")
+    (room-add-exits mall "east" arcade "west")
+    (room-add-exits mall "west" fashion "east")
+    (room-add-exits arcade "maintenance" (build-team-rocket-cavern world) "mall")
+    (dolist (room (list mall food-court arcade fashion))
+      (register-room world room))
+    mall))
+
 (defun new-default-world ()
-  (let ((world (initial-world))
-        (desert (world-object-with-name "A Whispering Desert")))
-    (build-shopping-mall world desert)
-    (build-team-rocket-carvern world)
+  "Create the default Apeiron world with all areas (hub, mall, cavern)."
+  (let ((world (make-instance 'mud-world)))
+    (let ((gathering (new-room :name "The Gathering"
+                                          :description "A warm, circular hall with a high domed ceiling. Torches flicker along the stone walls, casting dancing shadows. Four archways stand at the cardinal points, each bearing a carved symbol: a leaf (north), a sun (east), a droplet (west), and a flame (south). A sturdy oak guestbook sits on a pedestal in the centre."))
+          (forest (new-room :name "A Whispering Forest"
+                                       :description "Ancient trees tower overhead, their leaves rustling secrets in the wind. Shafts of golden sunlight pierce the canopy, illuminating patches of moss and wildflowers. A faint path winds deeper into the woods."))
+          (desert (new-room :name "A Sun-Bleached Desert"
+                                       :description "Endless dunes of golden sand stretch to the horizon under a blinding sun. The heat shimmers in waves, and the silence is broken only by the occasional skitter of a unseen creature. The bleached bones of a long-dead beast protrude from a nearby dune."))
+          (swamp (new-room :name "A Murky Swamp"
+                                      :description "Stagnant water laps at gnarled tree roots as thick mist curls around your ankles. The air is heavy with the smell of decay and damp earth. Somewhere in the distance, a bullfrog croaks and something large splashes."))
+          (volcano (new-room :name "A Rumbling Volcano"
+                                        :description "The ground trembles beneath your feet. Glowing lava flows through cracks in the black, jagged rock, casting an eerie red glow across the cavern. Heat shimmers violently and the air reeks of sulphur. The mountain groans above you."))
+          (guestbook (new-guestbook :name "an oak guestbook")))
+      ;; Place the guestbook in The Gathering
+      (room-add-object gathering guestbook)
+      ;; Connect The Gathering (hub) to the four biomes
+      (room-add-exits gathering "north" forest "south")
+      (room-add-exits gathering "east" desert "west")
+      (room-add-exits gathering "west" swamp "east")
+      (room-add-exits gathering "south" volcano "north")
+      ;; Desert door → shopping mall → Team Rocket cavern maze
+      (build-shopping-mall world desert)
+      ;; Register all objects in the world
+      (world-set-object-id! world guestbook)
+      (world-set-object-id! world gathering)
+      (world-set-object-id! world forest)
+      (world-set-object-id! world desert)
+      (world-set-object-id! world swamp)
+      (world-set-object-id! world volcano)
+      (world-set-starting-room! world gathering))
     world))

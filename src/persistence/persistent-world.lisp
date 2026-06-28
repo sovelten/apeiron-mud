@@ -215,13 +215,44 @@ Returns the new PERSISTENT-WORLD."
 
 ;; ─── World restore / initialize ─────────────────────────────────────────────
 
-(defun world-restore-or-initialize (&key force-new transient-world)
-  "Restore the world from the BKNR datastore, or create a fresh one.
+(defun default-transient-world ()
+  "Create a bare transient world with the five hub rooms and a guestbook.
 
-When no stored world is found, INITIALIZER is called with no arguments to
-produce a transient MUD-WORLD which is then materialized into persistence.
-If INITIALIZER is NIL (the default), `DEFAULT-TRANSIENT-WORLD` is used.
-When FORCE-NEW is true any existing store data is wiped first."
+Used as the fallback when WORLD-RESTORE-OR-INITIALIZE is called
+without :TRANSIENT-WORLD."
+  (let ((world (make-instance 'mud-world)))
+    (let ((gathering (new-room :name "The Gathering"
+                              :description "A warm, circular hall with a high domed ceiling. Torches flicker along the stone walls, casting dancing shadows."))
+          (forest (new-room :name "A Whispering Forest"
+                            :description "Ancient trees tower overhead, their leaves rustling secrets in the wind."))
+          (desert (new-room :name "A Sun-Bleached Desert"
+                            :description "Endless dunes of golden sand stretch to the horizon under a blinding sun."))
+          (swamp (new-room :name "A Murky Swamp"
+                           :description "Stagnant water laps at gnarled tree roots as thick mist curls around your ankles."))
+          (volcano (new-room :name "A Rumbling Volcano"
+                             :description "The ground trembles beneath your feet. Glowing lava flows through cracks in the black, jagged rock."))
+          (guestbook (new-guestbook :name "an oak guestbook"
+                                    :filepath (namestring (merge-pathnames "guestbook.csv" *data-directory*)))))
+      (room-add-object gathering guestbook)
+      (room-add-exits gathering "north" forest "south")
+      (room-add-exits gathering "east" desert "west")
+      (room-add-exits gathering "west" swamp "east")
+      (room-add-exits gathering "south" volcano "north")
+      (world-set-object-id! world guestbook)
+      (world-set-object-id! world gathering)
+      (world-set-object-id! world forest)
+      (world-set-object-id! world desert)
+      (world-set-object-id! world swamp)
+      (world-set-object-id! world volcano)
+      (world-set-starting-room! world gathering))
+    world))
+
+(defun world-restore-or-initialize (&key force-new transient-world)
+  "Restore the world from the BKNR datastore, or materialize a fresh one.
+
+When no stored world is found, TRANSIENT-WORLD is materialized into
+persistence.  If TRANSIENT-WORLD is NIL (the default), `DEFAULT-TRANSIENT-WORLD`
+is used.  When FORCE-NEW is true any existing store data is wiped first."
   (when force-new
     (log-message "Forcing new world, clearing existing datastore…")
     (when (and (boundp 'bknr.datastore:*store*) bknr.datastore:*store*)
@@ -266,7 +297,8 @@ When FORCE-NEW is true any existing store data is wiped first."
           (when *debug-mode*
             (log-message "World restored from BKNR datastore."))
           world)
-        (let ((world (materialize-world transient-world)))
+        (let* ((tw (or transient-world (default-transient-world)))
+               (world (materialize-world tw)))
           (sync-world)
           (when *debug-mode*
             (log-message "New world created from transient and persisted."))

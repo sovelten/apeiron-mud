@@ -11,7 +11,7 @@
   "Desert has a door exit to the shopping mall."
   (let* ((world (apeiron.persistence:world-restore-or-initialize
                  :force-new t
-                 :initializer #'apeiron.worlds:initial-world))
+                 :transient-world (apeiron.worlds:new-default-world)))
          (desert (find-if (lambda (r) (search "Sun-Bleached" (apeiron.core:object-name r)))
                           (apeiron.persistence:rooms))))
     (is (not (null desert)))
@@ -22,7 +22,7 @@
   "Arcade connects to Team Rocket cavern with NPCs and challenges."
   (let* ((world (apeiron.persistence:world-restore-or-initialize
                  :force-new t
-                 :initializer #'apeiron.worlds:initial-world))
+                 :transient-world (apeiron.worlds:new-default-world)))
          (all-rooms (apeiron.persistence:rooms))
          (arcade (find-if (lambda (r) (string= "Arcade Zone" (apeiron.core:object-name r))) all-rooms))
          (entrance (find-if (lambda (r) (search "Cavern Mouth" (apeiron.core:object-name r))) all-rooms))
@@ -45,7 +45,7 @@
   "Player can attack and defeat a grunt."
   (let* ((world (apeiron.persistence:world-restore-or-initialize
                  :force-new t
-                 :initializer #'apeiron.worlds:initial-world))
+                 :transient-world (apeiron.worlds:new-default-world)))
          (player (apeiron.core:new-character "Fighter" (make-instance 'apeiron.core:stream-session
                                                                        :stream (make-string-output-stream))))
          (grunt-room (find-if (lambda (r) (string= "Grunt Patrol Route" (apeiron.core:object-name r)))
@@ -65,7 +65,7 @@
    without error — regression test: world-rooms returns a hash-table, not a list."
   (let* ((world (apeiron.persistence:world-restore-or-initialize
                  :force-new t
-                 :initializer #'apeiron.worlds:initial-world))
+                 :transient-world (apeiron.worlds:new-default-world)))
          (player (apeiron.core:new-character "Fighter" (make-instance 'apeiron.core:stream-session
                                                                        :stream (make-string-output-stream))))
          (grunt-room (find-if (lambda (r) (string= "Grunt Patrol Route" (apeiron.core:object-name r)))
@@ -87,7 +87,7 @@
   "Answering a riddle unlocks the challenge flag."
   (let* ((world (apeiron.persistence:world-restore-or-initialize
                  :force-new t
-                 :initializer #'apeiron.worlds:initial-world))
+                 :transient-world (apeiron.worlds:new-default-world)))
          (player (apeiron.core:new-character "Solver" (make-instance 'apeiron.core:stream-session
                                                                       :stream (make-string-output-stream))))
          (gallery (find-if (lambda (r) (string= "Riddle Gallery" (apeiron.core:object-name r)))
