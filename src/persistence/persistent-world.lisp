@@ -247,12 +247,15 @@ without :TRANSIENT-WORLD."
       (world-set-starting-room! world gathering))
     world))
 
-(defun world-restore-or-initialize (&key force-new transient-world)
+(defun world-restore-or-initialize (&key force-new (initializer #'default-transient-world))
   "Restore the world from the BKNR datastore, or materialize a fresh one.
 
-When no stored world is found, TRANSIENT-WORLD is materialized into
-persistence.  If TRANSIENT-WORLD is NIL (the default), `DEFAULT-TRANSIENT-WORLD`
-is used.  When FORCE-NEW is true any existing store data is wiped first."
+When no stored world is found, INITIALIZER (a function of no arguments
+that returns a transient MUD-WORLD) is called to produce the transient
+world, which is then materialized into persistence.  Defaults to
+`DEFAULT-TRANSIENT-WORLD`.
+
+When FORCE-NEW is true any existing store data is wiped first."
   (when force-new
     (log-message "Forcing new world, clearing existing datastore…")
     (when (and (boundp 'bknr.datastore:*store*) bknr.datastore:*store*)
@@ -297,8 +300,8 @@ is used.  When FORCE-NEW is true any existing store data is wiped first."
           (when *debug-mode*
             (log-message "World restored from BKNR datastore."))
           world)
-        (let* ((tw (or transient-world (default-transient-world)))
-               (world (materialize-world tw)))
+        (let* ((transient (funcall initializer))
+               (world (materialize-world transient)))
           (sync-world)
           (when *debug-mode*
             (log-message "New world created from transient and persisted."))

@@ -188,7 +188,7 @@ connection to TLS in-band."
           (return-from start-mud-server nil))
         ;; Initialize world
         (let ((world (world-restore-or-initialize :force-new force-new
-                                                  :transient-world (apeiron.worlds:new-default-world))))
+                                                  :initializer #'apeiron.worlds:new-default-world)))
           ;; Start plain-text listener
           (setf *server-socket*
                 (usocket:socket-listen host port :reuse-address t :backlog 5))

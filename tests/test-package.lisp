@@ -8,6 +8,7 @@
            #:core-suite
            #:telnet-suite
            #:persistence-suite
+           #:worlds-suite
            #:server-suite
            #:setup-test-environment
            #:teardown-test-environment))
@@ -28,6 +29,10 @@
 (def-suite persistence-suite
     :in apeiron-tests
     :description "Persistence module tests — BKNR datastore, world restore")
+
+(def-suite worlds-suite
+    :in apeiron-tests
+    :description "World module tests — pre-built world areas, NPCs, combat")
 
 (def-suite server-suite
     :in apeiron-tests
