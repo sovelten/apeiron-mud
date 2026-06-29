@@ -66,9 +66,21 @@
 
 (defun room-describe (room)
   "Get a full description of a room including contents and exits."
-  (format nil "~%=== ~A ===~%~A~%You see:~%~{  - ~A~%~}~%~%Exits: ~{~A~^, ~}~%"
-          (object-name room)
-          (object-description room)
-          (map 'list #'object-describe (room-contents room))
-          (loop for key being the hash-keys of (room-exits room)
-                collect key)))
+  (let ((contents (room-contents room))
+        (exits (loop for key being the hash-keys of (room-exits room)
+                     collect key)))
+    (format nil "~%~A~%~A~%~A~%~{~A~%~}~%~A~{~A~^, ~}~%"
+            ;; Room name — bold bright white
+            (bold-white (format nil "=== ~A ===" (object-name room)))
+            ;; Room description — keep default (no color)
+            (object-description room)
+            ;; "You see:" header
+            (bold-white "You see:")
+            ;; Contents — color-coded by type
+            (map 'list (lambda (obj)
+                         (format nil "  - ~A" (object-describe obj)))
+                 contents)
+            ;; "Exits:" header
+            (bold-white "Exits: ")
+            ;; Exit directions — yellow
+            (mapcar #'yellow exits))))

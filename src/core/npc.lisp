@@ -68,8 +68,7 @@
   "Describe an NPC for examine/inventory output."
   (if (npc-defeated-p npc)
       (format nil "~A (defeated)" (object-name npc))
-      (format nil "~A [HP: ~D/~D] — ~A"
-              (object-name npc)
-              (npc-hp npc)
-              (npc-max-hp npc)
+      (format nil "~A ~A — ~A"
+              (bold-red (object-name npc))
+              (yellow (format nil "[HP: ~D/~D]" (npc-hp npc) (npc-max-hp npc)))
               (object-description npc))))

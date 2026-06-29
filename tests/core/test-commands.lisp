@@ -92,40 +92,42 @@
                (is (= 1 (length captured-messages)))
                (is (search "Error" (car captured-messages))))
                          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
-          
-          (test command-processing-shout
-            "Test the shout command — broadcasts to all players."
-            (let ((world (apeiron.persistence:world-restore-or-initialize)))
-              (let ((player1 (apeiron.core:new-character "Alice" (make-instance 'apeiron.core:stream-session
-                                                                                 :stream (make-string-output-stream))))
-                    (player2 (apeiron.core:new-character "Bob" (make-instance 'apeiron.core:stream-session
-                                                                               :stream (make-string-output-stream))))
-                    (messages1 '())
-                    (messages2 '()))
-                (apeiron.core:world-add-character! world player1)
-                (apeiron.core:world-add-character! world player2)
-                (let ((original-send-message (fdefinition 'apeiron.core:player-send-message)))
-                  (unwind-protect
-                       (progn
-                         (setf (fdefinition 'apeiron.core:player-send-message)
-                               (lambda (p msg &key newline)
-                                 (declare (ignore newline))
-                                 (cond
-                                   ((eq p player1) (push msg messages1))
-                                   ((eq p player2) (push msg messages2))
-                                   (t (push msg messages1)))))
-                         
-                         ;; Test 1: no message shows usage
-                         (setf messages1 '() messages2 '())
-                         (apeiron.core:process-command world player1 "shout")
-                         (is (equal '("Shout what? Usage: shout <message>") messages1))
-                         (is (null messages2))
-                         
-                         ;; Test 2: shout is broadcast to everyone except the shouter
-                         (setf messages1 '() messages2 '())
-                         (apeiron.core:process-command world player1 "shout Hello everyone!")
-                         ;; Player1 gets the "You shout" confirmation
-                         (is (search "You shout" (car messages1)))
-                         ;; Player2 gets the broadcast
-                         (is (search "Alice shouts: Hello everyone!" (car messages2))))
-                    (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+
+(test command-processing-shout
+  "Test the shout command — broadcasts to all players."
+  (let ((world (apeiron.persistence:world-restore-or-initialize)))
+    (let ((player1 (apeiron.core:new-character "Alice" (make-instance 'apeiron.core:stream-session
+                                                                       :stream (make-string-output-stream)
+                                                                       :use-colors nil)))
+          (player2 (apeiron.core:new-character "Bob" (make-instance 'apeiron.core:stream-session
+                                                                     :stream (make-string-output-stream)
+                                                                     :use-colors nil)))
+          (messages1 '())
+          (messages2 '()))
+      (apeiron.core:world-add-character! world player1)
+      (apeiron.core:world-add-character! world player2)
+      (let ((original-send-message (fdefinition 'apeiron.core:player-send-message)))
+        (unwind-protect
+             (progn
+               (setf (fdefinition 'apeiron.core:player-send-message)
+                     (lambda (p msg &key newline)
+                       (declare (ignore newline))
+                       (cond
+                         ((eq p player1) (push msg messages1))
+                         ((eq p player2) (push msg messages2))
+                         (t (push msg messages1)))))
+               
+               ;; Test 1: no message shows usage
+               (setf messages1 '() messages2 '())
+               (apeiron.core:process-command world player1 "shout")
+               (is (equal '("Shout what? Usage: shout <message>") messages1))
+               (is (null messages2))
+               
+               ;; Test 2: shout is broadcast to everyone except the shouter
+               (setf messages1 '() messages2 '())
+               (apeiron.core:process-command world player1 "shout Hello everyone!")
+               ;; Player1 gets the "You shout" confirmation
+               (is (search "You shout" (car messages1)))
+               ;; Player2 gets the broadcast
+               (is (search "Alice shouts: Hello everyone!" (car messages2))))
+          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))

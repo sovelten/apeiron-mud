@@ -56,8 +56,24 @@
     t))
 
 (defun object-describe (obj)
-  "Get a description of an object."
-  (format nil "~A (ID: ~D)" (object-name obj) (object-id obj)))
+  "Get a description of an object with type-based ANSI coloring.
+- Characters (players): bright green
+- NPCs: bright red
+- Items: cyan
+- Rooms: bold white
+- Generic: default (no color)"
+  (let ((name (object-name obj)))
+    (cond
+      ((typep obj 'mud-npc)
+       (bright-red (format nil "~A (ID: ~D)" name (object-id obj))))
+      ((eq (object-type obj) +object-type-character+)
+       (bright-green (format nil "~A (ID: ~D)" name (object-id obj))))
+      ((eq (object-type obj) +object-type-item+)
+       (cyan (format nil "~A (ID: ~D)" name (object-id obj))))
+      ((eq (object-type obj) +object-type-room+)
+       (bold-white (format nil "~A (ID: ~D)" name (object-id obj))))
+      (t
+       (format nil "~A (ID: ~D)" name (object-id obj))))))
 
 ;; Print object in REPL with useful information
 (defmethod print-object ((obj mud-object) stream)

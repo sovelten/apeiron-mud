@@ -26,6 +26,7 @@
                 ((:file "package")
                  (:file "constants" :depends-on ("package"))
                  (:file "utils" :depends-on ("constants"))
+                 (:file "colors" :depends-on ("package"))
                  (:file "object" :depends-on ("utils"))
                  (:file "room" :depends-on ("object"))
                  (:file "guestbook" :depends-on ("object"))

@@ -55,9 +55,11 @@
   "Format the guestbook entries as a readable string."
   (let ((entries (guestbook-entries guestbook)))
     (if (null entries)
-        (format nil "=== ~A ===~%~%The guestbook is currently empty.~%" (object-name guestbook))
+        (format nil "~A~%~%The guestbook is currently empty.~%"
+                (bold-white (format nil "=== ~A ===" (object-name guestbook))))
         (with-output-to-string (stream)
-          (format stream "=== ~A ===~%~%" (object-name guestbook))
+          (format stream "~A~%~%"
+                  (bold-white (format nil "=== ~A ===" (object-name guestbook))))
           (loop for entry in entries
                 for author = (getf entry :author)
                 for message = (getf entry :message)
@@ -66,4 +68,4 @@
                        (decode-universal-time timestamp)
                      (format stream "[~4,'0D-~2,'0D-~2,'0D ~2,'0D:~2,'0D:~2,'0D] ~A wrote:~%  ~A~%~%"
                              year month date hour minute second
-                             author message)))))))
+                             (bright-green author) message)))))))

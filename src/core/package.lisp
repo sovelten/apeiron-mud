@@ -28,6 +28,74 @@
    #:+max-command-length+
    #:+command-timeout+
 
+   ;; ANSI color control
+   #:*colorize*
+
+   ;; ANSI color constants
+   #:+sgr-reset+
+   #:+sgr-bold+
+   #:+sgr-dim+
+   #:+sgr-italic+
+   #:+sgr-underline+
+   #:+sgr-blink+
+   #:+sgr-reverse+
+   #:+sgr-fg-black+
+   #:+sgr-fg-red+
+   #:+sgr-fg-green+
+   #:+sgr-fg-yellow+
+   #:+sgr-fg-blue+
+   #:+sgr-fg-magenta+
+   #:+sgr-fg-cyan+
+   #:+sgr-fg-white+
+   #:+sgr-bg-black+
+   #:+sgr-bg-red+
+   #:+sgr-bg-green+
+   #:+sgr-bg-yellow+
+   #:+sgr-bg-blue+
+   #:+sgr-bg-magenta+
+   #:+sgr-bg-cyan+
+   #:+sgr-bg-white+
+   #:+sgr-fg-bright-black+
+   #:+sgr-fg-bright-red+
+   #:+sgr-fg-bright-green+
+   #:+sgr-fg-bright-yellow+
+   #:+sgr-fg-bright-blue+
+   #:+sgr-fg-bright-magenta+
+   #:+sgr-fg-bright-cyan+
+   #:+sgr-fg-bright-white+
+   #:+sgr-bg-bright-black+
+   #:+sgr-bg-bright-red+
+   #:+sgr-bg-bright-green+
+   #:+sgr-bg-bright-yellow+
+   #:+sgr-bg-bright-blue+
+   #:+sgr-bg-bright-magenta+
+   #:+sgr-bg-bright-cyan+
+   #:+sgr-bg-bright-white+
+
+   ;; ANSI color helpers
+   #:color-text
+   #:bold
+   #:underline
+   #:red
+   #:green
+   #:yellow
+   #:blue
+   #:magenta
+   #:cyan
+   #:white
+   #:bright-red
+   #:bright-green
+   #:bright-yellow
+   #:bright-blue
+   #:bright-magenta
+   #:bright-cyan
+   #:bright-white
+   #:bold-red
+   #:bold-green
+   #:bold-yellow
+   #:bold-cyan
+   #:bold-white
+
    ;; Object system
    #:mud-object
    #:new-object
@@ -99,6 +167,7 @@
    #:new-session
    #:session-id
    #:session-character
+   #:session-use-colors
 
    #:stream-session
 

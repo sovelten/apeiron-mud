@@ -34,7 +34,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
                 (if target-room
                     (progn
                       (object-move player target-room)
-                      (player-send-message player (format nil "You go ~A.~%" direction))
+                      (player-send-message player (format nil "~A ~A~%" (bright-cyan "You go") (yellow direction)))
                       (player-send-message player (room-describe target-room)))
                     (player-send-message player "You can't go that way."))))))))
 
@@ -66,7 +66,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
                (if (typep target 'mud-npc)
                    (npc-describe target)
                    (format nil "~A~%~A"
-                           (object-name target)
+                           (bold-white (object-name target))
                            (object-description target))))
               (player-send-message player "You don't see that here."))))))
 
@@ -89,10 +89,16 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
 (define-command "status" (world player args)
   (declare (ignore world args))
   (player-ensure-combat-stats player)
-  (player-send-message player
-                       (format nil "HP: ~D/~D"
-                               (player-hp player)
-                               (player-max-hp player))))
+  (let ((hp (player-hp player))
+        (max-hp (player-max-hp player))
+        (hp-text (format nil "~D/~D" hp max-hp)))
+    (player-send-message player
+                         (format nil "HP: ~A"
+                                 (if (<= hp (/ max-hp 4))
+                                     (bold-red hp-text)
+                                     (if (<= hp (/ max-hp 2))
+                                         (yellow hp-text)
+                                         (bright-green hp-text)))))))
 
 (define-command "eval" (world player args)
   (declare (ignore world))
@@ -118,7 +124,9 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
     (let ((exits (loop for key being the hash-keys of (room-exits room)
                        collect key)))
       (if exits
-          (player-send-message player (format nil "Exits: ~{~A~^, ~}" exits))
+          (player-send-message player (format nil "~A~{~A~^, ~}"
+                                              (bold-white "Exits: ")
+                                              (mapcar #'yellow exits)))
           (player-send-message player "There are no exits here.")))))
 
 (define-command "inventory" (world player args)
@@ -127,8 +135,11 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
     (if (zerop (length inv))
         (player-send-message player "You are not carrying anything.")
         (player-send-message player 
-                             (format nil "You are carrying:~%~{  - ~A~%~}"
-                                     (map 'list #'object-describe inv))))))
+                             (format nil "~A~%~{~A~%~}"
+                                     (bold-white "You are carrying:")
+                                     (map 'list (lambda (obj)
+                                                  (format nil "  - ~A" (object-describe obj)))
+                                          inv))))))
 
 (define-command "say" (world player args)
   (declare (ignore world))
@@ -136,13 +147,13 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
     (if (zerop (length message))
         (player-send-message player "Say what?")
         (let ((room (object-location player)))
-          (player-send-message player (format nil "You say: ~A" message))
+          (player-send-message player (format nil "~A: ~A" (bold-white "You say") message))
           (loop for obj across (room-contents room) do
             (when (and (typep obj 'mud-character)
                        (not (eq obj player)))
               (player-send-message obj 
-                                  (format nil "~A says: ~A" 
-                                          (object-name player) message))))))))
+                                  (format nil "~A: ~A" 
+                                          (bright-green (format nil "~A says" (object-name player))) message))))))))
 
 (define-command "shout" (world player args)
   (let ((message args))
@@ -150,9 +161,11 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
         (player-send-message player "Shout what? Usage: shout <message>")
         (progn
           (world-broadcast world
-                           (format nil "~A shouts: ~A" (object-name player) message)
+                           (format nil "~A: ~A" 
+                                   (bold-red (format nil "~A shouts" (object-name player)))
+                                   message)
                            player)
-          (player-send-message player (format nil "You shout: ~A" message))))))
+          (player-send-message player (format nil "~A: ~A" (bold-red "You shout") message))))))
 
 (define-command "read" (world player args)
   (declare (ignore world))
@@ -192,12 +205,27 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
 
 (define-command "help" (world player args)
   (declare (ignore world args))
-  (let ((help-text "Available commands:~%~{  ~A~%~}~%Type 'help <command>' for more info."))
-    (player-send-message player 
-                         (format nil help-text 
-                                 (sort (loop for key being the hash-keys of *commands*
-                                             collect key)
-                                       #'string<)))))
+  (let ((cmd-list (sort (loop for key being the hash-keys of *commands*
+                              collect (cyan key))
+                        #'string< :key #'string)))
+    (player-send-message player
+                         (format nil "~A~%~{~A~%~}~%Type 'help <command>' for more info."
+                                 (bold-white "Available commands:")
+                                 cmd-list))))
+
+(define-command "toggle-colors" (world player args)
+  (declare (ignore world args))
+  (let* ((session (character-session player))
+         (new-value (not (session-use-colors session))))
+    (setf (session-use-colors session) new-value)
+    ;; Rebinds *COLORIZE* to the new value so the response message
+    ;; respects the toggle (process-command already bound it to the old value)
+    (let ((*colorize* new-value))
+      (player-send-message player
+                           (format nil "Colors ~A."
+                                   (if new-value
+                                       (bright-green "enabled")
+                                       (red "disabled")))))))
 
 (define-command "quit" (world player args)
   (declare (ignore args))
@@ -218,7 +246,8 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
               (values (string-downcase trimmed) ""))))))
 
 (defun process-command (world player command-string)
-  "Process a command from a player."
+  "Process a command from a player.
+Honors the player's session color preference by binding *COLORIZE*."
   (when (> (length command-string) +max-command-length+)
     (player-send-message player "Command too long.")
     (return-from process-command nil))
@@ -229,9 +258,10 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
     
     (let ((handler (gethash command *commands*)))
       (if handler
-          (handler-case
-              (funcall handler world player args)
-            (error (e)
-              (log-error "Command error for ~A: ~A" (object-name player) e)
-              (player-send-message player "Error executing command.")))
+          (let ((*colorize* (session-use-colors (character-session player))))
+            (handler-case
+                (funcall handler world player args)
+              (error (e)
+                (log-error "Command error for ~A: ~A" (object-name player) e)
+                (player-send-message player "Error executing command."))))
           (player-send-message player "Unknown command. Type 'help' for available commands.")))))

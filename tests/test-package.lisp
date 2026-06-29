@@ -40,6 +40,7 @@
 
 (eval-when (:load-toplevel :execute)
   (setf *debug-mode* nil)
+  (setf *colorize* nil)
   (setf bknr.datastore::*store-verbose* nil)
   (let ((temp-dir (uiop:subpathname (uiop:default-temporary-directory) "mud-test-bknr/"))
         (data-dir (uiop:subpathname (uiop:default-temporary-directory) "mud-test-data/")))
@@ -53,6 +54,7 @@
 (defun setup-test-environment ()
   "Set up a clean, isolated temporary BKNR store for test runs."
   (setf *debug-mode* nil)
+  (setf *colorize* nil)
   (setf bknr.datastore::*store-verbose* nil)
   (let ((temp-dir (uiop:subpathname (uiop:default-temporary-directory) "mud-test-bknr/"))
         (data-dir (uiop:subpathname (uiop:default-temporary-directory) "mud-test-data/")))

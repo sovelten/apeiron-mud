@@ -29,7 +29,11 @@ The default method is a no-op."))
    (character :initarg :player
               :accessor session-character
               :initform nil
-              :documentation "Player controlled by this session"))
+              :documentation "Player controlled by this session")
+   (use-colors :initarg :use-colors
+               :accessor session-use-colors
+               :initform t
+               :documentation "Whether ANSI color codes should be used in output"))
   (:documentation "A network session in the MUD"))
 
 (defun new-session ()

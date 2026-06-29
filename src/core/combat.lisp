@@ -37,27 +37,39 @@
   (let ((messages (list)))
     (when (npc-defeated-p npc)
       (return-from combat-attack-npc
-        (list (format nil "~A is already defeated." (object-name npc)))))
+        (list (format nil "~A is already defeated." (bold-red (object-name npc))))))
     (let ((damage (player-roll-attack player)))
       (setf (npc-hp npc) (- (npc-hp npc) damage))
-      (push (format nil "You strike ~A for ~D damage!" (object-name npc) damage)
+      (push (format nil "~A ~A for ~A!"
+                    (bold-green "You strike")
+                    (bold-red (object-name npc))
+                    (bold-red (format nil "~D damage" damage)))
             messages)
       (if (<= (npc-hp npc) 0)
           (progn
             (npc-defeat! npc)
-            (push (npc-defeat-message npc) messages)
+            (push (bright-green (npc-defeat-message npc)) messages)
             (when (npc-victory-flag npc)
               (object-set-property player (npc-victory-flag npc) t)
-              (push (format nil "You earned a victory mark: ~A." (npc-victory-flag npc))
+              (push (format nil "~A ~A." (bright-yellow "You earned a victory mark:")
+                            (bright-cyan (npc-victory-flag npc)))
                     messages)))
           (let ((counter (npc-roll-attack npc)))
             (setf (player-hp player) (- (player-hp player) counter))
-            (push (format nil "~A hits you for ~D damage! (Your HP: ~D/~D)"
-                          (object-name npc) counter
-                          (player-hp player) (player-max-hp player))
+            (push (format nil "~A hits you for ~A! (Your HP: ~A)"
+                          (bold-red (object-name npc))
+                          (bold-red (format nil "~D damage" counter))
+                          (let ((hp-text (format nil "~D/~D"
+                                                  (player-hp player)
+                                                  (player-max-hp player))))
+                            (if (<= (player-hp player) (/ (player-max-hp player) 4))
+                                (bold-red hp-text)
+                                (if (<= (player-hp player) (/ (player-max-hp player) 2))
+                                    (yellow hp-text)
+                                    (bright-green hp-text)))))
                   messages)
             (when (player-defeated-p player)
-              (push "You black out and wake up at the cavern entrance, bruised but alive."
+              (push (bold-red "You black out and wake up at the cavern entrance, bruised but alive.")
                     messages)
               (player-heal-full player)
               (let ((entrance (loop for r being the hash-values of (world-rooms world)

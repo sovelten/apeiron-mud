@@ -47,6 +47,8 @@
           (delete obj inventory))))
 
 (defun player-send-message (player message &key (newline t))
-  "Send a message to a player. If NEWLINE is nil, don't add a trailing newline."
+  "Send a message to a player. If NEWLINE is nil, don't add a trailing newline.
+Honors the session's color preference by binding *COLORIZE* around the write."
   (let ((session (character-session player)))
-    (mud-write session message :newline newline)))
+    (let ((*colorize* (session-use-colors session)))
+      (mud-write session message :newline newline))))
