@@ -12,30 +12,30 @@ This code represents a common-lisp MUD server. If actual code contradicts this d
 
 These are the main layers of the code base:
 
-### Network - Includes network related logic
-
-  * network.lisp (main entry point, server start and thread control)
-  * session.lisp (single user session object, input/output and helpers)
-
-### World - Main world model. Keeps track of world objects and configuration.
-
+### Core - Main world model. Keeps track of world objects and configuration
   * world.lisp
+  * etc.
 
 ### Persistent World - Deals with persistence storage.
 
   * persistent-world.lisp
+  * store.lisp
 
-### Command Parser - This one is tricky, since commands receive input from user, manipulate the world and respond user. As much as possible we want to avoid exposure to the network. It should also not depend on the persistence layer.
+We should theoretically be able to load a fully transient world that does not rely on this layer and only lives in RAM. Persistent layer should be able to transform a fully transient world into persistent, keeping track of persisted entities and logging or snapshotting for recovery in case the server is restarted.
 
-  * command-handler.lisp 
+### Telnet - Implements telnet RFC 854 (and possibly other additions)
 
-### Utils
+This is the code of the telnet server. It should not depend on any of the other layers. The core layer relies on generic methods that can be implemented by string streams for testing purposes.
 
-  * utils.lisp
+### Worlds - One or more constructed worlds build from the fundamental pieces in the core layer
 
-### World Objects - objects inheriting from mud-object and their helpers. Characters are tricky because they are associated with a user session. In the future we want to rely on generic methods to avoid exposing the network layer.
+This is the world (or worlds) itself. This is done so that people can use the other modules to build their own worlds.
 
-  * remaining files (object, guestbook, character, room etc.)
+### Server - Includes network related logic
+
+  * network.lisp (main entry point, server start and thread control)
+
+This connects everything together (telnet, core, persistency, worlds) to build load a particular world in a server.
 
 ## Design Best Practices
 
@@ -50,6 +50,6 @@ We value functional programming design, therefore:
 ### Testing
 
 * Unit testing should be about a single data structure/function/object. If you need to mock the network or another side effect, likely you are doing something wrong.
-* Integration tests are about testing the whole program behavior. They should either rely on test versions of the generic methods (not implemented as of this moment) or mirror production. 
+* Integration tests are about testing the whole program behavior. They should either rely on test versions of the generic methods (not implemented as of this moment) or mirror production.
 * All integration tests should have initialization and tear down of anything that requires stateful change or network interaction. In other words, tests should be isolated and not affect other tests.
 * Integration tests live in test-integration.lisp and the other test files are to be seen as unit.
