@@ -178,10 +178,10 @@ room contents, and the starting room."
                                (room-add-exit p dir new-target))))
                          (room-exits obj))
                 ;; Contents
-                (loop for child across (room-contents obj)
+                (loop for child in (container-all-objects obj)
                       do (let ((new-child (gethash child map)))
                            (when new-child
-                             (room-add-object p new-child))))))))
+                             (container-add-object p new-child))))))))
       ;; Starting room
       (let ((old-start (starting-room transient-world)))
         (when old-start
@@ -228,7 +228,7 @@ without :TRANSIENT-WORLD."
                              :description "The ground trembles beneath your feet. Glowing lava flows through cracks in the black, jagged rock."))
           (guestbook (new-guestbook :name "an oak guestbook"
                                     :filepath (namestring (merge-pathnames "guestbook.csv" *data-directory*)))))
-      (room-add-object gathering guestbook)
+      (container-add-object gathering guestbook)
       (room-add-exits gathering "north" forest "south")
       (room-add-exits gathering "east" desert "west")
       (room-add-exits gathering "west" swamp "east")
@@ -276,14 +276,14 @@ When FORCE-NEW is true any existing store data is wiped first."
           ;; object locations, so transient objects from previous sessions
           ;; (e.g. characters added in earlier tests) don't accumulate.
           (dolist (r (bknr.datastore:store-objects-with-class 'persistent-room))
-            (setf (room-contents r) (make-array 0 :adjustable t :fill-pointer t)))
+            (setf (container-contents r) (make-hash-table)))
           ;; Rebuild room contents from persistent object locations.
           ;; Wrapped in a single transaction to avoid per-object auto-wrap overhead.
           (bknr.datastore:with-transaction ("rebuild-room-contents")
             (flet ((rebuild-room-contents (obj)
                      (let ((loc (object-location obj)))
                        (when (typep loc 'persistent-room)
-                         (room-add-object loc obj)))))
+                         (container-add-object loc obj)))))
               (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-object))
                 (rebuild-room-contents obj))
               (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-room))

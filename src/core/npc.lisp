@@ -62,7 +62,7 @@
                   (not (npc-defeated-p obj))
                   (search (string-downcase name)
                           (string-downcase (object-name obj)))))
-           (room-contents room)))
+           (container-all-objects room)))
 
 (defun npc-describe (npc)
   "Describe an NPC for examine/inventory output."

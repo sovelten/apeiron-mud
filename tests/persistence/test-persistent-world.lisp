@@ -44,7 +44,7 @@
        (let* ((world (apeiron.persistence:world-restore-or-initialize :force-new t))
               (tavern (apeiron.core:starting-room world))
               (guestbook (find-if (lambda (obj) (typep obj 'apeiron.core:mud-guestbook))
-                                  (apeiron.core:room-contents tavern))))
+                                  (apeiron.core:container-all-objects tavern))))
 
          (is (not (null guestbook)))
 
@@ -61,7 +61,7 @@
          (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
                 (reloaded-tavern (apeiron.core:starting-room new-world))
                 (reloaded-gbook (find-if (lambda (obj) (typep obj 'apeiron.core:mud-guestbook))
-                                         (apeiron.core:room-contents reloaded-tavern))))
+                                         (apeiron.core:container-all-objects reloaded-tavern))))
            (is (not (null reloaded-gbook)))
            (let ((entries (apeiron.core:guestbook-entries reloaded-gbook)))
              (is (= (length entries) 1))

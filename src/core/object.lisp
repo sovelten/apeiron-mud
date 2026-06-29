@@ -47,12 +47,12 @@
   (let ((old-location (object-location obj)))
     ;; Remove from old location if it's a room
     (when (and old-location (typep old-location 'mud-room))
-      (room-remove-object old-location obj))
+      (container-remove-object old-location obj))
     ;; Set new location
     (setf (object-location obj) new-location)
     ;; Add to new location if it's a room
     (when (typep new-location 'mud-room)
-      (room-add-object new-location obj))
+      (container-add-object new-location obj))
     t))
 
 (defun object-describe (obj)

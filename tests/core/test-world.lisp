@@ -141,8 +141,8 @@
                                      :stream (make-string-output-stream)))))
     (setf (apeiron.core:object-location alice) room)
     (setf (apeiron.core:object-location bob) room)
-    (apeiron.core:room-add-object room alice)
-    (apeiron.core:room-add-object room bob)
+    (apeiron.core:container-add-object room alice)
+    (apeiron.core:container-add-object room bob)
     (is (eq alice (apeiron.core:find-character-in-room room "Alice")))
     (is (eq bob (apeiron.core:find-character-in-room room "Bob")))
     ;; Case-insensitive match

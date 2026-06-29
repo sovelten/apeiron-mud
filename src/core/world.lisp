@@ -57,7 +57,7 @@ indices, and return the object."
   "Add a character to the world, placing them in the starting room."
   (let ((room (starting-room world)))
     (setf (object-location character) room)
-    (room-add-object room character)
+    (container-add-object room character)
     (setf (gethash (object-id character) (world-players world)) character)))
 
 (defun world-total-players (world)
@@ -68,7 +68,7 @@ indices, and return the object."
   (let ((room (object-location character)))
     ;; Remove from room
     (when (typep room 'mud-room)
-      (room-remove-object room character))
+      (container-remove-object room character))
     ;; Remove from world
     (remhash (object-id character) (world-players world))
     (log-message "~A removed from world" (object-name character))))
@@ -84,7 +84,7 @@ indices, and return the object."
 
 (defun find-character-in-room (room player-name)
   "Find a player in a room by name."
-  (loop for obj across (room-contents room)
+  (loop for obj in (container-all-objects room)
         when (and (typep obj 'mud-character)
                   (string-equal (object-name obj) player-name))
         return obj))
