@@ -4,6 +4,20 @@ A MUD (Multi-User Dungeon) server written in Common Lisp, inspired by Dworkin's 
 
 Very simple and raw at the moment, but the fact that it runs on lisp gives it some super powers, such as the ability to update the running image within the session.
 
+## Architecture
+
+```
+     apeiron/core
+     /     |     \
+worlds  persistence  telnet
+     \     |     /
+        server
+           |
+       apeiron (meta)
+```
+
+Core is the shared foundation. Worlds and persistence build on it independently (no dependency between them). Telnet is standalone. The server layer wires everything together.
+
 ## Key Design Principles
 
 1. **Persistent Objects** - Game objects are persisted and changes are logged to enable recovery (using BKNR.Datastore).

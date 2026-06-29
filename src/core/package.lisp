@@ -28,6 +28,9 @@
    #:+max-command-length+
    #:+command-timeout+
 
+   ;; Runtime data directory
+   #:*data-directory*
+
    ;; ANSI color control
    #:*colorize*
 

@@ -4,3 +4,7 @@
 ;;;; world-areas.lisp so they can be loaded independently during development.
 
 (in-package #:apeiron.worlds)
+
+;; ─── Data directory ─────────────────────────────────────────────────────────
+;; Runtime data files (guestbook CSV, etc.) live here, separate from BKNR
+;; snapshots which clutter the project root.

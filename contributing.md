@@ -12,6 +12,18 @@ This code represents a common-lisp MUD server. If actual code contradicts this d
 
 These are the main layers of the code base:
 
+```
+     apeiron/core
+     /     |     \
+worlds  persistence  telnet
+     \     |     /
+        server
+           |
+       apeiron (meta)
+```
+
+Core is the shared foundation. Worlds and persistence build on it independently (no dependency between them). Telnet is standalone. The server layer wires everything together.
+
 ### Core - Main world model. Keeps track of world objects and configuration
   * world.lisp
   * etc.

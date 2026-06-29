@@ -18,3 +18,11 @@
 ;; Command constants
 (defconstant +max-command-length+ 256)
 (defconstant +command-timeout+    30)
+
+;; ─── Runtime data directory ────────────────────────────────────────────────
+;; Runtime data files (guestbook CSV, etc.) live here, separate from BKNR
+;; snapshots which clutter the project root.
+
+(defvar *data-directory*
+  (merge-pathnames #p"data/" (asdf:system-source-directory :apeiron))
+  "Directory for run-time data files (guestbook CSV, etc.).")

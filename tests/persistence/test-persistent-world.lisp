@@ -36,7 +36,7 @@
 (test guestbook-persistence
   "Test that guestbook entries survive store close/reopen via CSV persistence."
   ;; Clean up any leftover CSV from earlier runs
-  (let ((csv-path (merge-pathnames "guestbook.csv" apeiron.persistence:*data-directory*)))
+  (let ((csv-path (merge-pathnames "guestbook.csv" *data-directory*)))
     (when (probe-file csv-path)
       (delete-file csv-path)))
   (unwind-protect
@@ -68,6 +68,6 @@
              (is (equal (getf (first entries) :author) "Sophia"))
              (is (equal (getf (first entries) :message) "Persistent via CSV!")))))
     ;; Clean up CSV file after test
-    (let ((csv-path (merge-pathnames "guestbook.csv" apeiron.persistence:*data-directory*)))
+    (let ((csv-path (merge-pathnames "guestbook.csv" *data-directory*)))
       (when (probe-file csv-path)
         (ignore-errors (delete-file csv-path))))))

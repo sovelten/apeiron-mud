@@ -1,5 +1,11 @@
 ;;;; src/persistence/package.lisp — Package definition for the persistence module
 
+;;;; src/persistence/package.lisp — Package definition for the persistence module
+
+;;;; src/persistence/package.lisp — Package definition for the persistence module
+
+;;;; src/persistence/package.lisp — Package definition for the persistence module
+
 (defpackage #:apeiron.persistence
   (:use #:cl
         #:apeiron.core
@@ -21,7 +27,6 @@
    #:new-persistent-guestbook
 
    ;; Store lifecycle
-   #:*data-directory*
    #:*store-directory*
    #:open-mud-store
    #:sync-world
