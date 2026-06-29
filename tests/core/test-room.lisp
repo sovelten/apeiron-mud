@@ -12,8 +12,8 @@
   "Test room contents management"
   (let ((room (apeiron.core:new-room))
         (obj (apeiron.core:new-room)))
-    (apeiron.core:room-add-object room obj)
-    (is (> (length (apeiron.core:room-contents room)) 0))))
+    (apeiron.core:container-add-object room obj)
+    (is (= 1 (hash-table-count (apeiron.core:container-contents room))))))
 
 (test room-exits
   "Test room exit management"

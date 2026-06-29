@@ -59,7 +59,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
                    (find-if (lambda (obj)
                               (and (not (eq obj player))
                                    (search target-name (string-downcase (object-name obj)))))
-                            (room-contents room)))))
+                            (container-all-objects room)))))
           (if target
               (player-send-message
                player
@@ -109,7 +109,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
             (let* ((form (read-from-string code-str))
                    (room (object-location player))
                    (result (eval form)))
-              (loop for obj across (room-contents room) do
+              (loop for obj in (container-all-objects room) do
                 (when (and (typep obj 'mud-character)
                            (not (eq obj player)))
                   (player-send-message obj (format nil "~A casts the spell: ~A" (object-name player) form))
@@ -131,15 +131,15 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
 
 (define-command "inventory" (world player args)
   (declare (ignore world args))
-  (let ((inv (player-inventory player)))
-    (if (zerop (length inv))
+  (let ((inv (container-all-objects player)))
+    (if (null inv)
         (player-send-message player "You are not carrying anything.")
         (player-send-message player 
                              (format nil "~A~%~{~A~%~}"
                                      (bold-white "You are carrying:")
-                                     (map 'list (lambda (obj)
-                                                  (format nil "  - ~A" (object-describe obj)))
-                                          inv))))))
+                                     (mapcar (lambda (obj)
+                                               (format nil "  - ~A" (object-describe obj)))
+                                             inv))))))
 
 (define-command "say" (world player args)
   (declare (ignore world))
@@ -148,7 +148,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
         (player-send-message player "Say what?")
         (let ((room (object-location player)))
           (player-send-message player (format nil "~A: ~A" (bold-white "You say") message))
-          (loop for obj across (room-contents room) do
+          (loop for obj in (container-all-objects room) do
             (when (and (typep obj 'mud-character)
                        (not (eq obj player)))
               (player-send-message obj 
@@ -170,8 +170,8 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
 (define-command "read" (world player args)
   (declare (ignore world))
   (let* ((room (object-location player))
-         (guestbook (or (find-if (lambda (obj) (typep obj 'mud-guestbook)) (room-contents room))
-                        (find-if (lambda (obj) (typep obj 'mud-guestbook)) (player-inventory player)))))
+         (guestbook (or (find-if (lambda (obj) (typep obj 'mud-guestbook)) (container-all-objects room))
+                        (find-if (lambda (obj) (typep obj 'mud-guestbook)) (container-all-objects player)))))
     (cond
       ((and (not (zerop (length args)))
             (not (string-equal args "guestbook"))
@@ -185,8 +185,8 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
 (define-command "write" (world player args)
   (declare (ignore world))
   (let* ((room (object-location player))
-         (guestbook (or (find-if (lambda (obj) (typep obj 'mud-guestbook)) (room-contents room))
-                        (find-if (lambda (obj) (typep obj 'mud-guestbook)) (player-inventory player)))))
+         (guestbook (or (find-if (lambda (obj) (typep obj 'mud-guestbook)) (container-all-objects room))
+                        (find-if (lambda (obj) (typep obj 'mud-guestbook)) (container-all-objects player)))))
     (if (null guestbook)
         (player-send-message player "There is no guestbook here to write in.")
         (let* ((session (character-session player))
@@ -196,7 +196,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
               (progn
                 (guestbook-add-entry guestbook (object-name player) message)
                 (player-send-message player "You write your message in the guestbook.")
-                (loop for obj across (room-contents room) do
+                (loop for obj in (container-all-objects room) do
                   (when (and (typep obj 'mud-character)
                              (not (eq obj player)))
                     (player-send-message obj (format nil "~A writes a message in ~A."

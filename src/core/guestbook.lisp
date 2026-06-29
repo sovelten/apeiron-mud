@@ -26,7 +26,7 @@
          (gb (make-instance 'mud-guestbook
                             :name name
                             :filepath filepath-str
-                            :type +object-type-item+)))
+                            )))
     (when filepath-str
       (log-message "Loading csv from ~A" filepath-str)
       (setf (guestbook-entries gb)

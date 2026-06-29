@@ -13,7 +13,7 @@
   (world-set-object-id! world room))
 
 (defun register-npc (world room npc)
-  (room-add-object room npc)
+  (container-add-object room npc)
   (world-set-object-id! world npc))
 
 (defun set-challenge-gate (room exit-direction question answer flag)
@@ -194,7 +194,7 @@
           (guestbook (new-guestbook :name "an oak guestbook"
                                     :filepath (namestring (merge-pathnames "guestbook.csv" *data-directory*)))))
       ;; Place the guestbook in The Gathering
-      (room-add-object gathering guestbook)
+      (container-add-object gathering guestbook)
       ;; Connect The Gathering (hub) to the four biomes
       (room-add-exits gathering "north" forest "south")
       (room-add-exits gathering "east" desert "west")

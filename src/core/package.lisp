@@ -18,12 +18,6 @@
    #:*mud-version*
    #:*debug-mode*
 
-   ;; Object type constants
-   #:+object-type-generic+
-   #:+object-type-room+
-   #:+object-type-character+
-   #:+object-type-item+
-
    ;; Command constants
    #:+max-command-length+
    #:+command-timeout+
@@ -108,7 +102,6 @@
    #:object-describe
    #:object-location
    #:object-properties
-   #:object-type
    #:object-get-property
    #:object-set-property
    #:object-move
@@ -139,9 +132,6 @@
    ;; Room system
    #:mud-room
    #:new-room
-   #:room-contents
-   #:room-add-object
-   #:room-remove-object
    #:room-exits
    #:room-add-exit
    #:room-add-exits
@@ -183,9 +173,11 @@
    #:mud-character
    #:new-character
    #:character-session
-   #:player-inventory
-   #:character-inventory-add
-   #:character-inventory-remove
+   #:container-contents
+   #:container-add-object
+   #:container-remove-object
+   #:container-all-objects
+   #:container-object-by-id
    #:player-send-message
 
    ;; World

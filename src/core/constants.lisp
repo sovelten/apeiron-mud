@@ -9,15 +9,8 @@
 (defparameter *mud-version* "0.0.1")
 (defparameter *debug-mode* t)
 
-;; Object type constants
-(defconstant +object-type-generic+   'generic)
-(defconstant +object-type-room+      'room)
-(defconstant +object-type-character+ 'character)
-(defconstant +object-type-item+      'item)
-
 ;; Command constants
 (defconstant +max-command-length+ 256)
-(defconstant +command-timeout+    30)
 
 ;; ─── Runtime data directory ────────────────────────────────────────────────
 ;; Runtime data files (guestbook CSV, etc.) live here, separate from BKNR

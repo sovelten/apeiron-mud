@@ -9,7 +9,7 @@
                                      :stream (make-string-output-stream)))))
     (is (equal (apeiron.core:object-name player) "TestPlayer"))
     (is (typep player 'apeiron.core:mud-character))
-    (is (vectorp (apeiron.core:player-inventory player)))))
+    (is (hash-table-p (apeiron.core:container-contents player)))))
 
 (test player-inventory
   "Test player inventory management"
@@ -17,11 +17,11 @@
   (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream))))
         (obj (apeiron.core:new-room :name "Test Item")))
-    (apeiron.core:character-inventory-add player obj)
-    (is (> (length (apeiron.core:player-inventory player)) 0))
-    (is (equal (aref (apeiron.core:player-inventory player) 0) obj))
-    (apeiron.core:character-inventory-remove player obj)
-    (is (= (length (apeiron.core:player-inventory player)) 0))))
+    (apeiron.core:container-add-object player obj)
+    (is (= 1 (hash-table-count (apeiron.core:container-contents player))))
+    (is (eq obj (apeiron.core:container-object-by-id player (apeiron.core:object-id obj))))
+    (apeiron.core:container-remove-object player obj)
+    (is (= 0 (hash-table-count (apeiron.core:container-contents player))))))
 
 (test player-location
   "Test that player has a location"

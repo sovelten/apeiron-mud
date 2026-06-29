@@ -38,7 +38,7 @@
     (let ((grunt (find-if (lambda (obj)
                             (and (typep obj 'apeiron.core:mud-npc)
                                  (search "grunt" (string-downcase (apeiron.core:object-name obj)))))
-                          (apeiron.core:room-contents grunt-room))))
+                          (apeiron.core:container-all-objects grunt-room))))
       (is (not (null grunt))))))
 
 (test combat-attack-grunt
@@ -51,7 +51,7 @@
          (grunt-room (find-if (lambda (r) (string= "Grunt Patrol Route" (apeiron.core:object-name r)))
                               (apeiron.persistence:rooms)))
          (grunt (find-if (lambda (obj) (typep obj 'apeiron.core:mud-npc))
-                          (apeiron.core:room-contents grunt-room))))
+                          (apeiron.core:container-all-objects grunt-room))))
     (apeiron.core:object-move player grunt-room)
     (is (not (apeiron.core:npc-defeated-p grunt)))
     (loop repeat 20
@@ -71,7 +71,7 @@
          (grunt-room (find-if (lambda (r) (string= "Grunt Patrol Route" (apeiron.core:object-name r)))
                               (apeiron.persistence:rooms)))
          (grunt (find-if (lambda (obj) (typep obj 'apeiron.core:mud-npc))
-                          (apeiron.core:room-contents grunt-room))))
+                          (apeiron.core:container-all-objects grunt-room))))
     ;; Put the player in the grunt room
     (apeiron.core:object-move player grunt-room)
     ;; Crank the player's HP down so the very first counter-attack KOs them
