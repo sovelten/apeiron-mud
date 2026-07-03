@@ -48,6 +48,9 @@
 (defvar wont   252 "Refuse to perform option.")
 (defvar will   251 "Agree/offer to perform option.")
 (defvar sb     250 "Subnegotiation begin.")
+
+(defvar eor    239 "End of Record — marks the end of a prompt/output record (RFC 885).")
+
 (defvar se     240 "Subnegotiation end.")
 (defvar nop    241 "No Operation (used for keepalive).")
 (defvar dm     242 "Data Mark — sync signal in urgent data stream.")
@@ -69,6 +72,9 @@
 (defconstant +telnet-opt-status+              5 "Status (RFC 859).")
 (defconstant +telnet-opt-timing-mark+         6 "Timing Mark (RFC 860).")
 (defconstant +telnet-opt-terminal-type+      24 "Terminal Type (RFC 1091).")
+
+(defconstant +telnet-opt-eor+              25 "End of Record — signal end of prompt/output (RFC 885).")
+
 (defconstant +telnet-opt-naws+               31 "Negotiate About Window Size (RFC 1073).")
 (defconstant +telnet-opt-terminal-speed+     32 "Terminal Speed (RFC 1079).")
 (defconstant +telnet-opt-new-environ+        39 "New Environment (RFC 1572).")
@@ -346,38 +352,37 @@ We request:
   - WILL Suppress Go Ahead  (we never send GA ourselves)
   - DO NAWS                 (we want to know window dimensions)
   - DO Terminal Type        (we want to know the terminal type)
+  - WILL EOR                (we will signal end-of-record for prompt detection)
 
 The commands are a list of byte-vectors ready to be written to the socket."
-  ;; Built-in subnegotiation handlers (NAWS, TERMINAL-TYPE) are registered
-  ;; automatically by INITIALIZE-INSTANCE on the protocol object.
-
-  ;; Local: we WILL suppress go-ahead.  (We deliberately do NOT want ECHO.)
-  (let ((local-sga (ensure-option-state protocol :local +telnet-opt-suppress-go-ahead+)))
+  (let ((local-sga
+         (ensure-option-state protocol :local +telnet-opt-suppress-go-ahead+))
+        (local-eor
+         (ensure-option-state protocol :local +telnet-opt-eor+)))
     (setf (telnet-option-state-wanted local-sga) t
-          (telnet-option-state-pending local-sga) t))
-
-  ;; Remote: we DO want these from the client
+          (telnet-option-state-pending local-sga) t
+          (telnet-option-state-wanted local-eor) t
+          (telnet-option-state-pending local-eor) t))
   (let ((remote-naws (ensure-option-state protocol :remote +telnet-opt-naws+))
-        (remote-term (ensure-option-state protocol :remote +telnet-opt-terminal-type+))
-        (remote-sga  (ensure-option-state protocol :remote +telnet-opt-suppress-go-ahead+)))
+        (remote-term
+         (ensure-option-state protocol :remote +telnet-opt-terminal-type+))
+        (remote-sga
+         (ensure-option-state protocol :remote +telnet-opt-suppress-go-ahead+)))
     (setf (telnet-option-state-wanted remote-sga) t
           (telnet-option-state-pending remote-sga) t
           (telnet-option-state-wanted remote-naws) t
           (telnet-option-state-pending remote-naws) t
           (telnet-option-state-wanted remote-term) t
           (telnet-option-state-pending remote-term) t))
-
-  ;; Build initial command list
-  (let ((commands (list (make-command-2 do +telnet-opt-suppress-go-ahead+)
-                        (make-command-2 will +telnet-opt-suppress-go-ahead+)
-                        (make-command-2 do +telnet-opt-naws+)
-                        (make-command-2 do +telnet-opt-terminal-type+))))
-    ;; If START_TLS is wanted (registered via telnet-register-start-tls),
-    ;; include WILL START_TLS in the initial negotiation.
-    (let ((start-tls-state (gethash +telnet-opt-start-tls+
-                                    (telnet-local-options protocol))))
-      (when (and start-tls-state
-                 (telnet-option-state-wanted start-tls-state))
+  (let ((commands
+         (list (make-command-2 will +telnet-opt-eor+)
+               (make-command-2 do +telnet-opt-suppress-go-ahead+)
+               (make-command-2 will +telnet-opt-suppress-go-ahead+)
+               (make-command-2 do +telnet-opt-naws+)
+               (make-command-2 do +telnet-opt-terminal-type+))))
+    (let ((start-tls-state
+           (gethash +telnet-opt-start-tls+ (telnet-local-options protocol))))
+      (when (and start-tls-state (telnet-option-state-wanted start-tls-state))
         (push (make-command-2 will +telnet-opt-start-tls+) commands)))
     (nreverse commands)))
 

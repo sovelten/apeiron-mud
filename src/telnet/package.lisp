@@ -38,6 +38,7 @@
    #:telnet-read-char
    #:telnet-write-string
    #:telnet-send-nop
+   #:telnet-send-eor
    #:telnet-write-raw
 
    ;; Stream access (for application layer)
@@ -48,6 +49,7 @@
    #:iac
    #:dont #:do #:wont #:will
    #:sb #:se
+   #:eor
    #:nop #:dm #:break #:ip #:ao #:ayt #:ec #:el #:ga
 
    ;; Telnet options
@@ -56,6 +58,7 @@
    #:+telnet-opt-suppress-go-ahead+
    #:+telnet-opt-naws+
    #:+telnet-opt-terminal-type+
+   #:+telnet-opt-eor+
    #:+telnet-opt-start-tls+
    ;; +telnet-opt-naws+ above is the NAWS (window size) option
 

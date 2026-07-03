@@ -72,6 +72,27 @@ then clear the character link via CALL-NEXT-METHOD."
           (log-error "Error closing telnet connection: ~A" e)))))
   (call-next-method))
 
+(defmethod session-send-prompt ((session telnet-session))
+  "Send a prompt followed by the End-of-Record (EOR) signal.
+Writes > to the client and then sends IAC SB EOR IAC SE (RFC 885)
+so that MUD clients can reliably detect prompt
+boundaries for trigger matching, GMCP framing, and similar features.
+The EOR is only sent if it was successfully negotiated (the client
+responded DO EOR). If the connection is lost, errors are silently
+ignored."
+  (let ((conn (session-telnet-connection session)))
+    (when conn
+      (handler-case
+          (progn
+            (telnet::telnet-write-string conn "> " :end nil)
+            (telnet::telnet-send-eor conn))
+        (telnet::telnet-connection-lost (e)
+          (declare (ignore e))
+          nil)
+        (telnet::telnet-error (e)
+          (log-error "Telnet prompt error: ~A" (telnet::telnet-error-message e))
+          nil)))))
+
 ;; ─── Telnet session constructors ────────────────────────────────────────────
 
 (defun new-telnet-session (usocket &key start-tls certificate key password)

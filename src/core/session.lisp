@@ -55,8 +55,14 @@ call CALL-NEXT-METHOD to clear the character link."
   (when (session-character session)
     (setf (session-character session) nil)))
 
-(defun session-send-prompt (session)
-  "Send a prompt to a player on the same line (no newline)."
+(defgeneric session-send-prompt (session)
+  (:documentation "Send a prompt to the player on the same line (no newline).
+The default method sends \"> \" and returns.
+Subclasses (e.g. telnet-session) may override to add protocol-specific
+signalling (e.g. EOR for prompt detection)."))
+
+(defmethod session-send-prompt ((session mud-session))
+  "Default prompt: send \"> \" with no newline."
   (mud-write session "> " :newline nil))
 
 (defmethod mud-read-line ((obj mud-session) &key (timeout 300))

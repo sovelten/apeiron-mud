@@ -677,6 +677,37 @@ Useful for sending protocol commands."
     (telnet-connection-lost () nil)
     (telnet-error () nil)))
 
+(defun telnet-send-eor (conn)
+  "Send an End-of-Record (EOR) signal via subnegotiation.
+
+Only sends the EOR signal if the EOR option (25) was successfully
+negotiated with the client (i.e., the client responded DO EOR after
+our WILL EOR offer).  If the option was not negotiated, this is a
+silent no-op — the caller does not need to check negotiation state.
+
+Per RFC 885, the server sends IAC SB EOR IAC SE (subnegotiation with
+option 25 and no payload) to mark the end of a prompt/output record.
+Many MUD clients (e.g. TinTin++, Mudlet) use this to detect prompt
+boundaries, enabling features like GMCP, MSP, or trigger-based prompt
+matching.
+
+Returns T on success, NIL if the connection was lost or EOR wasn't
+negotiated."
+  (unless (telnet-connection-alive-p conn)
+    (return-from telnet-send-eor nil))
+  (let ((protocol (telnet-conn-protocol conn)))
+    (unless protocol
+      (return-from telnet-send-eor nil))
+    (let ((state (telnet-local-option protocol +telnet-opt-eor+)))
+      (unless (and state (telnet-option-state-enabled state))
+        (return-from telnet-send-eor nil))
+      (handler-case
+          (progn
+            (telnet-write-raw conn (make-subneg-command +telnet-opt-eor+ #()))
+            t)
+        (telnet-connection-lost () nil)
+        (telnet-error () nil)))))
+
 ;;; ----------------------------------------------------------------
 ;;; Public: Close the connection
 ;;; ----------------------------------------------------------------
