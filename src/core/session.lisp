@@ -144,6 +144,16 @@ that provide their own stream abstraction."))
               (log-error "Failed to send message to session ~D: ~A"
                          (session-id obj) e))))))))
 
+(defmethod mud-write :after ((session mud-session) message &key (newline t))
+  "After every mud-write, issue a player-output-event so loggers can capture it."
+  (declare (ignore newline))
+  (let ((char (session-character session)))
+    (issue-player-output-event (session-id session)
+                               (if char (object-name char) nil)
+                               (etypecase message
+                                 (string message)
+                                 (t (princ-to-string message))))))
+
 (defmethod session-disconnect ((session stream-session))
   (when (session-stream session)
     (handler-case
