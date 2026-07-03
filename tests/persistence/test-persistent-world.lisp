@@ -33,12 +33,7 @@
              (let ((new-id (apeiron.core:object-id new-room)))
                (is (not (member new-id restored-ids))
                    "New object ID ~D conflicts with existing loaded room IDs: ~A"
-                   new-id restored-ids)))))
-    ;; Cleanup: close the store after the test
-    (when (and (boundp 'bknr.datastore:*store*)
-               bknr.datastore:*store*)
-      (ignore-errors (bknr.datastore:close-store))
-      (makunbound 'bknr.datastore:*store*))))
+                   new-id restored-ids))))))
 
 (test guestbook-persistence
   "Test that guestbook entries survive store close/reopen via CSV persistence."
