@@ -210,4 +210,29 @@
    #:*commands*
    #:define-command
    #:parse-command
-   #:process-command))
+   #:process-command
+
+   ;; Event system
+   #:mud-event
+   #:session-event
+   #:player-input-event
+   #:player-output-event
+   #:session-id
+   #:character-name
+   #:input
+   #:output
+
+   ;; Event logging
+   #:start-event-logging
+   #:stop-event-logging
+   #:*event-log-file*
+
+   ;; Event issuance helpers
+   #:issue-info-event
+   #:issue-error-event
+   #:issue-warning-event
+   #:issue-player-input-event
+   #:issue-player-output-event
+
+   ;; Extensibility
+   #:handle-event))

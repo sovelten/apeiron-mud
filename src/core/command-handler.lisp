@@ -248,6 +248,12 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
 (defun process-command (world player command-string)
   "Process a command from a player.
 Honors the player's session color preference by binding *COLORIZE*."
+  ;; Issue an event for every line of player input (for debugging/logging).
+  (let ((session (character-session player)))
+    (issue-player-input-event (session-id session)
+                              (object-name player)
+                              command-string))
+  
   (when (> (length command-string) +max-command-length+)
     (player-send-message player "Command too long.")
     (return-from process-command nil))

@@ -189,6 +189,8 @@ connection to TLS in-band."
         ;; Initialize world
         (let ((world (world-restore-or-initialize :force-new force-new
                                                   :initializer #'apeiron.worlds:new-default-world)))
+          ;; Start event logging to file
+          (start-event-logging :log-file (merge-pathnames "events.log" *data-directory*))
           ;; Start plain-text listener
           (setf *server-socket*
                 (usocket:socket-listen host port :reuse-address t :backlog 5))
@@ -278,6 +280,8 @@ connection to TLS in-band."
           (world-remove-character! world player)
           (session-disconnect (character-session player))))
 
+      ;; Stop event logging
+      (stop-event-logging)
       (log-message "MUD Server stopped")
       t)))
 

@@ -13,12 +13,20 @@
   (apply #'format nil format-string args))
 
 (defun log-message (format-string &rest args)
-  "Log an informational message."
-  (when apeiron.core:*debug-mode*
-    (format t "[INFO] ~A~%" (apply #'format-message format-string args)))
-  nil)
+  "Log an informational message.
+Writes to the console when *DEBUG-MODE* is non-NIL, and also issues a
+Deeds info-event so that file-logging and other handlers can pick it up."
+  (let ((message (apply #'format-message format-string args)))
+    (when apeiron.core:*debug-mode*
+      (format t "[INFO] ~A~%" message))
+    (apeiron.core:issue-info-event message)
+    nil))
 
 (defun log-error (format-string &rest args)
-  "Log an error message."
-  (format t "[ERROR] ~A~%" (apply #'format-message format-string args))
-  nil)
+  "Log an error message.
+Writes to the console and also issues a Deeds error-event so that
+file-logging and other handlers can pick it up."
+  (let ((message (apply #'format-message format-string args)))
+    (format t "[ERROR] ~A~%" message)
+    (apeiron.core:issue-error-event message)
+    nil))

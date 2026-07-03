@@ -20,12 +20,14 @@
   :author "Sophia Velten"
   :license "MIT"
   :depends-on ("bordeaux-threads"
-               "cl-csv")
+               "cl-csv"
+               "deeds")
   :components ((:module "src/core"
                 :components
                 ((:file "package")
                  (:file "constants" :depends-on ("package"))
-                 (:file "utils" :depends-on ("constants"))
+                 (:file "events" :depends-on ("package"))
+                 (:file "utils" :depends-on ("constants" "events"))
                  (:file "colors" :depends-on ("package"))
                  (:file "object" :depends-on ("utils"))
                  (:file "container" :depends-on ("object"))

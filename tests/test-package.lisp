@@ -10,6 +10,7 @@
            #:persistence-suite
            #:worlds-suite
            #:server-suite
+           #:events-suite
            #:setup-test-environment
            #:teardown-test-environment))
 
@@ -37,6 +38,10 @@
 (def-suite server-suite
     :in apeiron-tests
     :description "Server module tests — network, integration")
+
+(def-suite events-suite
+    :in apeiron-tests
+    :description "Event system tests — event types, logging, handlers")
 
 (eval-when (:load-toplevel :execute)
   (setf *debug-mode* nil)
