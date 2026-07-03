@@ -235,6 +235,12 @@ without :TRANSIENT-WORLD."
       (world-set-starting-room! world gathering))
     world))
 
+(defun get-persistent-world ()
+  "Return world instance persisted in bknr store"
+  (let ((worlds (bknr.datastore:store-objects-with-class 'persistent-world)))
+    (when worlds
+      (first worlds))))
+
 (defun world-restore-or-initialize (&key force-new (initializer #'default-transient-world))
   "Restore the world from the BKNR datastore, or materialize a fresh one.
 
@@ -253,9 +259,9 @@ When FORCE-NEW is true any existing store data is wiped first."
                                 :if-does-not-exist :ignore)
     (makunbound 'bknr.datastore:*store*))
   (open-mud-store)
-  (let ((stored-worlds (bknr.datastore:store-objects-with-class 'persistent-world)))
-    (if stored-worlds
-        (let ((world (first stored-worlds)))
+  (let ((world (get-persistent-world)))
+    (if world
+        (progn
           ;; Populate world's indices from BKNR objects
           (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-object))
             (world-set-object-id! world obj))
@@ -294,25 +300,3 @@ When FORCE-NEW is true any existing store data is wiped first."
           (when *debug-mode*
             (log-message "New world created from transient and persisted."))
           world))))
-
-;; ─── World queries ──────────────────────────────────────────────────────────
-
-(defun get-persistent-world ()
-  (let ((worlds (bknr.datastore:store-objects-with-class 'persistent-world)))
-    (when worlds
-      (first worlds))))
-
-(defun total-rooms ()
-  "Return the number of persistent rooms.
-Note: Prefer (world-total-rooms world) in new code."
-  (length (bknr.datastore:store-objects-with-class 'persistent-room)))
-
-(defun room-by-id (room-id)
-  "Look up a persistent room by its world-level ID.
-Note: Prefer (world-room-by-id world room-id) in new code."
-  (find room-id (rooms) :key #'object-id))
-
-(defun rooms ()
-  "Return all persistent rooms.
-Note: Prefer (world-rooms world) in new code."
-  (bknr.datastore:store-objects-with-class 'persistent-room))
