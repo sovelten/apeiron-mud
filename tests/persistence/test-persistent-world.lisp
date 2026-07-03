@@ -71,3 +71,41 @@
     (let ((csv-path (merge-pathnames "guestbook.csv" *data-directory*)))
       (when (probe-file csv-path)
         (ignore-errors (delete-file csv-path))))))
+
+(test guestbook-present-after-restore
+  "After closing and reopening the BKNR store, the guestbook should still
+be present in 'The Gathering' room.  This guards against a bug where
+CONTAINER-ADD-OBJECT did not set OBJECT-LOCATION, so the rebuild step
+in WORLD-RESTORE-OR-INITIALIZE could not find the guestbook and it
+disappeared from the room."
+  ;; Clean up any leftover CSV from earlier runs
+  (let ((csv-path (merge-pathnames "guestbook.csv" *data-directory*)))
+    (when (probe-file csv-path)
+      (delete-file csv-path)))
+  (unwind-protect
+       (let* ((world (apeiron.persistence:world-restore-or-initialize :force-new t))
+              (tavern (apeiron.core:starting-room world))
+              (gathering-name (apeiron.core:object-name tavern)))
+
+         (is (string= "The Gathering" gathering-name))
+
+         ;; Guestbook should be in the room after first materialization
+         (let ((gb-first (find-if (lambda (obj) (typep obj 'apeiron.core:mud-guestbook))
+                                  (apeiron.core:container-all-objects tavern))))
+           (is (not (null gb-first))
+               "Guestbook should be in The Gathering after first materialization"))
+
+         ;; Sync and restart
+         (apeiron.persistence:sync-world)
+         (bknr.datastore:close-store)
+
+         (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
+                (reloaded-tavern (apeiron.core:starting-room new-world))
+                (gb-after (find-if (lambda (obj) (typep obj 'apeiron.core:mud-guestbook))
+                                   (apeiron.core:container-all-objects reloaded-tavern))))
+           (is (not (null gb-after))
+               "Guestbook should still be in The Gathering after BKNR restore")))
+    ;; Clean up CSV file after test
+    (let ((csv-path (merge-pathnames "guestbook.csv" *data-directory*)))
+      (when (probe-file csv-path)
+        (ignore-errors (delete-file csv-path))))))

@@ -94,7 +94,7 @@ close/reopen cycles that trigger BKNR transaction log replay warnings."
           (make-instance 'bknr.datastore:mp-store
                          :directory *store-directory*
                          :subsystems (list (make-instance 'bknr.datastore:store-object-subsystem))))
-    (setf *store* bknr.datastore:*store*)))
+    ))
 
 (defun sync-world ()
   "Snapshot the datastore so all persistent objects are written to disk."
