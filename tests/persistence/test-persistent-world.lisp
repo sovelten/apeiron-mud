@@ -6,13 +6,15 @@
   "Test that the world initializes properly"
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
     (is (not (null (apeiron.core:get-config-key world :starting-room-id))))
-    (is (> (apeiron.persistence:total-rooms) 0))))
+    (is (> (apeiron.core:world-total-rooms world) 0))))
 
 (test bknr-id-conflict-on-restart
   "Test that world-level IDs do NOT conflict after store close/reopen."
   (unwind-protect
        (let* ((world (apeiron.persistence:world-restore-or-initialize :force-new t))
-              (initial-ids (mapcar #'apeiron.core:object-id (apeiron.persistence:rooms))))
+              (initial-ids (mapcar #'apeiron.core:object-id
+                                   (loop for room being the hash-values of (apeiron.core:world-rooms world)
+                                         collect room))))
 
          (is (>= (length initial-ids) 2))
 
@@ -21,7 +23,9 @@
          ;; players is a transient slot — auto-initialized on restore
 
          (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
-                (restored-ids (mapcar #'apeiron.core:object-id (apeiron.persistence:rooms))))
+                (restored-ids (mapcar #'apeiron.core:object-id
+                                      (loop for room being the hash-values of (apeiron.core:world-rooms new-world)
+                                            collect room))))
            ;; Ensure rooms were loaded with their original world-level IDs
            (is (= (length initial-ids) (length restored-ids)))
            (is (subsetp initial-ids restored-ids))
@@ -31,7 +35,12 @@
              (let ((new-id (apeiron.core:object-id new-room)))
                (is (not (member new-id restored-ids))
                    "New object ID ~D conflicts with existing loaded room IDs: ~A"
-                   new-id restored-ids)))))))
+                   new-id restored-ids)))))
+    ;; Cleanup: close the store after the test
+    (when (and (boundp 'bknr.datastore:*store*)
+               bknr.datastore:*store*)
+      (ignore-errors (bknr.datastore:close-store))
+      (makunbound 'bknr.datastore:*store*))))
 
 (test guestbook-persistence
   "Test that guestbook entries survive store close/reopen via CSV persistence."

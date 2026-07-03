@@ -34,9 +34,4 @@
    ;; World persistence
    #:initial-world
    #:world-restore-or-initialize
-   #:get-persistent-world
-
-   ;; World queries
-   #:total-rooms
-   #:room-by-id
-   #:rooms))
+   #:get-persistent-world))
