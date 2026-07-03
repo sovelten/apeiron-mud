@@ -203,6 +203,7 @@
    #:world-object-by-id
    #:world-object-with-name
    #:world-all-objects
+   #:world-all-rooms
    #:world-room-by-id
    #:world-total-rooms
 

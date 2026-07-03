@@ -13,8 +13,7 @@
   (unwind-protect
        (let* ((world (apeiron.persistence:world-restore-or-initialize :force-new t))
               (initial-ids (mapcar #'apeiron.core:object-id
-                                   (loop for room being the hash-values of (apeiron.core:world-rooms world)
-                                         collect room))))
+                                   (apeiron.core:world-all-rooms world))))
 
          (is (>= (length initial-ids) 2))
 
@@ -24,8 +23,7 @@
 
          (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
                 (restored-ids (mapcar #'apeiron.core:object-id
-                                      (loop for room being the hash-values of (apeiron.core:world-rooms new-world)
-                                            collect room))))
+                                      (apeiron.core:world-all-rooms new-world))))
            ;; Ensure rooms were loaded with their original world-level IDs
            (is (= (length initial-ids) (length restored-ids)))
            (is (subsetp initial-ids restored-ids))

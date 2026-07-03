@@ -12,8 +12,7 @@
   (let* ((world (apeiron.persistence:world-restore-or-initialize
                  :force-new t
                  :initializer #'apeiron.worlds:new-default-world))
-         (all-rooms (loop for room being the hash-values of (apeiron.core:world-rooms world)
-                          collect room))
+         (all-rooms (apeiron.core:world-all-rooms world))
          (desert (find-if (lambda (r) (search "Sun-Bleached" (apeiron.core:object-name r)))
                           all-rooms)))
     (is (not (null desert)))
@@ -25,8 +24,7 @@
   (let* ((world (apeiron.persistence:world-restore-or-initialize
                  :force-new t
                  :initializer #'apeiron.worlds:new-default-world))
-         (all-rooms (loop for room being the hash-values of (apeiron.core:world-rooms world)
-                          collect room))
+         (all-rooms (apeiron.core:world-all-rooms world))
          (arcade (find-if (lambda (r) (string= "Arcade Zone" (apeiron.core:object-name r))) all-rooms))
          (entrance (find-if (lambda (r) (search "Cavern Mouth" (apeiron.core:object-name r))) all-rooms))
          (grunt-room (find-if (lambda (r) (string= "Grunt Patrol Route" (apeiron.core:object-name r))) all-rooms))
@@ -51,8 +49,7 @@
                  :initializer #'apeiron.worlds:new-default-world))
          (player (apeiron.core:new-character "Fighter" (make-instance 'apeiron.core:stream-session
                                                                        :stream (make-string-output-stream))))
-         (all-rooms (loop for room being the hash-values of (apeiron.core:world-rooms world)
-                          collect room))
+         (all-rooms (apeiron.core:world-all-rooms world))
          (grunt-room (find-if (lambda (r) (string= "Grunt Patrol Route" (apeiron.core:object-name r)))
                               all-rooms))
          (grunt (find-if (lambda (obj) (typep obj 'apeiron.core:mud-npc))
@@ -73,8 +70,7 @@
                  :initializer #'apeiron.worlds:new-default-world))
          (player (apeiron.core:new-character "Fighter" (make-instance 'apeiron.core:stream-session
                                                                        :stream (make-string-output-stream))))
-         (all-rooms (loop for room being the hash-values of (apeiron.core:world-rooms world)
-                          collect room))
+         (all-rooms (apeiron.core:world-all-rooms world))
          (grunt-room (find-if (lambda (r) (string= "Grunt Patrol Route" (apeiron.core:object-name r)))
                               all-rooms))
          (grunt (find-if (lambda (obj) (typep obj 'apeiron.core:mud-npc))
@@ -97,8 +93,7 @@
                  :initializer #'apeiron.worlds:new-default-world))
          (player (apeiron.core:new-character "Solver" (make-instance 'apeiron.core:stream-session
                                                                       :stream (make-string-output-stream))))
-         (all-rooms (loop for room being the hash-values of (apeiron.core:world-rooms world)
-                          collect room))
+         (all-rooms (apeiron.core:world-all-rooms world))
          (gallery (find-if (lambda (r) (string= "Riddle Gallery" (apeiron.core:object-name r)))
                            all-rooms)))
     (apeiron.core:object-move player gallery)
