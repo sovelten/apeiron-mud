@@ -287,7 +287,9 @@ connection to TLS in-band."
 
 (defun get-server-status ()
   "Get the current status of the server."
-  (format nil "Server running: ~A~%Players online: ~D~%Rooms in world: ~D~%"
-          (if *server-running* "Yes" "No")
-          (world-total-players (get-persistent-world))
-          (total-rooms)))
+  (let ((world (get-persistent-world)))
+    (format nil "Server running: ~A~%Players online: ~D~%Rooms in world: ~D~%"
+            (if *server-running*
+                "Yes"
+                "No")
+            (world-total-players world) (world-total-rooms world))))

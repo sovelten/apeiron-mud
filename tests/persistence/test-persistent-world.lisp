@@ -6,13 +6,14 @@
   "Test that the world initializes properly"
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
     (is (not (null (apeiron.core:get-config-key world :starting-room-id))))
-    (is (> (apeiron.persistence:total-rooms) 0))))
+    (is (> (apeiron.core:world-total-rooms world) 0))))
 
 (test bknr-id-conflict-on-restart
   "Test that world-level IDs do NOT conflict after store close/reopen."
   (unwind-protect
        (let* ((world (apeiron.persistence:world-restore-or-initialize :force-new t))
-              (initial-ids (mapcar #'apeiron.core:object-id (apeiron.persistence:rooms))))
+              (initial-ids (mapcar #'apeiron.core:object-id
+                                   (apeiron.core:world-all-rooms world))))
 
          (is (>= (length initial-ids) 2))
 
@@ -21,7 +22,8 @@
          ;; players is a transient slot — auto-initialized on restore
 
          (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
-                (restored-ids (mapcar #'apeiron.core:object-id (apeiron.persistence:rooms))))
+                (restored-ids (mapcar #'apeiron.core:object-id
+                                      (apeiron.core:world-all-rooms new-world))))
            ;; Ensure rooms were loaded with their original world-level IDs
            (is (= (length initial-ids) (length restored-ids)))
            (is (subsetp initial-ids restored-ids))

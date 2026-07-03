@@ -112,6 +112,11 @@ indices, and return the object."
   (loop for obj being the hash-values of (world-objects world)
         collect obj))
 
+(defun world-all-rooms (world)
+  "Return all objects registered in the world."
+  (loop for room being the hash-values of (world-rooms world)
+        collect room))
+
 (defun world-room-by-id (world room-id)
   "Look up a room in the world by its world-level ID."
   (gethash room-id (world-rooms world)))

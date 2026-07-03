@@ -63,7 +63,7 @@
 
 (test command-processing-eval
   "Test the eval command"
-  (let ((world (apeiron.persistence:world-restore-or-initialize)))
+  (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
     (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream))))
           (captured-messages '()))
