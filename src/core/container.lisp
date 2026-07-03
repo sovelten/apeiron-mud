@@ -14,10 +14,17 @@
 (defgeneric container-all-objects (container))
 
 (defmethod container-add-object ((container container-mixin) object)
-  (setf (gethash (object-id object) (container-contents container)) object))
+  "Add OBJECT to CONTAINER's contents and set its location to CONTAINER.
+Setting OBJECT-LOCATION is critical for BKNR persistence: on restore,
+WORLD-RESTORE-OR-INITIALIZE rebuilds room contents by scanning each
+persistent object's LOCATION slot."
+  (setf (gethash (object-id object) (container-contents container)) object)
+  (setf (object-location object) container))
 
 (defmethod container-remove-object ((container container-mixin) object)
-  (remhash (object-id object) (container-contents container)))
+  "Remove OBJECT from CONTAINER's contents and clear its location."
+  (remhash (object-id object) (container-contents container))
+  (setf (object-location object) nil))
 
 (defmethod container-object-by-id ((container container-mixin) id)
   (gethash id (container-contents container)))
