@@ -268,11 +268,10 @@ When FORCE-NEW is true any existing store data is wiped first."
           ;; Rebuild room contents from persistent object locations.
           ;; persistent-object queries also return subclasses (room, guestbook, npc).
           ;; Wrapped in a single transaction to avoid per-object auto-wrap overhead.
-          (bknr.datastore:with-transaction ("rebuild-room-contents")
-            (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-object))
-              (let ((location (object-location obj)))
-                (when (typep location 'persistent-room)
-                  (container-add-object location obj)))))
+          (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-object))
+            (let ((location (object-location obj)))
+              (when (typep location 'persistent-room)
+                (container-add-object location obj))))
           (when *debug-mode*
             (log-message "World restored from BKNR datastore."))
           world)
