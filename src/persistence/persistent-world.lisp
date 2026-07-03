@@ -8,17 +8,16 @@
   ()
   (:transient-slots properties))
 
-(defwrapping-persistent-class persistent-room (mud-room)
+(defwrapping-persistent-class persistent-room (mud-room persistent-object)
   ()
-  (:transient-slots properties contents))
+  (:transient-slots contents))
 
-(defwrapping-persistent-class persistent-guestbook (mud-guestbook)
+(defwrapping-persistent-class persistent-guestbook (mud-guestbook persistent-object)
   ()
-  (:transient-slots properties entries))
+  (:transient-slots entries))
 
-(defwrapping-persistent-class persistent-npc (mud-npc)
-  ()
-  (:transient-slots properties))
+(defwrapping-persistent-class persistent-npc (mud-npc persistent-object)
+  ())
 
 (defmethod bknr.datastore:initialize-transient-instance ((gb persistent-guestbook))
   "Re-read guestbook entries from the CSV file after restore."
@@ -262,21 +261,12 @@ When FORCE-NEW is true any existing store data is wiped first."
   (let ((world (get-persistent-world)))
     (if world
         (progn
-          ;; Populate world's indices from BKNR objects
+          ;; Populate world's indices from BKNR objects.
+          ;; persistent-object queries also return subclasses (room, guestbook, npc).
           (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-object))
             (world-set-object-id! world obj))
-          (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-room))
-            (world-set-object-id! world obj))
-          (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-guestbook))
-            (world-set-object-id! world obj))
-          (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-npc))
-            (world-set-object-id! world obj))
-          ;; Reset room contents (transient) before rebuilding from persistent
-          ;; object locations, so transient objects from previous sessions
-          ;; (e.g. characters added in earlier tests) don't accumulate.
-          (dolist (r (bknr.datastore:store-objects-with-class 'persistent-room))
-            (setf (container-contents r) (make-hash-table)))
           ;; Rebuild room contents from persistent object locations.
+          ;; persistent-object queries also return subclasses (room, guestbook, npc).
           ;; Wrapped in a single transaction to avoid per-object auto-wrap overhead.
           (bknr.datastore:with-transaction ("rebuild-room-contents")
             (flet ((rebuild-room-contents (obj)
@@ -284,12 +274,6 @@ When FORCE-NEW is true any existing store data is wiped first."
                        (when (typep loc 'persistent-room)
                          (container-add-object loc obj)))))
               (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-object))
-                (rebuild-room-contents obj))
-              (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-room))
-                (rebuild-room-contents obj))
-              (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-guestbook))
-                (rebuild-room-contents obj))
-              (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-npc))
                 (rebuild-room-contents obj))))
           (when *debug-mode*
             (log-message "World restored from BKNR datastore."))
