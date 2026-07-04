@@ -15,21 +15,6 @@
     (apeiron.core:container-add-object room obj)
     (is (= 1 (hash-table-count (apeiron.core:container-contents room))))))
 
-(test room-exits
-  "Test room exit management"
-  (let ((room1 (apeiron.core:new-room :name "Room 1"))
-        (room2 (apeiron.core:new-room :name "Room 2")))
-    (apeiron.core:room-add-exit room1 "north" room2)
-    (is (eq (apeiron.core:room-get-exit room1 "north") room2))))
-
-(test room-add-exits
-  "Test room exit management"
-  (let ((room1 (apeiron.core:new-room :name "Room 1"))
-        (room2 (apeiron.core:new-room :name "Room 2")))
-    (apeiron.core:room-add-exits room1 "north" room2 "south")
-    (is (eq (apeiron.core:room-get-exit room1 "north") room2))
-    (is (eq (apeiron.core:room-get-exit room2 "south") room1))))
-
 (test find-character-in-room
   "Test finding a character in a room by name (case-insensitive)"
   (let ((room (apeiron.core:new-room :name "Tavern"))
@@ -47,3 +32,39 @@
     (is (eq alice (apeiron.core:find-character-in-room room "alice")))
     ;; Non-existent name returns nil
     (is (null (apeiron.core:find-character-in-room room "Charlie")))))
+
+(test connection-bidirectional
+  "Test that connect-rooms creates a bidirectional connection"
+  (let ((world (new-world))
+        (room1 (new-room :name "Forest"))
+        (room2 (new-room :name "Cave")))
+    (let ((conn (connect-rooms world room1 "north" room2 "south"
+                  :name "forest-cave passage")))
+      (is (typep conn 'mud-connection))
+      (is (eq (room-exit-target room1 "north") room2))
+      (is (eq (room-exit-target room2 "south") room1))
+      (is (find conn (room-connections room1)))
+      (is (find conn (room-connections room2)))
+      (is (eq (connection-other-room conn room1) room2))
+      (is (string= (connection-direction-to conn room1) "north"))
+      (is (string= (connection-direction-to conn room2) "south"))
+      (is (eq (connection-find room1 "north") conn))
+      (is (null (connection-find room1 "east")))
+      (is (null (connection-blocked-p conn))))))
+
+(test connection-blocked
+  "Test that blocked connections prevent movement"
+  (let ((world (new-world))
+        (room1 (new-room :name "Forest"))
+        (room2 (new-room :name "Cave")))
+    (let ((conn (connect-rooms world room1 "north" room2 "south"
+                  :name "locked gate"
+                  :blocked t)))
+      (is-true (connection-blocked-p conn))
+      (is (eq (connection-find room1 "north") conn))
+      (is (stringp (connection-exit-blocked-message room1 "north")))
+      (is (search "blocked" (connection-exit-blocked-message room1 "north")))
+      ;; Toggle unblocked
+      (setf (connection-blocked-p conn) nil)
+      (is-false (connection-blocked-p conn))
+      (is (null (connection-exit-blocked-message room1 "north"))))))

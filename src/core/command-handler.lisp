@@ -26,11 +26,10 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
         (room (object-location player)))
     (if (zerop (length direction))
         (player-send-message player "Go where? Usage: go <direction>")
-        (let ((block-msg (or (room-exit-blocked-p room player direction)
-                             (room-challenge-blocked-p room player direction))))
+        (let ((block-msg (room-exit-blocked-p room player direction)))
           (if block-msg
               (player-send-message player block-msg)
-              (let ((target-room (room-get-exit room direction)))
+              (let ((target-room (room-exit-target room direction)))
                 (if target-room
                     (progn
                       (object-move player target-room)
@@ -75,13 +74,17 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
   (let ((room (object-location player)))
     (if (zerop (length args))
         (player-send-message player "Answer what? Usage: answer <text>")
-        (let* ((expected (object-get-property room "challenge-answer"))
-               (flag (object-get-property room "challenge-flag")))
+        (let* ((conn (find-if (lambda (c)
+                                (object-get-property c "challenge-answer"))
+                              (room-connections room)))
+               (expected (and conn (object-get-property conn "challenge-answer")))
+               (flag (and conn (object-get-property conn "challenge-flag"))))
           (cond
             ((null expected)
              (player-send-message player "There is no challenge here to answer."))
             ((string= (string-downcase args) (string-downcase expected))
              (object-set-property player flag t)
+             (setf (connection-blocked-p conn) nil)
              (player-send-message player "Correct! The way forward opens."))
             (t
              (player-send-message player "Wrong answer. Try again.")))))))
@@ -154,8 +157,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
 (define-command "exits" (world player args)
   (declare (ignore world args))
   (let ((room (object-location player)))
-    (let ((exits (loop for key being the hash-keys of (room-exits room)
-                       collect key)))
+    (let ((exits (mapcar #'first (room-exit-list room))))
       (if exits
           (player-send-message player (format nil "~A~{~A~^, ~}"
                                               (bold-white "Exits: ")

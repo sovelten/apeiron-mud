@@ -19,6 +19,7 @@
    #:persistent-object
    #:persistent-room
    #:persistent-guestbook
+   #:persistent-connection
    #:persistent-world
 
    ;; Persistent factory functions

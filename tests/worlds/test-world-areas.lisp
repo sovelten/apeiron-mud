@@ -16,7 +16,7 @@
          (desert (find-if (lambda (r) (search "Sun-Bleached" (apeiron.core:object-name r)))
                           all-rooms)))
     (is (not (null desert)))
-    (is (not (null (apeiron.core:room-get-exit desert "door"))))
+    (is (not (null (apeiron.core:room-exit-target desert "door"))))
     (is (search "DESERT OASIS MALL" (apeiron.core:object-description desert)))))
 
 (test team-rocket-cavern-maze
@@ -32,7 +32,7 @@
                               (apeiron.core:world-all-objects world))))
     (is (not (null arcade)))
     (is (not (null entrance)))
-    (is (eq entrance (apeiron.core:room-get-exit arcade "maintenance")))
+    (is (eq entrance (apeiron.core:room-exit-target arcade "maintenance")))
     (is (>= (length all-rooms) 15))
     (is (>= (length npcs) 3))
     (is (not (null grunt-room)))
@@ -87,16 +87,23 @@
     (is (not (eq (apeiron.core:object-location player) grunt-room)))))
 
 (test challenge-answer-riddle
-  "Answering a riddle unlocks the challenge flag."
+  "Answering a riddle correctly unblocks the connection via process-command."
   (let* ((world (apeiron.persistence:world-restore-or-initialize
                  :force-new t
                  :initializer #'apeiron.worlds:new-default-world))
+         (stream (make-string-output-stream))
          (player (apeiron.core:new-character "Solver" (make-instance 'apeiron.core:stream-session
-                                                                      :stream (make-string-output-stream))))
+                                                                      :stream stream)))
          (all-rooms (apeiron.core:world-all-rooms world))
          (gallery (find-if (lambda (r) (string= "Riddle Gallery" (apeiron.core:object-name r)))
                            all-rooms)))
     (apeiron.core:object-move player gallery)
-    (is (not (null (apeiron.core:room-challenge-blocked-p gallery player "east"))))
-    (apeiron.core:object-set-property player "solved-meowth-riddle" t)
-    (is (null (apeiron.core:room-challenge-blocked-p gallery player "east")))))
+    ;; Exit should be blocked before answering
+    (is (not (null (apeiron.core:room-exit-blocked-p gallery player "east"))))
+    (is (search "feline" (apeiron.core:room-exit-blocked-p gallery player "east")))
+    ;; Player answers correctly via the command system
+    (apeiron.core:process-command world player "answer meowth")
+    ;; Exit should now be unblocked
+    (is (null (apeiron.core:room-exit-blocked-p gallery player "east")))
+    ;; Player's flag should be set
+    (is (apeiron.core:object-get-property player "solved-meowth-riddle"))))

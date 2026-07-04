@@ -19,14 +19,20 @@
                     :timestamp (parse-integer (third row))))
             (cl-csv:read-csv (pathname filepath)))))
 
-(defun new-guestbook (&key (name "a dusty guestbook") (filepath "./guestbook.csv"))
-  (let* ((filepath-str (if (pathnamep filepath)
-                           (namestring filepath)
-                           filepath))
+(defun new-guestbook (&key (name "a dusty guestbook") (filepath nil filepath-supplied-p))
+  (let* ((effective-filepath (if filepath-supplied-p
+                                 filepath
+                                 (namestring
+                                  (merge-pathnames
+                                   (make-pathname :name (substitute #\- #\space name)
+                                                  :type "csv")
+                                   *data-directory*))))
+         (filepath-str (if (pathnamep effective-filepath)
+                           (namestring effective-filepath)
+                           effective-filepath))
          (gb (make-instance 'mud-guestbook
                             :name name
-                            :filepath filepath-str
-                            )))
+                            :filepath filepath-str)))
     (when filepath-str
       (log-message "Loading csv from ~A" filepath-str)
       (setf (guestbook-entries gb)

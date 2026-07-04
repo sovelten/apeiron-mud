@@ -121,8 +121,6 @@
    #:npc-describe
    #:find-npc-in-room
    #:combat-attack-npc
-   #:room-challenge-blocked-p
-   #:room-exit-blocked-p
    #:player-hp
    #:player-max-hp
    #:player-ensure-combat-stats
@@ -133,10 +131,26 @@
    #:mud-room
    #:new-room
    #:room-exits
-   #:room-add-exit
-   #:room-add-exits
-   #:room-get-exit
+   #:room-connections
+   #:room-exit-target
+   #:room-exit-blocked-p
+   #:room-exit-list
    #:room-describe
+
+   ;; Connection system
+   #:mud-connection
+   #:make-connection
+   #:connection-room-a
+   #:connection-room-b
+   #:connection-direction-a
+   #:connection-direction-b
+   #:connection-blocked-p
+   #:connection-other-room
+   #:connection-direction-to
+   #:connection-find
+   #:connection-exit-blocked-message
+   #:connection-set-challenge
+   #:connection-blocked-message
 
    ;; Guestbook
    #:mud-guestbook
@@ -183,6 +197,7 @@
    ;; World
    #:mud-world
    #:new-world
+   #:connect-rooms
    #:world-id-counter
    #:world-config
    #:world-players

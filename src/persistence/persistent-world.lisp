@@ -19,6 +19,9 @@
 (defwrapping-persistent-class persistent-npc (mud-npc persistent-object)
   ())
 
+(defwrapping-persistent-class persistent-connection (mud-connection persistent-object)
+  ())
+
 (defmethod bknr.datastore:initialize-transient-instance ((gb persistent-guestbook))
   "Re-read guestbook entries from the CSV file after restore."
   (call-next-method)
@@ -26,6 +29,15 @@
     (when fp
       (setf (guestbook-entries gb)
             (guestbook-load-from-csv (pathname fp))))))
+
+(defmethod bknr.datastore:initialize-transient-instance ((conn persistent-connection))
+  "Re-register the connection in each room's connections list after restore."
+  (call-next-method)
+  (let ((room-a (connection-room-a conn))
+        (room-b (connection-room-b conn)))
+    (when (and room-a room-b)
+      (push conn (room-connections room-a))
+      (push conn (room-connections room-b)))))
 
 (defwrapping-persistent-class persistent-world (mud-world)
   ()
@@ -35,23 +47,6 @@
   "Register OBJECT in WORLD by materializing a persistent copy."
   (bknr.datastore:with-transaction ("create-object")
     (materialize-object object world)))
-
-;; ─── Persistent factory functions ───────────────────────────────────────────
-
-(defun create-guestbook! (&key (name "a dusty guestbook") (filepath (namestring (merge-pathnames "guestbook.csv" *data-directory*))))
-  "Create a new persistent guestbook stored in the BKNR datastore."
-  (let* ((filepath-str (if (pathnamep filepath)
-                           (namestring filepath)
-                           filepath))
-         (gb (make-instance 'persistent-guestbook
-                            :name name
-                            :filepath filepath-str
-)))
-    (when filepath-str
-      (log-message "Loading csv from ~A" filepath-str)
-      (setf (guestbook-entries gb)
-            (guestbook-load-from-csv (pathname filepath-str))))
-    gb))
 
 ;; ─── Store lifecycle ────────────────────────────────────────────────────────
 
@@ -115,6 +110,22 @@ close/reopen cycles that trigger BKNR transaction log replay warnings."
                            :description (object-description obj))))
                   (clone-properties obj r)
                   r))
+               (mud-connection
+                (let* ((room-a (world-object-by-id persistent-world
+                                                   (object-id (connection-room-a obj))))
+                       (room-b (world-object-by-id persistent-world
+                                                   (object-id (connection-room-b obj))))
+                       (c (make-instance 'persistent-connection
+                            :name (object-name obj)
+                            :description (object-description obj)
+                            :room-a room-a
+                            :room-b room-b
+                            :direction-a (connection-direction-a obj)
+                            :direction-b (connection-direction-b obj)
+                            :blocked (connection-blocked-p obj)
+                            :blocked-message (connection-blocked-message obj))))
+                  (clone-properties obj c)
+                  c))
                (mud-object
                 (let ((o (make-instance 'persistent-object
                            :name (object-name obj)
@@ -142,12 +153,6 @@ by matching IDs in PERSISTENT-WORLD's object index."
                       (setf (object-location p) new-loc)))))
               ;; Room-specific relationships
               (when (typep obj 'mud-room)
-                ;; Exits
-                (maphash (lambda (dir target)
-                           (let ((new-target (world-object-by-id persistent-world (object-id target))))
-                             (when new-target
-                               (room-add-exit p dir new-target))))
-                         (room-exits obj))
                 ;; Contents
                 (loop for child in (container-all-objects obj)
                       do (let ((new-child (world-object-by-id persistent-world (object-id child))))
@@ -165,16 +170,26 @@ by matching IDs in PERSISTENT-WORLD's object index."
 
 All rooms, objects, NPCs, and guestbooks in TRANSIENT-WORLD are re-created
 as BKNR-persistent instances within a single transaction.  Relationships
-(locations, exits, room contents, properties) are faithfully copied.
+(locations, room contents, starting room) are faithfully copied.
+
+Rooms are materialized first so that Connection objects can resolve
+their ROOM-A / ROOM-B references immediately at creation time (via
+INITIALIZE-TRANSIENT-INSTANCE), eliminating the need for a separate
+cross-reference pass for connections.
 
 Returns the new PERSISTENT-WORLD."
   (let ((pw (make-instance 'persistent-world)))
     (bknr.datastore:with-transaction ("materialize-world")
-      ;; Phase 1 — create persistent counterparts
+      ;; Phase 1 — rooms first (connections reference them)
       (dolist (obj (world-all-objects transient-world))
-        (unless (typep obj 'mud-character)
+        (when (typep obj 'mud-room)
           (materialize-object obj pw)))
-      ;; Phase 2 — restore cross-references
+      ;; Phase 2 — everything else (connections find rooms from Phase 1)
+      (dolist (obj (world-all-objects transient-world))
+        (when (and (not (typep obj 'mud-character))
+                   (not (typep obj 'mud-room)))
+          (materialize-object obj pw)))
+      ;; Phase 3 — restore cross-references (locations, contents, starting room)
       (materialize-relationships transient-world pw))
     pw))
 
@@ -196,13 +211,12 @@ without :TRANSIENT-WORLD."
                            :description "Stagnant water laps at gnarled tree roots as thick mist curls around your ankles."))
           (volcano (new-room :name "A Rumbling Volcano"
                              :description "The ground trembles beneath your feet. Glowing lava flows through cracks in the black, jagged rock."))
-          (guestbook (new-guestbook :name "an oak guestbook"
-                                    :filepath (namestring (merge-pathnames "guestbook.csv" *data-directory*)))))
+          (guestbook (new-guestbook :name "an oak guestbook")))
       (container-add-object gathering guestbook)
-      (room-add-exits gathering "north" forest "south")
-      (room-add-exits gathering "east" desert "west")
-      (room-add-exits gathering "west" swamp "east")
-      (room-add-exits gathering "south" volcano "north")
+      (connect-rooms world gathering "north" forest "south")
+      (connect-rooms world gathering "east" desert "west")
+      (connect-rooms world gathering "west" swamp "east")
+      (connect-rooms world gathering "south" volcano "north")
       (world-add-object! world guestbook)
       (world-add-object! world gathering)
       (world-add-object! world forest)

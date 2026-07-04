@@ -33,12 +33,13 @@
                  (:file "container" :depends-on ("object"))
                  (:file "room" :depends-on ("object" "container"))
                  (:file "guestbook" :depends-on ("object"))
+                 (:file "connection" :depends-on ("room"))
                  (:file "npc" :depends-on ("object"))
                  (:file "combat" :depends-on ("npc" "character"))
                  (:file "session" :depends-on ("utils"))
                  (:file "character" :depends-on ("object" "session" "container"))
                  (:file "command-handler" :depends-on ("session"))
-                 (:file "world" :depends-on ("room" "guestbook" "character"))))))
+                 (:file "world" :depends-on ("room" "connection" "guestbook" "character"))))))
 
 (defsystem "apeiron/telnet"
   :version "0.0.1"
