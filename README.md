@@ -118,7 +118,7 @@ Exits: west
 Welcome to the MUD!
 > eval (world-add-object! (world) (new-room :name "Rivendell"))
 #<MUD-ROOM Rivendell (ID: 8)>
-> eval (connect-rooms (world) (here) "east" (world-object-with-name (world) "Rivendell") "west")
+> eval (connect-rooms! (world) (here) "east" (world-object-with-name (world) "Rivendell") "west")
 #<MUD-CONNECTION passage between The Prancing Pony and Rivendell (ID: 9)>
 > look
 

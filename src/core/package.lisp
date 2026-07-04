@@ -197,7 +197,7 @@
    ;; World
    #:mud-world
    #:new-world
-   #:connect-rooms
+   #:connect-rooms!
    #:world-id-counter
    #:world-config
    #:world-players

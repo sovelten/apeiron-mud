@@ -38,7 +38,7 @@
   (let ((world (new-world))
         (room1 (new-room :name "Forest"))
         (room2 (new-room :name "Cave")))
-    (let ((conn (connect-rooms world room1 "north" room2 "south"
+    (let ((conn (connect-rooms! world room1 "north" room2 "south"
                   :name "forest-cave passage")))
       (is (typep conn 'mud-connection))
       (is (eq (room-exit-target room1 "north") room2))
@@ -50,14 +50,16 @@
       (is (string= (connection-direction-to conn room2) "south"))
       (is (eq (connection-find room1 "north") conn))
       (is (null (connection-find room1 "east")))
-      (is (null (connection-blocked-p conn))))))
+      (is (null (connection-blocked-p conn)))
+      ;; world-object-by-id should find it
+      (is (eq conn (world-object-by-id world (object-id conn)))))))
 
 (test connection-blocked
   "Test that blocked connections prevent movement"
   (let ((world (new-world))
         (room1 (new-room :name "Forest"))
         (room2 (new-room :name "Cave")))
-    (let ((conn (connect-rooms world room1 "north" room2 "south"
+    (let ((conn (connect-rooms! world room1 "north" room2 "south"
                   :name "locked gate"
                   :blocked t)))
       (is-true (connection-blocked-p conn))
