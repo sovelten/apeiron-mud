@@ -190,7 +190,10 @@ Returns the new PERSISTENT-WORLD."
                    (not (typep obj 'mud-room)))
           (materialize-object obj pw)))
       ;; Phase 3 — restore cross-references (locations, contents, starting room)
-      (materialize-relationships transient-world pw))
+      (materialize-relationships transient-world pw)
+      ;; Sync the ID counter so new objects after materialization don't
+      ;; collide with IDs already assigned during materialization.
+      (setf (world-id-counter pw) (world-id-counter transient-world)))
     pw))
 
 ;; ─── World restore / initialize ─────────────────────────────────────────────
