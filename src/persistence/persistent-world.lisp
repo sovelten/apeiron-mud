@@ -33,21 +33,21 @@
 
 ;; ─── Persistent factory functions ───────────────────────────────────────────
 
-(defun new-persistent-object (&key (name "An Object") (description ""))
+(defun create-object! (&key (name "An Object") (description ""))
   "Create a new persistent object stored in the BKNR datastore."
   (make-instance 'persistent-object
                  :name name
                  :description description
                  :location nil))
 
-(defun new-persistent-room (&key (name "A Room") (description ""))
+(defun create-room! (&key (name "A Room") (description ""))
   "Create a new persistent room stored in the BKNR datastore."
   (make-instance 'persistent-room
                  :name name
                  :description description
                  :location nil))
 
-(defun new-persistent-npc (&key name description hp max-hp attack-min attack-max
+(defun create-npc! (&key name description hp max-hp attack-min attack-max
                                defeat-message victory-flag)
   "Create a new persistent NPC stored in the BKNR datastore."
   (let ((max-hp (or max-hp hp 10)))
@@ -61,7 +61,7 @@
                    :defeat-message defeat-message
                    :victory-flag victory-flag)))
 
-(defun new-persistent-guestbook (&key (name "a dusty guestbook") (filepath (namestring (merge-pathnames "guestbook.csv" *data-directory*))))
+(defun create-guestbook! (&key (name "a dusty guestbook") (filepath (namestring (merge-pathnames "guestbook.csv" *data-directory*))))
   "Create a new persistent guestbook stored in the BKNR datastore."
   (let* ((filepath-str (if (pathnamep filepath)
                            (namestring filepath)

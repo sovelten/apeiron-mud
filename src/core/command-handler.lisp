@@ -100,23 +100,40 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
                                          (yellow hp-text)
                                          (bright-green hp-text)))))))
 
+(defvar *eval-player* nil
+  "Bound to the current player character during eval command execution.")
+
+(defun me ()
+  "Return the current player character during eval command execution."
+  *eval-player*)
+
+(defvar *eval-location* nil
+  "Bound to the current player's location during eval command execution.")
+
+(defun here ()
+  "Return the current player's location during eval command execution."
+  *eval-location*)
+
 (define-command "eval" (world player args)
   (declare (ignore world))
   (let ((code-str args))
     (if (zerop (length code-str))
         (player-send-message player "Eval what? Usage: eval <code>")
-        (handler-case
-            (let* ((form (read-from-string code-str))
-                   (room (object-location player))
-                   (result (eval form)))
-              (loop for obj in (container-all-objects room) do
-                (when (and (typep obj 'mud-character)
-                           (not (eq obj player)))
-                  (player-send-message obj (format nil "~A casts the spell: ~A" (object-name player) form))
-                  (player-send-message obj (format nil "~A" result))))
-              (player-send-message player (format nil "~A" result)))
-          (error (e)
-            (player-send-message player (format nil "Error: ~A" e)))))))
+        (let ((*eval-player* player)
+              (*eval-location* (object-location player))
+              (*package* (find-package :apeiron.core)))
+          (handler-case
+              (let* ((form (read-from-string code-str))
+                     (room (object-location player))
+                     (result (eval form)))
+                (loop for obj in (container-all-objects room) do
+                  (when (and (typep obj 'mud-character)
+                             (not (eq obj player)))
+                    (player-send-message obj (format nil "~A casts the spell: ~A" (object-name player) form))
+                    (player-send-message obj (format nil "~A" result))))
+                (player-send-message player (format nil "~A" result)))
+            (error (e)
+              (player-send-message player (format nil "Error: ~A" e))))))))
 
 (define-command "exits" (world player args)
   (declare (ignore world args))

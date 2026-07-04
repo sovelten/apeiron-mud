@@ -212,6 +212,10 @@
    #:define-command
    #:parse-command
    #:process-command
+   #:*eval-player*
+   #:me
+   #:*eval-location*
+   #:here
 
    ;; Event system
    #:mud-event
