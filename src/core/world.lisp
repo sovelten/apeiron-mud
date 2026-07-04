@@ -34,7 +34,7 @@
   ;; Increment id counter and return new id
   (incf (world-id-counter world)))
 
-(defun world-set-object-id! (world object)
+(defun world-add-object! (world object)
   "Assign a world-level ID to an object, register it in the world's
 indices, and return the object."
   (when (eq -1 (object-id object)) ;; Only set if unset

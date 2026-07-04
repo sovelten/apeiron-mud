@@ -10,11 +10,11 @@
 ;; ─── Helpers ─────────────────────────────────────────────────────────────────
 
 (defun register-room (world room)
-  (world-set-object-id! world room))
+  (world-add-object! world room))
 
 (defun register-npc (world room npc)
   (container-add-object room npc)
-  (world-set-object-id! world npc))
+  (world-add-object! world npc))
 
 (defun set-challenge-gate (room exit-direction question answer flag)
   (object-set-property room "challenge-exit" exit-direction)
@@ -203,11 +203,11 @@
       ;; Desert door → shopping mall → Team Rocket cavern maze
       (build-shopping-mall world desert)
       ;; Register all objects in the world
-      (world-set-object-id! world guestbook)
-      (world-set-object-id! world gathering)
-      (world-set-object-id! world forest)
-      (world-set-object-id! world desert)
-      (world-set-object-id! world swamp)
-      (world-set-object-id! world volcano)
+      (world-add-object! world guestbook)
+      (world-add-object! world gathering)
+      (world-add-object! world forest)
+      (world-add-object! world desert)
+      (world-add-object! world swamp)
+      (world-add-object! world volcano)
       (world-set-starting-room! world gathering))
     world))

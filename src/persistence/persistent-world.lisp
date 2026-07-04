@@ -145,7 +145,7 @@ and store the mapping in MAP (transient -> persistent)."
                            :description (object-description obj))))
                   (clone-properties obj o)
                   o)))))
-    (world-set-object-id! persistent-world p)
+    (world-add-object! persistent-world p)
     (setf (gethash obj map) p)))
 
 (defun materialize-relationships (transient-world persistent-world map)
@@ -225,12 +225,12 @@ without :TRANSIENT-WORLD."
       (room-add-exits gathering "east" desert "west")
       (room-add-exits gathering "west" swamp "east")
       (room-add-exits gathering "south" volcano "north")
-      (world-set-object-id! world guestbook)
-      (world-set-object-id! world gathering)
-      (world-set-object-id! world forest)
-      (world-set-object-id! world desert)
-      (world-set-object-id! world swamp)
-      (world-set-object-id! world volcano)
+      (world-add-object! world guestbook)
+      (world-add-object! world gathering)
+      (world-add-object! world forest)
+      (world-add-object! world desert)
+      (world-add-object! world swamp)
+      (world-add-object! world volcano)
       (world-set-starting-room! world gathering))
     world))
 
@@ -264,7 +264,7 @@ When FORCE-NEW is true any existing store data is wiped first."
           ;; Populate world's indices from BKNR objects.
           ;; persistent-object queries also return subclasses (room, guestbook, npc).
           (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-object))
-            (world-set-object-id! world obj))
+            (world-add-object! world obj))
           ;; Rebuild room contents from persistent object locations.
           ;; persistent-object queries also return subclasses (room, guestbook, npc).
           ;; Wrapped in a single transaction to avoid per-object auto-wrap overhead.

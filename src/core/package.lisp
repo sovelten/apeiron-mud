@@ -190,7 +190,7 @@
    #:world-rooms
    #:get-config-key
    #:world-gen-id!
-   #:world-set-object-id!
+   #:world-add-object!
    #:world-set-starting-room!
    #:starting-room
    #:world-add-character!
