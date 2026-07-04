@@ -117,3 +117,10 @@ indices, and return the object."
 (defun world-total-rooms (world)
   "Return the number of rooms in the world."
   (hash-table-count (world-rooms world)))
+
+(defgeneric create-object! (world object)
+  (:documentation "Register OBJECT in WORLD, materializing it for persistent worlds.
+For transient worlds this is equivalent to WORLD-ADD-OBJECT!.
+For persistent worlds a persistent copy is created in the datastore.")
+  (:method ((world mud-world) object)
+    (world-add-object! world object)))

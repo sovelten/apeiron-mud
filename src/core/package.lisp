@@ -216,6 +216,9 @@
    #:me
    #:*eval-location*
    #:here
+   #:*eval-world*
+   #:world
+   #:create-object!
 
    ;; Event system
    #:mud-event
