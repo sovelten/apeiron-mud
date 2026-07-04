@@ -111,9 +111,15 @@ close/reopen cycles that trigger BKNR transaction log replay warnings."
                   (clone-properties obj r)
                   r))
                (mud-connection
-                (let ((c (make-instance 'persistent-connection
+                (let* ((room-a (world-object-by-id persistent-world
+                                                   (object-id (connection-room-a obj))))
+                       (room-b (world-object-by-id persistent-world
+                                                   (object-id (connection-room-b obj))))
+                       (c (make-instance 'persistent-connection
                             :name (object-name obj)
                             :description (object-description obj)
+                            :room-a room-a
+                            :room-b room-b
                             :direction-a (connection-direction-a obj)
                             :direction-b (connection-direction-b obj)
                             :blocked (connection-blocked-p obj)
@@ -145,18 +151,6 @@ by matching IDs in PERSISTENT-WORLD's object index."
                   (let ((new-loc (world-object-by-id persistent-world (object-id old-loc))))
                     (when new-loc
                       (setf (object-location p) new-loc)))))
-              ;; Connection room references
-              (when (typep obj 'mud-connection)
-                (let ((room-a (world-object-by-id persistent-world
-                                                  (object-id (connection-room-a obj))))
-                      (room-b (world-object-by-id persistent-world
-                                                  (object-id (connection-room-b obj)))))
-                  (when (and room-a room-b)
-                    (setf (connection-room-a p) room-a
-                          (connection-room-b p) room-b)
-                    ;; Re-register in each room's connections list
-                    (push p (room-connections room-a))
-                    (push p (room-connections room-b)))))
               ;; Room-specific relationships
               (when (typep obj 'mud-room)
                 ;; Contents
@@ -176,16 +170,26 @@ by matching IDs in PERSISTENT-WORLD's object index."
 
 All rooms, objects, NPCs, and guestbooks in TRANSIENT-WORLD are re-created
 as BKNR-persistent instances within a single transaction.  Relationships
-(locations, exits, room contents, properties) are faithfully copied.
+(locations, room contents, starting room) are faithfully copied.
+
+Rooms are materialized first so that Connection objects can resolve
+their ROOM-A / ROOM-B references immediately at creation time (via
+INITIALIZE-TRANSIENT-INSTANCE), eliminating the need for a separate
+cross-reference pass for connections.
 
 Returns the new PERSISTENT-WORLD."
   (let ((pw (make-instance 'persistent-world)))
     (bknr.datastore:with-transaction ("materialize-world")
-      ;; Phase 1 — create persistent counterparts
+      ;; Phase 1 — rooms first (connections reference them)
       (dolist (obj (world-all-objects transient-world))
-        (unless (typep obj 'mud-character)
+        (when (typep obj 'mud-room)
           (materialize-object obj pw)))
-      ;; Phase 2 — restore cross-references
+      ;; Phase 2 — everything else (connections find rooms from Phase 1)
+      (dolist (obj (world-all-objects transient-world))
+        (when (and (not (typep obj 'mud-character))
+                   (not (typep obj 'mud-room)))
+          (materialize-object obj pw)))
+      ;; Phase 3 — restore cross-references (locations, contents, starting room)
       (materialize-relationships transient-world pw))
     pw))
 
