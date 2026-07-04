@@ -35,6 +35,19 @@
                    "New object ID ~D conflicts with existing loaded room IDs: ~A"
                    new-id restored-ids)))))))
 
+(test id-counter-after-materialization
+  "After materializing a world, the persistent world's id-counter must
+reflect the transient world's counter so new objects don't get duplicate IDs."
+  (let* ((world (apeiron.persistence:world-restore-or-initialize :force-new t))
+         (max-id (loop for obj in (apeiron.core:world-all-objects world)
+                       maximize (apeiron.core:object-id obj)))
+         (new-room (apeiron.core:new-room :name "Latecomer")))
+    (apeiron.core:world-add-object! world new-room)
+    (let ((new-id (apeiron.core:object-id new-room)))
+      (is (> new-id max-id)
+          "New room ID ~D should exceed the highest existing ID ~D"
+          new-id max-id))))
+
 (test guestbook-persistence
   "Test that guestbook entries survive store close/reopen via CSV persistence."
   ;; Clean up any leftover CSV from earlier runs

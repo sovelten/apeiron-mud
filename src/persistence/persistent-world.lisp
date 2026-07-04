@@ -190,7 +190,10 @@ Returns the new PERSISTENT-WORLD."
                    (not (typep obj 'mud-room)))
           (materialize-object obj pw)))
       ;; Phase 3 — restore cross-references (locations, contents, starting room)
-      (materialize-relationships transient-world pw))
+      (materialize-relationships transient-world pw)
+      ;; Sync the ID counter so new objects after materialization don't
+      ;; collide with IDs already assigned during materialization.
+      (setf (world-id-counter pw) (world-id-counter transient-world)))
     pw))
 
 ;; ─── World restore / initialize ─────────────────────────────────────────────
@@ -264,6 +267,10 @@ When FORCE-NEW is true any existing store data is wiped first."
             (let ((location (object-location obj)))
               (when (typep location 'persistent-room)
                 (container-add-object location obj))))
+          ;; Sync the ID counter so new objects don't collide
+          (let ((max-id (loop for obj being the hash-values of (world-objects world)
+                              maximize (object-id obj))))
+            (setf (world-id-counter world) (or max-id 0)))
           (when *debug-mode*
             (log-message "World restored from BKNR datastore."))
           world)
