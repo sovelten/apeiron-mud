@@ -48,6 +48,27 @@
   (bknr.datastore:with-transaction ("create-object")
     (materialize-object object world)))
 
+(defmethod connect-rooms! ((world persistent-world) room-a direction-a room-b direction-b
+                           &key (name (format nil "passage between ~A and ~A"
+                                              (object-name room-a)
+                                              (object-name room-b)))
+                             blocked blocked-message)
+  "Create a persistent connection directly in a PERSISTENT-WORLD."
+  (let ((conn (make-instance 'persistent-connection
+                              :name name
+                              :room-a room-a
+                              :room-b room-b
+                              :direction-a (string-downcase direction-a)
+                              :direction-b (string-downcase direction-b)
+                              :blocked blocked
+                              :blocked-message blocked-message)))
+    (bknr.datastore:with-transaction ("connect-rooms!")
+      (setf (object-id conn) (world-gen-id! world))
+      (world-add-object! world conn)
+      (push conn (room-connections room-a))
+      (push conn (room-connections room-b)))
+    conn))
+
 ;; ─── Store lifecycle ────────────────────────────────────────────────────────
 
 (defvar *store-directory*
@@ -216,10 +237,10 @@ without :TRANSIENT-WORLD."
                              :description "The ground trembles beneath your feet. Glowing lava flows through cracks in the black, jagged rock."))
           (guestbook (new-guestbook :name "an oak guestbook")))
       (container-add-object gathering guestbook)
-      (connect-rooms world gathering "north" forest "south")
-      (connect-rooms world gathering "east" desert "west")
-      (connect-rooms world gathering "west" swamp "east")
-      (connect-rooms world gathering "south" volcano "north")
+      (connect-rooms! world gathering "north" forest "south")
+      (connect-rooms! world gathering "east" desert "west")
+      (connect-rooms! world gathering "west" swamp "east")
+      (connect-rooms! world gathering "south" volcano "north")
       (world-add-object! world guestbook)
       (world-add-object! world gathering)
       (world-add-object! world forest)
