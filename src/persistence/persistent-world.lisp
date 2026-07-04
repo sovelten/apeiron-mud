@@ -116,7 +116,8 @@ close/reopen cycles that trigger BKNR transaction log replay warnings."
                             :description (object-description obj)
                             :direction-a (connection-direction-a obj)
                             :direction-b (connection-direction-b obj)
-                            :blocked (connection-blocked-p obj))))
+                            :blocked (connection-blocked-p obj)
+                            :blocked-message (connection-blocked-message obj))))
                   (clone-properties obj c)
                   c))
                (mud-object

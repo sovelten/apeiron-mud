@@ -42,15 +42,19 @@ DIRECTION is a lowercase string, CONNECTION is the MUD-CONNECTION."
 (defun room-exit-blocked-p (room player direction)
   "Return a blocking message if the player cannot use this exit yet.
 
-Checks both flag-based gates (legacy) and Connection-based blocking."
-  (let* ((dir (string-downcase direction))
-         (required-flag (object-get-property room (format nil "gate-~A" dir))))
-    (or (when (and required-flag (not (object-get-property player required-flag)))
-          (or (object-get-property room (format nil "gate-~A-message" dir))
-              (format nil "Something blocks the ~A exit. You are not ready to pass."
-                      direction)))
-        ;; Also check if a Connection object blocks this direction
-        (connection-exit-blocked-message room direction))))
+First checks if the connection itself is blocked (covers challenges,
+riddles, and any other reason a connection might be impassable).
+Then falls back to flag-based gates stored on the room."
+  (let ((dir (string-downcase direction)))
+    (or
+     ;; Connection-based blocking (challenges, riddles, locked doors)
+     (connection-exit-blocked-message room dir)
+     ;; Flag-based gate (e.g. defeat an NPC to pass) — stored on the room
+     (let ((required-flag (object-get-property room (format nil "gate-~A" dir))))
+       (when (and required-flag (not (object-get-property player required-flag)))
+         (or (object-get-property room (format nil "gate-~A-message" dir))
+             (format nil "Something blocks the ~A exit. You are not ready to pass."
+                     direction)))))))
 
 (defun room-describe (room)
   "Get a full description of a room including contents and exits."

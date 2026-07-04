@@ -24,7 +24,11 @@
    (blocked :initarg :blocked
             :accessor connection-blocked-p
             :initform nil
-            :documentation "Whether the passage is currently blocked"))
+            :documentation "Whether the passage is currently blocked")
+   (blocked-message :initarg :blocked-message
+                    :accessor connection-blocked-message
+                    :initform nil
+                    :documentation "Custom message shown when blocked (e.g. a riddle)"))
   (:documentation "A bidirectional connection between two rooms, with a direction
 name at each end.  Characters cannot traverse a blocked connection."))
 
@@ -48,12 +52,13 @@ name at each end.  Characters cannot traverse a blocked connection."))
                         &key (name (format nil "passage between ~A and ~A"
                                            (object-name room-a)
                                            (object-name room-b)))
-                          blocked)
+                          blocked blocked-message)
   "Create and return a new MUD-CONNECTION between ROOM-A and ROOM-B.
 
 DIRECTION-A is the direction name from ROOM-A to ROOM-B (e.g. \"north\").
 DIRECTION-B is the direction name from ROOM-B to ROOM-A (e.g. \"south\").
 When BLOCKED is true the passage starts blocked.
+BLOCKED-MESSAGE is shown to players when they try to pass.
 
 The connection is NOT linked into any room's connections list or world;
 call CONNECT-ROOMS (in world.lisp) for that."
@@ -63,7 +68,8 @@ call CONNECT-ROOMS (in world.lisp) for that."
                  :room-b room-b
                  :direction-a (string-downcase direction-a)
                  :direction-b (string-downcase direction-b)
-                 :blocked blocked))
+                 :blocked blocked
+                 :blocked-message blocked-message))
 
 ;; ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -96,11 +102,23 @@ this room and direction.  Returns the connection if found."
 (defun connection-exit-blocked-message (room direction)
   "Return a blocking message if a connection in this direction is blocked, or nil.
 
-Checks whether a Connection on ROOM in DIRECTION exists and is blocked.
-Returns the connection's name as part of the message so the player knows
-why they can't pass."
+When the connection has a custom BLOCKED-MESSAGE (e.g. a riddle question)
+that is returned; otherwise a generic \"X is blocked\" message is used."
   (let ((conn (connection-find room direction)))
     (when (and conn (connection-blocked-p conn))
-      (format nil "~A is blocked. You cannot go ~A."
-              (object-name conn)
-              direction))))
+      (or (connection-blocked-message conn)
+          (format nil "~A is blocked. You cannot go ~A."
+                  (object-name conn)
+                  direction)))))
+
+(defun connection-set-challenge (connection question answer flag)
+  "Set a challenge (riddle/password) on a CONNECTION.
+
+Blocks the connection so players cannot pass, and stores the QUESTION
+as the blocked message.  A player who answers correctly with ANSWER
+sets the FLAG on themselves, unblocking the connection."
+  (setf (connection-blocked-p connection) t
+        (connection-blocked-message connection) question)
+  (object-set-property connection "challenge-question" question)
+  (object-set-property connection "challenge-answer" answer)
+  (object-set-property connection "challenge-flag" flag))

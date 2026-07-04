@@ -78,14 +78,3 @@
                 (when entrance
                   (object-move player entrance)))))))
     (nreverse messages)))
-
-(defun room-challenge-blocked-p (room player direction)
-  "Return a blocking message if a riddle/password gate blocks this exit."
-  (let* ((dir (string-downcase direction))
-         (challenge-exit (object-get-property room "challenge-exit"))
-         (challenge-flag (object-get-property room "challenge-flag")))
-    (when (and challenge-exit challenge-flag
-               (string= dir (string-downcase challenge-exit))
-               (not (object-get-property player challenge-flag)))
-      (or (object-get-property room "challenge-question")
-          "A challenge blocks your way. Try: answer <your answer>"))))

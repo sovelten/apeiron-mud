@@ -16,12 +16,6 @@
   (container-add-object room npc)
   (world-add-object! world npc))
 
-(defun set-challenge-gate (room exit-direction question answer flag)
-  (object-set-property room "challenge-exit" exit-direction)
-  (object-set-property room "challenge-question" question)
-  (object-set-property room "challenge-answer" answer)
-  (object-set-property room "challenge-flag" flag))
-
 (defun set-flag-gate (room exit-direction flag &optional message)
   (object-set-property room (format nil "gate-~A" (string-downcase exit-direction)) flag)
   (when message
@@ -113,11 +107,11 @@
     (connect-rooms world boss-chamber "north" treasure "south")
 
     ;; Challenges
-    (set-challenge-gate riddle-gallery "east"
+    (connection-set-challenge (connection-find riddle-gallery "east")
                         "A voice echoes: 'What feline crook loves coins above all else?' Try: answer <name>"
                         "meowth"
                         "solved-meowth-riddle")
-    (set-challenge-gate password-gate "north"
+    (connection-set-challenge (connection-find password-gate "north")
                         "The keypad demands: 'Enter the organization password.' Try: answer <password>"
                         "rocket"
                         "solved-rocket-password")

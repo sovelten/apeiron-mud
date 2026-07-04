@@ -50,12 +50,13 @@ indices, and return the object."
                       &key (name (format nil "passage between ~A and ~A"
                                          (object-name room-a)
                                          (object-name room-b)))
-                        blocked)
+                        blocked blocked-message)
   "Create a bidirectional Connection between ROOM-A and ROOM-B in WORLD.
 
 DIRECTION-A is the direction name from ROOM-A to ROOM-B (e.g. \"north\").
 DIRECTION-B is the direction name from ROOM-B to ROOM-A (e.g. \"south\").
 When BLOCKED is true the passage starts blocked and cannot be traversed.
+BLOCKED-MESSAGE is shown to players when they try to pass.
 
 The connection is linked into both rooms' CONNECTIONS lists and
 registered with WORLD-ADD-OBJECT! so it participates in persistence
@@ -63,7 +64,8 @@ materialization.
 
 Returns the new MUD-CONNECTION instance."
   (let* ((conn (make-connection room-a direction-a room-b direction-b
-                                :name name :blocked blocked)))
+                                :name name :blocked blocked
+                                :blocked-message blocked-message)))
     (push conn (room-connections room-a))
     (push conn (room-connections room-b))
     (world-add-object! world conn)

@@ -121,7 +121,6 @@
    #:npc-describe
    #:find-npc-in-room
    #:combat-attack-npc
-   #:room-challenge-blocked-p
    #:player-hp
    #:player-max-hp
    #:player-ensure-combat-stats
@@ -150,6 +149,8 @@
    #:connection-direction-to
    #:connection-find
    #:connection-exit-blocked-message
+   #:connection-set-challenge
+   #:connection-blocked-message
 
    ;; Guestbook
    #:mud-guestbook
