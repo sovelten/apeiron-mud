@@ -36,23 +36,6 @@
   (bknr.datastore:with-transaction ("create-object")
     (materialize-object object world)))
 
-;; ─── Persistent factory functions ───────────────────────────────────────────
-
-(defun create-guestbook! (&key (name "a dusty guestbook") (filepath (namestring (merge-pathnames "guestbook.csv" *data-directory*))))
-  "Create a new persistent guestbook stored in the BKNR datastore."
-  (let* ((filepath-str (if (pathnamep filepath)
-                           (namestring filepath)
-                           filepath))
-         (gb (make-instance 'persistent-guestbook
-                            :name name
-                            :filepath filepath-str
-)))
-    (when filepath-str
-      (log-message "Loading csv from ~A" filepath-str)
-      (setf (guestbook-entries gb)
-            (guestbook-load-from-csv (pathname filepath-str))))
-    gb))
-
 ;; ─── Store lifecycle ────────────────────────────────────────────────────────
 
 (defvar *store-directory*
@@ -196,8 +179,7 @@ without :TRANSIENT-WORLD."
                            :description "Stagnant water laps at gnarled tree roots as thick mist curls around your ankles."))
           (volcano (new-room :name "A Rumbling Volcano"
                              :description "The ground trembles beneath your feet. Glowing lava flows through cracks in the black, jagged rock."))
-          (guestbook (new-guestbook :name "an oak guestbook"
-                                    :filepath (namestring (merge-pathnames "guestbook.csv" *data-directory*)))))
+          (guestbook (new-guestbook :name "an oak guestbook")))
       (container-add-object gathering guestbook)
       (room-add-exits gathering "north" forest "south")
       (room-add-exits gathering "east" desert "west")

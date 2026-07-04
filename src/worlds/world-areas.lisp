@@ -191,8 +191,7 @@
                                       :description "Stagnant water laps at gnarled tree roots as thick mist curls around your ankles. The air is heavy with the smell of decay and damp earth. Somewhere in the distance, a bullfrog croaks and something large splashes."))
           (volcano (new-room :name "A Rumbling Volcano"
                                         :description "The ground trembles beneath your feet. Glowing lava flows through cracks in the black, jagged rock, casting an eerie red glow across the cavern. Heat shimmers violently and the air reeks of sulphur. The mountain groans above you."))
-          (guestbook (new-guestbook :name "an oak guestbook"
-                                    :filepath (namestring (merge-pathnames "guestbook.csv" *data-directory*)))))
+          (guestbook (new-guestbook :name "an oak guestbook")))
       ;; Place the guestbook in The Gathering
       (container-add-object gathering guestbook)
       ;; Connect The Gathering (hub) to the four biomes
