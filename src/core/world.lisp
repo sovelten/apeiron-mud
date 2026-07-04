@@ -82,13 +82,6 @@ indices, and return the object."
   (loop for player being the hash-values of (world-players world)
         collect player))
 
-(defun find-character-in-room (room player-name)
-  "Find a player in a room by name."
-  (loop for obj in (container-all-objects room)
-        when (and (typep obj 'mud-character)
-                  (string-equal (object-name obj) player-name))
-        return obj))
-
 (defun world-broadcast (world message &optional exclude-player)
   "Broadcast a message to all players (optionally excluding one)."
   (dolist (player (characters world))
