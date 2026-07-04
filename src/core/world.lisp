@@ -65,7 +65,6 @@ Returns the registered MUD-CONNECTION instance."))
                                               (object-name room-a)
                                               (object-name room-b)))
                              blocked blocked-message)
-  "Create a transient connection in a MUD-WORLD."
   (let* ((conn (make-connection room-a direction-a room-b direction-b
                                 :name name :blocked blocked
                                 :blocked-message blocked-message))

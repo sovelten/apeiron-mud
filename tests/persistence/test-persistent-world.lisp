@@ -75,6 +75,20 @@ the slot transient each restore doubles the list."
             "After 2nd restart: should have 4 connections, not ~D"
             (length (apeiron.core:room-connections reloaded2)))))))
 
+(test connect-rooms-on-persistent-world-no-duplicate
+  "connect-rooms! on a persistent world must not duplicate connections
+in the room's connections list."
+  (let* ((world (apeiron.persistence:world-restore-or-initialize :force-new t))
+         (gathering (apeiron.core:starting-room world))
+         (count-before (length (apeiron.core:room-connections gathering)))
+         (new-room (apeiron.core:create-object! world (apeiron.core:new-room :name "Secret"))))
+    (apeiron.core:connect-rooms! world gathering "west" new-room "east")
+    (is (= (1+ count-before)
+           (length (apeiron.core:room-connections gathering)))
+        "Expected ~D connections after adding one, got ~D"
+        (1+ count-before)
+        (length (apeiron.core:room-connections gathering)))))
+
 (test guestbook-persistence
   "Test that guestbook entries survive store close/reopen via CSV persistence."
   ;; Clean up any leftover CSV from earlier runs

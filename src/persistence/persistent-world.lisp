@@ -115,8 +115,6 @@ close/reopen cycles that trigger BKNR transaction log replay warnings."
                             :direction-b (connection-direction-b obj)
                             :blocked (connection-blocked-p obj)
                             :blocked-message (connection-blocked-message obj))))
-                  (push c (room-connections room-a))
-                  (push c (room-connections room-b))
                   (clone-properties obj c)
                   c))
                (mud-object
@@ -144,6 +142,10 @@ by matching IDs in PERSISTENT-WORLD's object index."
                   (let ((new-loc (world-object-by-id persistent-world (object-id old-loc))))
                     (when new-loc
                       (setf (object-location p) new-loc)))))
+              ;; Connection room links
+              (when (typep obj 'mud-connection)
+                (push p (room-connections (connection-room-a p)))
+                (push p (room-connections (connection-room-b p))))
               ;; Room-specific relationships
               (when (typep obj 'mud-room)
                 ;; Contents
