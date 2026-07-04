@@ -29,3 +29,21 @@
     (apeiron.core:room-add-exits room1 "north" room2 "south")
     (is (eq (apeiron.core:room-get-exit room1 "north") room2))
     (is (eq (apeiron.core:room-get-exit room2 "south") room1))))
+
+(test find-character-in-room
+  "Test finding a character in a room by name (case-insensitive)"
+  (let ((room (apeiron.core:new-room :name "Tavern"))
+        (alice (apeiron.core:new-character "Alice" (make-instance 'apeiron.core:stream-session
+                                     :stream (make-string-output-stream))))
+        (bob   (apeiron.core:new-character "Bob"   (make-instance 'apeiron.core:stream-session
+                                     :stream (make-string-output-stream)))))
+    (setf (apeiron.core:object-location alice) room)
+    (setf (apeiron.core:object-location bob) room)
+    (apeiron.core:container-add-object room alice)
+    (apeiron.core:container-add-object room bob)
+    (is (eq alice (apeiron.core:find-character-in-room room "Alice")))
+    (is (eq bob (apeiron.core:find-character-in-room room "Bob")))
+    ;; Case-insensitive match
+    (is (eq alice (apeiron.core:find-character-in-room room "alice")))
+    ;; Non-existent name returns nil
+    (is (null (apeiron.core:find-character-in-room room "Charlie")))))

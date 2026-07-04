@@ -17,6 +17,13 @@
                  
                  :location nil))
 
+(defun find-character-in-room (room player-name)
+  "Find a player in a room by name."
+  (loop for obj in (container-all-objects room)
+        when (and (typep obj 'mud-character)
+                  (string-equal (object-name obj) player-name))
+        return obj))
+
 (defun room-add-exit (room direction target-room)
   "Add an exit from a room to another room."
   (setf (gethash (string-downcase direction) (room-exits room)) target-room))

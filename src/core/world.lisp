@@ -34,7 +34,7 @@
   ;; Increment id counter and return new id
   (incf (world-id-counter world)))
 
-(defun world-set-object-id! (world object)
+(defun world-add-object! (world object)
   "Assign a world-level ID to an object, register it in the world's
 indices, and return the object."
   (when (eq -1 (object-id object)) ;; Only set if unset
@@ -82,13 +82,6 @@ indices, and return the object."
   (loop for player being the hash-values of (world-players world)
         collect player))
 
-(defun find-character-in-room (room player-name)
-  "Find a player in a room by name."
-  (loop for obj in (container-all-objects room)
-        when (and (typep obj 'mud-character)
-                  (string-equal (object-name obj) player-name))
-        return obj))
-
 (defun world-broadcast (world message &optional exclude-player)
   "Broadcast a message to all players (optionally excluding one)."
   (dolist (player (characters world))
@@ -124,3 +117,10 @@ indices, and return the object."
 (defun world-total-rooms (world)
   "Return the number of rooms in the world."
   (hash-table-count (world-rooms world)))
+
+(defgeneric create-object! (world object)
+  (:documentation "Register OBJECT in WORLD, materializing it for persistent worlds.
+For transient worlds this is equivalent to WORLD-ADD-OBJECT!.
+For persistent worlds a persistent copy is created in the datastore.")
+  (:method ((world mud-world) object)
+    (world-add-object! world object)))

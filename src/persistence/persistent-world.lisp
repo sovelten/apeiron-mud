@@ -31,37 +31,14 @@
   ()
   (:transient-slots players objects rooms))
 
+(defmethod create-object! ((world persistent-world) object)
+  "Register OBJECT in WORLD by materializing a persistent copy."
+  (bknr.datastore:with-transaction ("create-object")
+    (materialize-object object world)))
+
 ;; ─── Persistent factory functions ───────────────────────────────────────────
 
-(defun new-persistent-object (&key (name "An Object") (description ""))
-  "Create a new persistent object stored in the BKNR datastore."
-  (make-instance 'persistent-object
-                 :name name
-                 :description description
-                 :location nil))
-
-(defun new-persistent-room (&key (name "A Room") (description ""))
-  "Create a new persistent room stored in the BKNR datastore."
-  (make-instance 'persistent-room
-                 :name name
-                 :description description
-                 :location nil))
-
-(defun new-persistent-npc (&key name description hp max-hp attack-min attack-max
-                               defeat-message victory-flag)
-  "Create a new persistent NPC stored in the BKNR datastore."
-  (let ((max-hp (or max-hp hp 10)))
-    (make-instance 'persistent-npc
-                   :name name
-                   :description description
-                   :hp (or hp max-hp)
-                   :max-hp max-hp
-                   :attack-min attack-min
-                   :attack-max attack-max
-                   :defeat-message defeat-message
-                   :victory-flag victory-flag)))
-
-(defun new-persistent-guestbook (&key (name "a dusty guestbook") (filepath (namestring (merge-pathnames "guestbook.csv" *data-directory*))))
+(defun create-guestbook! (&key (name "a dusty guestbook") (filepath (namestring (merge-pathnames "guestbook.csv" *data-directory*))))
   "Create a new persistent guestbook stored in the BKNR datastore."
   (let* ((filepath-str (if (pathnamep filepath)
                            (namestring filepath)
@@ -107,9 +84,8 @@ close/reopen cycles that trigger BKNR transaction log replay warnings."
   (maphash (lambda (k v) (object-set-property target k v))
            (object-properties source)))
 
-(defun materialize-object (obj persistent-world map)
-  "Create a persistent copy of OBJ, register it in PERSISTENT-WORLD,
-and store the mapping in MAP (transient -> persistent)."
+(defun materialize-object (obj persistent-world)
+  "Create a persistent copy of OBJ and register it in PERSISTENT-WORLD."
   (let ((p (etypecase obj
                (mud-npc
                 (let ((n (make-instance 'persistent-npc
@@ -145,39 +121,42 @@ and store the mapping in MAP (transient -> persistent)."
                            :description (object-description obj))))
                   (clone-properties obj o)
                   o)))))
-    (world-set-object-id! persistent-world p)
-    (setf (gethash obj map) p)))
+    ;; Use same ID as the transient original so persistent counterparts
+    ;; can be found via WORLD-OBJECT-BY-ID / WORLD-OBJECTS during restoration.
+    (setf (object-id p) (object-id obj))
+    (world-add-object! persistent-world p)))
 
-(defun materialize-relationships (transient-world persistent-world map)
+(defun materialize-relationships (transient-world persistent-world)
   "Restore cross-references between persistent objects: locations, exits,
-room contents, and the starting room."
+room contents, and the starting room.  Persistent counterparts are found
+by matching IDs in PERSISTENT-WORLD's object index."
   (dolist (obj (world-all-objects transient-world))
         (unless (typep obj 'mud-character)
-          (let ((p (gethash obj map)))
+          (let ((p (world-object-by-id persistent-world (object-id obj))))
             (when p
               ;; Location
               (let ((old-loc (object-location obj)))
                 (when old-loc
-                  (let ((new-loc (gethash old-loc map)))
+                  (let ((new-loc (world-object-by-id persistent-world (object-id old-loc))))
                     (when new-loc
                       (setf (object-location p) new-loc)))))
               ;; Room-specific relationships
               (when (typep obj 'mud-room)
                 ;; Exits
                 (maphash (lambda (dir target)
-                           (let ((new-target (gethash target map)))
+                           (let ((new-target (world-object-by-id persistent-world (object-id target))))
                              (when new-target
                                (room-add-exit p dir new-target))))
                          (room-exits obj))
                 ;; Contents
                 (loop for child in (container-all-objects obj)
-                      do (let ((new-child (gethash child map)))
+                      do (let ((new-child (world-object-by-id persistent-world (object-id child))))
                            (when new-child
                              (container-add-object p new-child))))))))
       ;; Starting room
       (let ((old-start (starting-room transient-world)))
         (when old-start
-          (let ((new-start (gethash old-start map)))
+          (let ((new-start (world-object-by-id persistent-world (object-id old-start))))
             (when new-start
               (world-set-starting-room! persistent-world new-start)))))))
 
@@ -189,15 +168,14 @@ as BKNR-persistent instances within a single transaction.  Relationships
 (locations, exits, room contents, properties) are faithfully copied.
 
 Returns the new PERSISTENT-WORLD."
-  (let ((pw (make-instance 'persistent-world))
-        (map (make-hash-table :test #'eq)))
+  (let ((pw (make-instance 'persistent-world)))
     (bknr.datastore:with-transaction ("materialize-world")
       ;; Phase 1 — create persistent counterparts
       (dolist (obj (world-all-objects transient-world))
         (unless (typep obj 'mud-character)
-          (materialize-object obj pw map)))
+          (materialize-object obj pw)))
       ;; Phase 2 — restore cross-references
-      (materialize-relationships transient-world pw map))
+      (materialize-relationships transient-world pw))
     pw))
 
 ;; ─── World restore / initialize ─────────────────────────────────────────────
@@ -225,12 +203,12 @@ without :TRANSIENT-WORLD."
       (room-add-exits gathering "east" desert "west")
       (room-add-exits gathering "west" swamp "east")
       (room-add-exits gathering "south" volcano "north")
-      (world-set-object-id! world guestbook)
-      (world-set-object-id! world gathering)
-      (world-set-object-id! world forest)
-      (world-set-object-id! world desert)
-      (world-set-object-id! world swamp)
-      (world-set-object-id! world volcano)
+      (world-add-object! world guestbook)
+      (world-add-object! world gathering)
+      (world-add-object! world forest)
+      (world-add-object! world desert)
+      (world-add-object! world swamp)
+      (world-add-object! world volcano)
       (world-set-starting-room! world gathering))
     world))
 
@@ -264,7 +242,7 @@ When FORCE-NEW is true any existing store data is wiped first."
           ;; Populate world's indices from BKNR objects.
           ;; persistent-object queries also return subclasses (room, guestbook, npc).
           (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-object))
-            (world-set-object-id! world obj))
+            (world-add-object! world obj))
           ;; Rebuild room contents from persistent object locations.
           ;; persistent-object queries also return subclasses (room, guestbook, npc).
           ;; Wrapped in a single transaction to avoid per-object auto-wrap overhead.

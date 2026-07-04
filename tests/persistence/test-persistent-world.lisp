@@ -29,7 +29,7 @@
            (is (subsetp initial-ids restored-ids))
            ;; Add a new room post-restart
            (let ((new-room (apeiron.core:new-room :name "Post-Restart Room")))
-             (apeiron.core:world-set-object-id! new-world new-room)
+             (apeiron.core:world-add-object! new-world new-room)
              (let ((new-id (apeiron.core:object-id new-room)))
                (is (not (member new-id restored-ids))
                    "New object ID ~D conflicts with existing loaded room IDs: ~A"

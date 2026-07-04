@@ -100,23 +100,56 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
                                          (yellow hp-text)
                                          (bright-green hp-text)))))))
 
+(defvar *eval-player* nil
+  "Bound to the current player character during eval command execution.")
+
+(defvar *eval-location* nil
+  "Bound to the current player's location during eval command execution.")
+
+(defvar *eval-world* nil
+  "Bound to the current world during eval command execution.")
+
+(defun me ()
+  "Return the current player character during eval command execution."
+  *eval-player*)
+
+(defun here ()
+  "Return the current player's location during eval command execution."
+  *eval-location*)
+
+(defun world ()
+  *eval-world*)
+
+(defun eval-context-package ()
+  "Return the eval context package, creating it on first call.
+:use's CL and APEIRON.CORE so all core MUD symbols are accessible"
+  (or (find-package '#:apeiron.eval)
+      (let ((p (make-package '#:apeiron.eval :use nil)))
+        (use-package '#:cl p)
+        (use-package '#:apeiron.core p)
+        p)))
+
 (define-command "eval" (world player args)
   (declare (ignore world))
   (let ((code-str args))
     (if (zerop (length code-str))
         (player-send-message player "Eval what? Usage: eval <code>")
-        (handler-case
-            (let* ((form (read-from-string code-str))
-                   (room (object-location player))
-                   (result (eval form)))
-              (loop for obj in (container-all-objects room) do
-                (when (and (typep obj 'mud-character)
-                           (not (eq obj player)))
-                  (player-send-message obj (format nil "~A casts the spell: ~A" (object-name player) form))
-                  (player-send-message obj (format nil "~A" result))))
-              (player-send-message player (format nil "~A" result)))
-          (error (e)
-            (player-send-message player (format nil "Error: ~A" e)))))))
+        (let ((*eval-world* world)
+              (*eval-player* player)
+              (*eval-location* (object-location player))
+              (*package* (eval-context-package)))
+          (handler-case
+              (let* ((form (read-from-string code-str))
+                     (room (object-location player))
+                     (result (eval form)))
+                (loop for obj in (container-all-objects room) do
+                  (when (and (typep obj 'mud-character)
+                             (not (eq obj player)))
+                    (player-send-message obj (format nil "~A casts the spell: ~A" (object-name player) form))
+                    (player-send-message obj (format nil "~A" result))))
+                (player-send-message player (format nil "~A" result)))
+            (error (e)
+              (player-send-message player (format nil "Error: ~A" e))))))))
 
 (define-command "exits" (world player args)
   (declare (ignore world args))

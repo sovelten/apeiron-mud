@@ -116,7 +116,7 @@ You see:
 Exits: north
 
 Welcome to the MUD!
->  eval (mud:new-persistent-room! :name "Valinor")) 
+>  eval (apeiron.persistence:create-room! :name "Valinor")) 
 #<MUD-ROOM Valinor (ID: 5)>
 > eval (mud:rooms)
 (#<MUD-ROOM The Tavern (ID: 1)> #<MUD-ROOM A Dense Forest (ID: 2)>

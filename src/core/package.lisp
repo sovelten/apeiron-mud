@@ -190,7 +190,7 @@
    #:world-rooms
    #:get-config-key
    #:world-gen-id!
-   #:world-set-object-id!
+   #:world-add-object!
    #:world-set-starting-room!
    #:starting-room
    #:world-add-character!
@@ -212,6 +212,13 @@
    #:define-command
    #:parse-command
    #:process-command
+   #:*eval-player*
+   #:me
+   #:*eval-location*
+   #:here
+   #:*eval-world*
+   #:world
+   #:create-object!
 
    ;; Event system
    #:mud-event
