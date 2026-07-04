@@ -114,11 +114,10 @@ that is returned; otherwise a generic \"X is blocked\" message is used."
 (defun connection-set-challenge (connection question answer flag)
   "Set a challenge (riddle/password) on a CONNECTION.
 
-Blocks the connection so players cannot pass, and stores the QUESTION
-as the blocked message.  A player who answers correctly with ANSWER
-sets the FLAG on themselves, unblocking the connection."
-  (setf (connection-blocked-p connection) t
-        (connection-blocked-message connection) question)
+A player who answers correctly with ANSWER sets the FLAG on themselves,
+which allows them to pass.  Players without the flag see the QUESTION
+as a blocking message.  This is independent of regular connection
+blocking (CONNECTION-BLOCKED-P)."
   (object-set-property connection "challenge-question" question)
   (object-set-property connection "challenge-answer" answer)
   (object-set-property connection "challenge-flag" flag))

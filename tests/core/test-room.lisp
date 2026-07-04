@@ -69,4 +69,44 @@
       ;; Toggle unblocked
       (setf (connection-blocked-p conn) nil)
       (is-false (connection-blocked-p conn))
-      (is (null (connection-exit-blocked-message room1 "north"))))))
+            (is (null (connection-exit-blocked-message room1 "north"))))))
+      
+      (test connection-regular-block-blocks-all-players
+        "A regularly blocked connection blocks every player regardless of flags."
+        (let* ((world (new-world))
+               (room1 (new-room :name "Hall"))
+               (room2 (new-room :name "Vault"))
+               (alice (new-character "Alice" (make-instance 'stream-session
+                                             :stream (make-string-output-stream))))
+               (bob   (new-character "Bob"   (make-instance 'stream-session
+                                             :stream (make-string-output-stream)))))
+          (object-move alice room1)
+          (object-move bob room1)
+          (let ((conn (connect-rooms! world room1 "north" room2 "south"
+                        :name "iron gate"
+                        :blocked t)))
+            (is (stringp (room-exit-blocked-p room1 alice "north")))
+            (is (stringp (room-exit-blocked-p room1 bob "north")))
+            (setf (connection-blocked-p conn) nil)
+            (is (null (room-exit-blocked-p room1 alice "north")))
+            (is (null (room-exit-blocked-p room1 bob "north"))))))
+      
+      (test connection-challenge-only-blocks-players-without-flag
+        "A challenge-gated connection blocks only players who lack the flag."
+        (let* ((world (new-world))
+               (room1 (new-room :name "Library"))
+               (room2 (new-room :name "Archive"))
+               (alice (new-character "Alice" (make-instance 'stream-session
+                                             :stream (make-string-output-stream))))
+               (bob   (new-character "Bob"   (make-instance 'stream-session
+                                             :stream (make-string-output-stream)))))
+          (object-move alice room1)
+          (object-move bob room1)
+          (let ((conn (connect-rooms! world room1 "north" room2 "south")))
+                  (object-set-property conn "challenge-flag" "passed-test")
+                  (object-set-property conn "challenge-question" "What is 2+2?")
+            (is (stringp (room-exit-blocked-p room1 alice "north")))
+            (is (stringp (room-exit-blocked-p room1 bob "north")))
+            (object-set-property alice "passed-test" t)
+            (is (null (room-exit-blocked-p room1 alice "north")))
+            (is (stringp (room-exit-blocked-p room1 bob "north"))))))

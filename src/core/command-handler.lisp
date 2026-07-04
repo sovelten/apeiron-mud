@@ -84,7 +84,6 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
              (player-send-message player "There is no challenge here to answer."))
             ((string= (string-downcase args) (string-downcase expected))
              (object-set-property player flag t)
-             (setf (connection-blocked-p conn) nil)
              (player-send-message player "Correct! The way forward opens."))
             (t
              (player-send-message player "Wrong answer. Try again.")))))))
