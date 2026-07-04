@@ -133,8 +133,6 @@
    #:new-room
    #:room-exits
    #:room-connections
-   #:room-add-exit
-   #:room-add-exits
    #:room-get-exit
    #:room-exit-blocked-p
    #:room-all-exits
@@ -142,7 +140,7 @@
 
    ;; Connection system
    #:mud-connection
-   #:connect-rooms
+   #:make-connection
    #:connection-room-a
    #:connection-room-b
    #:connection-direction-a
@@ -198,6 +196,7 @@
    ;; World
    #:mud-world
    #:new-world
+   #:connect-rooms
    #:world-id-counter
    #:world-config
    #:world-players

@@ -15,21 +15,6 @@
     (apeiron.core:container-add-object room obj)
     (is (= 1 (hash-table-count (apeiron.core:container-contents room))))))
 
-(test room-exits
-  "Test room exit management"
-  (let ((room1 (apeiron.core:new-room :name "Room 1"))
-        (room2 (apeiron.core:new-room :name "Room 2")))
-    (apeiron.core:room-add-exit room1 "north" room2)
-    (is (eq (apeiron.core:room-get-exit room1 "north") room2))))
-
-(test room-add-exits
-  "Test room exit management"
-  (let ((room1 (apeiron.core:new-room :name "Room 1"))
-        (room2 (apeiron.core:new-room :name "Room 2")))
-    (apeiron.core:room-add-exits room1 "north" room2 "south")
-    (is (eq (apeiron.core:room-get-exit room1 "north") room2))
-    (is (eq (apeiron.core:room-get-exit room2 "south") room1))))
-
 (test find-character-in-room
   "Test finding a character in a room by name (case-insensitive)"
   (let ((room (apeiron.core:new-room :name "Tavern"))
@@ -50,9 +35,10 @@
 
 (test connection-bidirectional
   "Test that connect-rooms creates a bidirectional connection"
-  (let ((room1 (new-room :name "Forest"))
+  (let ((world (new-world))
+        (room1 (new-room :name "Forest"))
         (room2 (new-room :name "Cave")))
-    (let ((conn (connect-rooms room1 "north" room2 "south"
+    (let ((conn (connect-rooms world room1 "north" room2 "south"
                   :name "forest-cave passage")))
       (is (typep conn 'mud-connection))
       (is (eq (room-get-exit room1 "north") room2))
@@ -68,9 +54,10 @@
 
 (test connection-blocked
   "Test that blocked connections prevent movement"
-  (let ((room1 (new-room :name "Forest"))
+  (let ((world (new-world))
+        (room1 (new-room :name "Forest"))
         (room2 (new-room :name "Cave")))
-    (let ((conn (connect-rooms room1 "north" room2 "south"
+    (let ((conn (connect-rooms world room1 "north" room2 "south"
                   :name "locked gate"
                   :blocked t)))
       (is-true (connection-blocked-p conn))
@@ -81,18 +68,3 @@
       (setf (connection-blocked-p conn) nil)
       (is-false (connection-blocked-p conn))
       (is (null (connection-exit-blocked-message room1 "north"))))))
-
-(test connection-works-alongside-legacy-exits
-  "Test that connections and room-add-exit coexist"
-  (let ((room1 (new-room :name "Tavern"))
-        (room2 (new-room :name "Kitchen"))
-        (room3 (new-room :name "Pantry")))
-    ;; Legacy string-based exit
-    (room-add-exit room1 "east" room2)
-    ;; Connection-based exit
-    (connect-rooms room1 "north" room3 "south" :name "service passage")
-    ;; Both work for navigation
-    (is (eq (room-get-exit room1 "east") room2))
-    (is (eq (room-get-exit room1 "north") room3))
-    ;; Connections list only contains the connection
-    (is (= 1 (length (room-connections room1))))))

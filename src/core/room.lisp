@@ -28,15 +28,6 @@
                   (string-equal (object-name obj) player-name))
         return obj))
 
-(defun room-add-exit (room direction target-room)
-  "Add an exit from a room to another room."
-  (setf (gethash (string-downcase direction) (room-exits room)) target-room))
-
-(defun room-add-exits (room direction target-room target-direction)
-  "Add an exit from a room to another room."
-  (room-add-exit room direction target-room)
-  (room-add-exit target-room target-direction room))
-
 (defun room-get-exit (room direction)
   "Get the target room for an exit.
 

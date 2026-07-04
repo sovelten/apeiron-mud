@@ -158,12 +158,6 @@ by matching IDs in PERSISTENT-WORLD's object index."
                     (push p (room-connections room-b)))))
               ;; Room-specific relationships
               (when (typep obj 'mud-room)
-                ;; Exits
-                (maphash (lambda (dir target)
-                           (let ((new-target (world-object-by-id persistent-world (object-id target))))
-                             (when new-target
-                               (room-add-exit p dir new-target))))
-                         (room-exits obj))
                 ;; Contents
                 (loop for child in (container-all-objects obj)
                       do (let ((new-child (world-object-by-id persistent-world (object-id child))))
@@ -214,10 +208,10 @@ without :TRANSIENT-WORLD."
                              :description "The ground trembles beneath your feet. Glowing lava flows through cracks in the black, jagged rock."))
           (guestbook (new-guestbook :name "an oak guestbook")))
       (container-add-object gathering guestbook)
-      (room-add-exits gathering "north" forest "south")
-      (room-add-exits gathering "east" desert "west")
-      (room-add-exits gathering "west" swamp "east")
-      (room-add-exits gathering "south" volcano "north")
+      (connect-rooms world gathering "north" forest "south")
+      (connect-rooms world gathering "east" desert "west")
+      (connect-rooms world gathering "west" swamp "east")
+      (connect-rooms world gathering "south" volcano "north")
       (world-add-object! world guestbook)
       (world-add-object! world gathering)
       (world-add-object! world forest)

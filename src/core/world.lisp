@@ -46,6 +46,29 @@ indices, and return the object."
     (setf (gethash (object-id object) (world-rooms world)) object))
   object)
 
+(defun connect-rooms (world room-a direction-a room-b direction-b
+                      &key (name (format nil "passage between ~A and ~A"
+                                         (object-name room-a)
+                                         (object-name room-b)))
+                        blocked)
+  "Create a bidirectional Connection between ROOM-A and ROOM-B in WORLD.
+
+DIRECTION-A is the direction name from ROOM-A to ROOM-B (e.g. \"north\").
+DIRECTION-B is the direction name from ROOM-B to ROOM-A (e.g. \"south\").
+When BLOCKED is true the passage starts blocked and cannot be traversed.
+
+The connection is linked into both rooms' CONNECTIONS lists and
+registered with WORLD-ADD-OBJECT! so it participates in persistence
+materialization.
+
+Returns the new MUD-CONNECTION instance."
+  (let* ((conn (make-connection room-a direction-a room-b direction-b
+                                :name name :blocked blocked)))
+    (push conn (room-connections room-a))
+    (push conn (room-connections room-b))
+    (world-add-object! world conn)
+    conn))
+
 (defun world-set-starting-room! (world room)
   (setf (gethash :starting-room-id (world-config world)) (object-id room)))
 

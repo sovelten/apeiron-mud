@@ -39,7 +39,7 @@
                  (:file "session" :depends-on ("utils"))
                  (:file "character" :depends-on ("object" "session" "container"))
                  (:file "command-handler" :depends-on ("session"))
-                 (:file "world" :depends-on ("room" "guestbook" "character"))))))
+                 (:file "world" :depends-on ("room" "connection" "guestbook" "character"))))))
 
 (defsystem "apeiron/telnet"
   :version "0.0.1"

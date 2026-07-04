@@ -99,18 +99,18 @@
                 :defeat-message "Boss G crumples. 'This isn't over... I'll be back... with a better evil plan!' The cavern rumbles as secret exits open."
                 :victory-flag "beat-boss-g")))
     ;; Maze layout
-    (room-add-exits entrance "north" crossroads "south")
-    (room-add-exits crossroads "north" grunt-patrol "south")
-    (room-add-exits crossroads "east" riddle-gallery "west")
-    (room-add-exits crossroads "west" mirror-maze "east")
-    (room-add-exits crossroads "south" cat-alley "north")
-    (room-add-exits grunt-patrol "north" elite-patrol "south")
-    (room-add-exits riddle-gallery "east" password-gate "west")
-    (room-add-exits mirror-maze "south" crossroads "north")
-    (room-add-exits mirror-maze "west" hidden-lab "east")
-    (room-add-exits elite-patrol "north" password-gate "south")
-    (room-add-exits password-gate "north" boss-chamber "south")
-    (room-add-exits boss-chamber "north" treasure "south")
+    (connect-rooms world entrance "north" crossroads "south")
+    (connect-rooms world crossroads "north" grunt-patrol "south")
+    (connect-rooms world crossroads "east" riddle-gallery "west")
+    (connect-rooms world crossroads "west" mirror-maze "east")
+    (connect-rooms world crossroads "south" cat-alley "north")
+    (connect-rooms world grunt-patrol "north" elite-patrol "south")
+    (connect-rooms world riddle-gallery "east" password-gate "west")
+    (connect-rooms world mirror-maze "south" crossroads "north")
+    (connect-rooms world mirror-maze "west" hidden-lab "east")
+    (connect-rooms world elite-patrol "north" password-gate "south")
+    (connect-rooms world password-gate "north" boss-chamber "south")
+    (connect-rooms world boss-chamber "north" treasure "south")
 
     ;; Challenges
     (set-challenge-gate riddle-gallery "east"
@@ -169,11 +169,11 @@
                    "Mannequins display the latest trainer gear: cargo shorts, fingerless gloves, and hats that somehow never fall off during battle. A sale banner screams '50% OFF REPEL!'.")))
     (setf (object-description desert)
           (concatenate 'string (object-description desert) door-flavor))
-    (room-add-exits desert "door" mall "desert")
-    (room-add-exits mall "north" food-court "south")
-    (room-add-exits mall "east" arcade "west")
-    (room-add-exits mall "west" fashion "east")
-    (room-add-exits arcade "maintenance" (build-team-rocket-cavern world) "mall")
+    (connect-rooms world desert "door" mall "desert")
+    (connect-rooms world mall "north" food-court "south")
+    (connect-rooms world mall "east" arcade "west")
+    (connect-rooms world mall "west" fashion "east")
+    (connect-rooms world arcade "maintenance" (build-team-rocket-cavern world) "mall")
     (dolist (room (list mall food-court arcade fashion))
       (register-room world room))
     mall))
@@ -195,10 +195,10 @@
       ;; Place the guestbook in The Gathering
       (container-add-object gathering guestbook)
       ;; Connect The Gathering (hub) to the four biomes
-      (room-add-exits gathering "north" forest "south")
-      (room-add-exits gathering "east" desert "west")
-      (room-add-exits gathering "west" swamp "east")
-      (room-add-exits gathering "south" volcano "north")
+      (connect-rooms world gathering "north" forest "south")
+      (connect-rooms world gathering "east" desert "west")
+      (connect-rooms world gathering "west" swamp "east")
+      (connect-rooms world gathering "south" volcano "north")
       ;; Desert door → shopping mall → Team Rocket cavern maze
       (build-shopping-mall world desert)
       ;; Register all objects in the world

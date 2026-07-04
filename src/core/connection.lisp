@@ -1,18 +1,19 @@
 ;;;; src/core/connection.lisp — Reified connections between rooms
 ;;;;
 ;;;; A Connection is a first-class MUD object representing a bidirectional
-;;;; passage between two rooms.  It lives alongside the legacy string-based
-;;;; exit system: ROOM-GET-EXIT falls back to CONNECTION-FIND when no
-;;;; hash-table entry exists, so connections work transparently.
+;;;; passage between two rooms.  ROOM-GET-EXIT falls back to CONNECTION-FIND
+;;;; so connections work transparently alongside legacy string-based exits.
 
 (in-package #:apeiron.core)
 
 (defclass mud-connection (mud-object)
   ((room-a :initarg :room-a
            :accessor connection-room-a
+           :initform nil
            :documentation "First room in the connection")
    (room-b :initarg :room-b
            :accessor connection-room-b
+           :initform nil
            :documentation "Second room in the connection")
    (direction-a :initarg :direction-a
                 :accessor connection-direction-a
@@ -31,43 +32,38 @@ name at each end.  Characters cannot traverse a blocked connection."))
 
 (defmethod print-object ((conn mud-connection) stream)
   (print-unreadable-object (conn stream :type t)
-    (format stream "~A — ~A:~A <-> ~A:~A~@[ [BLOCKED]~]"
-            (object-name conn)
-            (object-name (connection-room-a conn))
-            (connection-direction-a conn)
-            (object-name (connection-room-b conn))
-            (connection-direction-b conn)
-            (connection-blocked-p conn))))
+    (let ((ra (connection-room-a conn))
+          (rb (connection-room-b conn)))
+      (format stream "~A~@[ — ~A:~A <-> ~A:~A~]~@[ [BLOCKED]~]"
+              (object-name conn)
+              (and ra rb (object-name ra))
+              (and ra (connection-direction-a conn))
+              (and rb (object-name rb))
+              (and rb (connection-direction-b conn))
+              (connection-blocked-p conn)))))
 
 ;; ─── Constructor ────────────────────────────────────────────────────────────
 
-(defun connect-rooms (room-a direction-a room-b direction-b
-                      &key (name (format nil "passage between ~A and ~A"
-                                         (object-name room-a)
-                                         (object-name room-b)))
-                        blocked)
-  "Create a bidirectional Connection between ROOM-A and ROOM-B.
+(defun make-connection (room-a direction-a room-b direction-b
+                        &key (name (format nil "passage between ~A and ~A"
+                                           (object-name room-a)
+                                           (object-name room-b)))
+                          blocked)
+  "Create and return a new MUD-CONNECTION between ROOM-A and ROOM-B.
 
 DIRECTION-A is the direction name from ROOM-A to ROOM-B (e.g. \"north\").
 DIRECTION-B is the direction name from ROOM-B to ROOM-A (e.g. \"south\").
-When BLOCKED is true the passage starts blocked and cannot be traversed.
+When BLOCKED is true the passage starts blocked.
 
-The connection is recorded in each room's CONNECTIONS list.  Lookup
-happens via ROOM-GET-EXIT which falls back to CONNECTION-FIND when no
-hash-table entry exists.
-
-Returns the new MUD-CONNECTION instance."
-  (let ((conn (make-instance 'mud-connection
-                             :name name
-                             :room-a room-a
-                             :room-b room-b
-                             :direction-a (string-downcase direction-a)
-                             :direction-b (string-downcase direction-b)
-                             :blocked blocked)))
-    ;; Record the connection on both rooms
-    (push conn (room-connections room-a))
-    (push conn (room-connections room-b))
-    conn))
+The connection is NOT linked into any room's connections list or world;
+call CONNECT-ROOMS (in world.lisp) for that."
+  (make-instance 'mud-connection
+                 :name name
+                 :room-a room-a
+                 :room-b room-b
+                 :direction-a (string-downcase direction-a)
+                 :direction-b (string-downcase direction-b)
+                 :blocked blocked))
 
 ;; ─── Helpers ────────────────────────────────────────────────────────────────
 
