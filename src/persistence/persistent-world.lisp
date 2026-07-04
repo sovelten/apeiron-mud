@@ -30,15 +30,6 @@
       (setf (guestbook-entries gb)
             (guestbook-load-from-csv (pathname fp))))))
 
-(defmethod bknr.datastore:initialize-transient-instance ((conn persistent-connection))
-  "Re-register the connection in each room's connections list after restore."
-  (call-next-method)
-  (let ((room-a (connection-room-a conn))
-        (room-b (connection-room-b conn)))
-    (when (and room-a room-b)
-      (push conn (room-connections room-a))
-      (push conn (room-connections room-b)))))
-
 (defwrapping-persistent-class persistent-world (mud-world)
   ()
   (:transient-slots players objects rooms))
@@ -47,27 +38,6 @@
   "Register OBJECT in WORLD by materializing a persistent copy."
   (bknr.datastore:with-transaction ("create-object")
     (materialize-object object world)))
-
-(defmethod connect-rooms! ((world persistent-world) room-a direction-a room-b direction-b
-                           &key (name (format nil "passage between ~A and ~A"
-                                              (object-name room-a)
-                                              (object-name room-b)))
-                             blocked blocked-message)
-  "Create a persistent connection directly in a PERSISTENT-WORLD."
-  (let ((conn (make-instance 'persistent-connection
-                              :name name
-                              :room-a room-a
-                              :room-b room-b
-                              :direction-a (string-downcase direction-a)
-                              :direction-b (string-downcase direction-b)
-                              :blocked blocked
-                              :blocked-message blocked-message)))
-    (bknr.datastore:with-transaction ("connect-rooms!")
-      (setf (object-id conn) (world-gen-id! world))
-      (world-add-object! world conn)
-      (push conn (room-connections room-a))
-      (push conn (room-connections room-b)))
-    conn))
 
 ;; ─── Store lifecycle ────────────────────────────────────────────────────────
 
@@ -145,6 +115,8 @@ close/reopen cycles that trigger BKNR transaction log replay warnings."
                             :direction-b (connection-direction-b obj)
                             :blocked (connection-blocked-p obj)
                             :blocked-message (connection-blocked-message obj))))
+                  (push c (room-connections room-a))
+                  (push c (room-connections room-b))
                   (clone-properties obj c)
                   c))
                (mud-object

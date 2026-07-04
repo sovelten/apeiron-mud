@@ -69,7 +69,7 @@ Returns the registered MUD-CONNECTION instance."))
   (let* ((conn (make-connection room-a direction-a room-b direction-b
                                 :name name :blocked blocked
                                 :blocked-message blocked-message))
-         (registered (world-add-object! world conn)))
+         (registered (create-object! world conn)))
     (push registered (room-connections room-a))
     (push registered (room-connections room-b))
     registered))
