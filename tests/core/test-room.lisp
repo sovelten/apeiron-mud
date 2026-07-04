@@ -41,8 +41,8 @@
     (let ((conn (connect-rooms world room1 "north" room2 "south"
                   :name "forest-cave passage")))
       (is (typep conn 'mud-connection))
-      (is (eq (room-get-exit room1 "north") room2))
-      (is (eq (room-get-exit room2 "south") room1))
+      (is (eq (room-exit-target room1 "north") room2))
+      (is (eq (room-exit-target room2 "south") room1))
       (is (find conn (room-connections room1)))
       (is (find conn (room-connections room2)))
       (is (eq (connection-other-room conn room1) room2))

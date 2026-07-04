@@ -30,7 +30,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
                              (room-challenge-blocked-p room player direction))))
           (if block-msg
               (player-send-message player block-msg)
-              (let ((target-room (room-get-exit room direction)))
+              (let ((target-room (room-exit-target room direction)))
                 (if target-room
                     (progn
                       (object-move player target-room)
@@ -154,7 +154,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
 (define-command "exits" (world player args)
   (declare (ignore world args))
   (let ((room (object-location player)))
-    (let ((exits (mapcar #'first (room-all-exits room))))
+    (let ((exits (mapcar #'first (room-exit-list room))))
       (if exits
           (player-send-message player (format nil "~A~{~A~^, ~}"
                                               (bold-white "Exits: ")

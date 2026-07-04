@@ -133,9 +133,9 @@
    #:new-room
    #:room-exits
    #:room-connections
-   #:room-get-exit
+   #:room-exit-target
    #:room-exit-blocked-p
-   #:room-all-exits
+   #:room-exit-list
    #:room-describe
 
    ;; Connection system

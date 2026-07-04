@@ -16,7 +16,7 @@
          (desert (find-if (lambda (r) (search "Sun-Bleached" (apeiron.core:object-name r)))
                           all-rooms)))
     (is (not (null desert)))
-    (is (not (null (apeiron.core:room-get-exit desert "door"))))
+    (is (not (null (apeiron.core:room-exit-target desert "door"))))
     (is (search "DESERT OASIS MALL" (apeiron.core:object-description desert)))))
 
 (test team-rocket-cavern-maze
@@ -32,7 +32,7 @@
                               (apeiron.core:world-all-objects world))))
     (is (not (null arcade)))
     (is (not (null entrance)))
-    (is (eq entrance (apeiron.core:room-get-exit arcade "maintenance")))
+    (is (eq entrance (apeiron.core:room-exit-target arcade "maintenance")))
     (is (>= (length all-rooms) 15))
     (is (>= (length npcs) 3))
     (is (not (null grunt-room)))

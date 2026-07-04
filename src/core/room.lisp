@@ -3,11 +3,7 @@
 ;; Room class - a specialized mud-object
 
 (defclass mud-room (mud-object container-mixin)
-  ((exits :initarg :exits
-          :accessor room-exits
-          :initform (make-hash-table :test #'equal)
-          :documentation "Map of exit names to target rooms")
-   (connections :initarg :connections
+  ((connections :initarg :connections
                 :accessor room-connections
                 :initform '()
                 :documentation "List of Connection objects attached to this room"))
@@ -28,33 +24,20 @@
                   (string-equal (object-name obj) player-name))
         return obj))
 
-(defun room-get-exit (room direction)
-  "Get the target room for an exit.
+(defun room-exit-target (room direction)
+  "Get the target room when moving in DIRECTION from ROOM.
 
-First checks the legacy hash-table (string-based exits), then falls
-back to Connection objects registered on this room."
-  (or (gethash (string-downcase direction) (room-exits room))
-      (let ((conn (connection-find room direction)))
-        (when conn
-          (connection-other-room conn room)))))
+Returns the room at the other end of the matching Connection, or NIL."
+  (let ((conn (connection-find room direction)))
+    (when conn
+      (connection-other-room conn room))))
 
-(defun room-all-exits (room)
-  "Return a list of (direction connection-or-nil) for every exit in ROOM.
+(defun room-exit-list (room)
+  "Return a list of (direction connection) for every exit in ROOM.
 
-Includes both legacy hash-table entries and Connection-based exits.
-DIRECTION is a lowercase string.  CONNECTION-OR-NIL is the MUD-CONNECTION
-if this exit is backed by a connection, or NIL for legacy string exits."
-  (let ((hash-keys (loop for k being the hash-keys of (room-exits room) collect k))
-        (result '()))
-    ;; Legacy hash-table exits
-    (dolist (key hash-keys)
-      (push (list key (connection-find room key)) result))
-    ;; Connection-only exits
-    (dolist (conn (room-connections room))
-      (let ((dir (connection-direction-to conn room)))
-        (unless (find dir hash-keys :test #'string-equal)
-          (push (list dir conn) result))))
-    (nreverse result)))
+DIRECTION is a lowercase string, CONNECTION is the MUD-CONNECTION."
+  (loop for conn in (room-connections room)
+        collect (list (connection-direction-to conn room) conn)))
 
 (defun room-exit-blocked-p (room player direction)
   "Return a blocking message if the player cannot use this exit yet.
@@ -72,7 +55,7 @@ Checks both flag-based gates (legacy) and Connection-based blocking."
 (defun room-describe (room)
   "Get a full description of a room including contents and exits."
   (let ((contents (container-all-objects room))
-        (exits (room-all-exits room)))
+        (exits (room-exit-list room)))
     (format nil "~%~A~%~A~%~A~%~{~A~%~}~%~A~{~A~^, ~}~%"
             ;; Room name — bold bright white
             (bold-white (format nil "=== ~A ===" (object-name room)))
