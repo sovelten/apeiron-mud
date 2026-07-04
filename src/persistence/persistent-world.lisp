@@ -267,10 +267,6 @@ When FORCE-NEW is true any existing store data is wiped first."
             (let ((location (object-location obj)))
               (when (typep location 'persistent-room)
                 (container-add-object location obj))))
-          ;; Sync the ID counter so new objects don't collide
-          (let ((max-id (loop for obj being the hash-values of (world-objects world)
-                              maximize (object-id obj))))
-            (setf (world-id-counter world) (or max-id 0)))
           (when *debug-mode*
             (log-message "World restored from BKNR datastore."))
           world)
