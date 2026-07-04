@@ -7,11 +7,11 @@ Very simple and raw at the moment, but the fact that it runs on lisp gives it so
 ## Architecture
 
 ```
-     apeiron/core
-     /     |     \
+       apeiron/core
+     /     |        \
 worlds  persistence  telnet
-     \     |     /
-        server
+     \     |         /
+         server
            |
        apeiron (meta)
 ```
@@ -102,45 +102,42 @@ telnet localhost 8888
 
 ### Example Session 
 
-Using eval to create a room:
+Using eval to create a room and connect it:
 
 ```
 What is your name?
 > Frodo
 
-=== The Tavern ===
+=== The Prancing Pony ===
 
 You see:
   - Frodo (ID: 4)
 
-Exits: north
+Exits: west
 
 Welcome to the MUD!
->  eval (apeiron.persistence:create-room! :name "Valinor")) 
-#<MUD-ROOM Valinor (ID: 5)>
-> eval (mud:rooms)
-(#<MUD-ROOM The Tavern (ID: 1)> #<MUD-ROOM A Dense Forest (ID: 2)>
- #<MUD-ROOM Valinor (ID: 5)>)
-> eval (mud:room-add-exits (mud:room-by-id 1) "west" (mud:room-by-id 5) "east")
-#<MUD-ROOM The Tavern (ID: 1)>
+> eval (world-add-object! (world) (new-room :name "Rivendell"))
+#<MUD-ROOM Rivendell (ID: 8)>
+> eval (connect-rooms (world) (here) "east" (world-object-with-name (world) "Rivendell") "west")
+#<MUD-CONNECTION passage between The Prancing Pony and Rivendell (ID: 9)>
 > look
 
-=== The Tavern ===
+=== The Prancing Pony ===
 
 You see:
   - Frodo (ID: 4)
 
-Exits: north, west
+Exits: west, east
 
-> go west
-You go west.
+> go east
+You go east.
 
-=== Valinor ===
+=== Rivendell ===
 
 You see:
   - Frodo (ID: 4)
 
-Exits: east
+Exits: west
 
 > say Where are all the elves?
 You say: Where are all the elves?

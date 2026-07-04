@@ -198,18 +198,15 @@
     (is (null (apeiron.core:world-object-by-id world 999)))))
 
 (test world-object-with-name
-  "Test finding objects by name (case-insensitive)"
+  "Test finding an object by name (case-insensitive)"
   (let ((world (apeiron.core:new-world)))
     (let ((sword  (apeiron.core:new-object :name "Sword"))
-          (shield (apeiron.core:new-object :name "Shield"))
-          (sword2 (apeiron.core:new-object :name "sword")))
+          (shield (apeiron.core:new-object :name "Shield")))
       (apeiron.core:world-add-object! world sword)
       (apeiron.core:world-add-object! world shield)
-      (apeiron.core:world-add-object! world sword2)
-      (let ((results (apeiron.core:world-object-with-name world "Sword")))
-        (is (= 2 (length results)))
-        (is (member sword results))
-        (is (member sword2 results)))
+      (is (eq sword (apeiron.core:world-object-with-name world "Sword")))
+      (is (eq sword (apeiron.core:world-object-with-name world "sword")))
+      (is (eq shield (apeiron.core:world-object-with-name world "Shield")))
       (is (null (apeiron.core:world-object-with-name world "Axe"))))))
 
 (test world-all-objects

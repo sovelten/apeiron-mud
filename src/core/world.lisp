@@ -120,10 +120,10 @@ Returns the new MUD-CONNECTION instance."
   (gethash object-id (world-objects world)))
 
 (defun world-object-with-name (world name)
-  "Return all objects in the world with the given NAME."
+  "Return the first object in the world with the given NAME, or NIL."
   (loop for obj being the hash-values of (world-objects world)
         when (string-equal (object-name obj) name)
-        collect obj))
+        return obj))
 
 (defun world-all-objects (world)
   "Return all objects registered in the world."

@@ -36,5 +36,5 @@
       (apeiron.core:world-add-object! world obj)
       (apeiron.core:world-add-object! world obj2)
       (is (equal obj (apeiron.core:world-object-by-id world (apeiron.core:object-id obj))))
-      (is (equal obj2 (first (apeiron.core:world-object-with-name world "Test Object 2"))))
+      (is (equal obj2 (apeiron.core:world-object-with-name world "Test Object 2")))
       (is (= 2 (length (apeiron.core:world-all-objects world)))))))
