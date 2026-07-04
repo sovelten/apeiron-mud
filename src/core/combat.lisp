@@ -79,15 +79,6 @@
                   (object-move player entrance)))))))
     (nreverse messages)))
 
-(defun room-exit-blocked-p (room player direction)
-  "Return a blocking message if the player cannot use this exit yet."
-  (let* ((dir (string-downcase direction))
-         (required-flag (object-get-property room (format nil "gate-~A" dir))))
-    (when (and required-flag (not (object-get-property player required-flag)))
-      (or (object-get-property room (format nil "gate-~A-message" dir))
-          (format nil "Something blocks the ~A exit. You are not ready to pass."
-                  direction)))))
-
 (defun room-challenge-blocked-p (room player direction)
   "Return a blocking message if a riddle/password gate blocks this exit."
   (let* ((dir (string-downcase direction))

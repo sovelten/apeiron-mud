@@ -47,3 +47,52 @@
     (is (eq alice (apeiron.core:find-character-in-room room "alice")))
     ;; Non-existent name returns nil
     (is (null (apeiron.core:find-character-in-room room "Charlie")))))
+
+(test connection-bidirectional
+  "Test that connect-rooms creates a bidirectional connection"
+  (let ((room1 (new-room :name "Forest"))
+        (room2 (new-room :name "Cave")))
+    (let ((conn (connect-rooms room1 "north" room2 "south"
+                  :name "forest-cave passage")))
+      (is (typep conn 'mud-connection))
+      (is (eq (room-get-exit room1 "north") room2))
+      (is (eq (room-get-exit room2 "south") room1))
+      (is (find conn (room-connections room1)))
+      (is (find conn (room-connections room2)))
+      (is (eq (connection-other-room conn room1) room2))
+      (is (string= (connection-direction-to conn room1) "north"))
+      (is (string= (connection-direction-to conn room2) "south"))
+      (is (eq (connection-find room1 "north") conn))
+      (is (null (connection-find room1 "east")))
+      (is (null (connection-blocked-p conn))))))
+
+(test connection-blocked
+  "Test that blocked connections prevent movement"
+  (let ((room1 (new-room :name "Forest"))
+        (room2 (new-room :name "Cave")))
+    (let ((conn (connect-rooms room1 "north" room2 "south"
+                  :name "locked gate"
+                  :blocked t)))
+      (is-true (connection-blocked-p conn))
+      (is (eq (connection-find room1 "north") conn))
+      (is (stringp (connection-exit-blocked-message room1 "north")))
+      (is (search "blocked" (connection-exit-blocked-message room1 "north")))
+      ;; Toggle unblocked
+      (setf (connection-blocked-p conn) nil)
+      (is-false (connection-blocked-p conn))
+      (is (null (connection-exit-blocked-message room1 "north"))))))
+
+(test connection-works-alongside-legacy-exits
+  "Test that connections and room-add-exit coexist"
+  (let ((room1 (new-room :name "Tavern"))
+        (room2 (new-room :name "Kitchen"))
+        (room3 (new-room :name "Pantry")))
+    ;; Legacy string-based exit
+    (room-add-exit room1 "east" room2)
+    ;; Connection-based exit
+    (connect-rooms room1 "north" room3 "south" :name "service passage")
+    ;; Both work for navigation
+    (is (eq (room-get-exit room1 "east") room2))
+    (is (eq (room-get-exit room1 "north") room3))
+    ;; Connections list only contains the connection
+    (is (= 1 (length (room-connections room1))))))

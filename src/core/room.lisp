@@ -6,7 +6,11 @@
   ((exits :initarg :exits
           :accessor room-exits
           :initform (make-hash-table :test #'equal)
-          :documentation "Map of exit names to target rooms"))
+          :documentation "Map of exit names to target rooms")
+   (connections :initarg :connections
+                :accessor room-connections
+                :initform '()
+                :documentation "List of Connection objects attached to this room"))
   (:documentation "A location/room in the MUD"))
 
 (defun new-room (&key (name "A Room") (description ""))
@@ -37,11 +41,27 @@
   "Get the target room for an exit."
   (gethash (string-downcase direction) (room-exits room)))
 
+(defun room-exit-blocked-p (room player direction)
+  "Return a blocking message if the player cannot use this exit yet.
+
+Checks both flag-based gates (legacy) and Connection-based blocking."
+  (let* ((dir (string-downcase direction))
+         (required-flag (object-get-property room (format nil "gate-~A" dir))))
+    (or (when (and required-flag (not (object-get-property player required-flag)))
+          (or (object-get-property room (format nil "gate-~A-message" dir))
+              (format nil "Something blocks the ~A exit. You are not ready to pass."
+                      direction)))
+        ;; Also check if a Connection object blocks this direction
+        (connection-exit-blocked-message room direction))))
+
 (defun room-describe (room)
   "Get a full description of a room including contents and exits."
   (let ((contents (container-all-objects room))
         (exits (loop for key being the hash-keys of (room-exits room)
-                     collect key)))
+                     collect (let ((conn (connection-find room key)))
+                               (if (and conn (connection-blocked-p conn))
+                                   (format nil "~A ~A" (yellow key) (bold-red "(blocked)"))
+                                   (yellow key))))))
     (format nil "~%~A~%~A~%~A~%~{~A~%~}~%~A~{~A~^, ~}~%"
             ;; Room name — bold bright white
             (bold-white (format nil "=== ~A ===" (object-name room)))
@@ -55,5 +75,5 @@
                     contents)
             ;; "Exits:" header
             (bold-white "Exits: ")
-            ;; Exit directions — yellow
-            (mapcar #'yellow exits))))
+            ;; Exit directions — yellow, with (blocked) suffix if applicable
+            exits)))

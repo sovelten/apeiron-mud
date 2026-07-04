@@ -19,6 +19,9 @@
 (defwrapping-persistent-class persistent-npc (mud-npc persistent-object)
   ())
 
+(defwrapping-persistent-class persistent-connection (mud-connection persistent-object)
+  ())
+
 (defmethod bknr.datastore:initialize-transient-instance ((gb persistent-guestbook))
   "Re-read guestbook entries from the CSV file after restore."
   (call-next-method)
@@ -26,6 +29,19 @@
     (when fp
       (setf (guestbook-entries gb)
             (guestbook-load-from-csv (pathname fp))))))
+
+(defmethod bknr.datastore:initialize-transient-instance ((conn persistent-connection))
+  "Re-link the connection's rooms and rebuild exit hash-entries after restore."
+  (call-next-method)
+  (let ((room-a (connection-room-a conn))
+        (room-b (connection-room-b conn)))
+    (when (and room-a room-b)
+      ;; Rebuild the bidirectional exit hash-table entries
+      (room-add-exit room-a (connection-direction-a conn) room-b)
+      (room-add-exit room-b (connection-direction-b conn) room-a)
+      ;; Re-register in each room's connections list
+      (push conn (room-connections room-a))
+      (push conn (room-connections room-b)))))
 
 (defwrapping-persistent-class persistent-world (mud-world)
   ()
@@ -98,6 +114,15 @@ close/reopen cycles that trigger BKNR transaction log replay warnings."
                            :description (object-description obj))))
                   (clone-properties obj r)
                   r))
+               (mud-connection
+                (let ((c (make-instance 'persistent-connection
+                            :name (object-name obj)
+                            :description (object-description obj)
+                            :direction-a (connection-direction-a obj)
+                            :direction-b (connection-direction-b obj)
+                            :blocked (connection-blocked-p obj))))
+                  (clone-properties obj c)
+                  c))
                (mud-object
                 (let ((o (make-instance 'persistent-object
                            :name (object-name obj)
@@ -123,6 +148,21 @@ by matching IDs in PERSISTENT-WORLD's object index."
                   (let ((new-loc (world-object-by-id persistent-world (object-id old-loc))))
                     (when new-loc
                       (setf (object-location p) new-loc)))))
+              ;; Connection room references
+              (when (typep obj 'mud-connection)
+                (let ((room-a (world-object-by-id persistent-world
+                                                  (object-id (connection-room-a obj))))
+                      (room-b (world-object-by-id persistent-world
+                                                  (object-id (connection-room-b obj)))))
+                  (when (and room-a room-b)
+                    (setf (connection-room-a p) room-a
+                          (connection-room-b p) room-b)
+                    ;; Rebuild the connection's bidirectional exit hash entries
+                    (room-add-exit room-a (connection-direction-a p) room-b)
+                    (room-add-exit room-b (connection-direction-b p) room-a)
+                    ;; Re-register in each room's connections list
+                    (push p (room-connections room-a))
+                    (push p (room-connections room-b)))))
               ;; Room-specific relationships
               (when (typep obj 'mud-room)
                 ;; Exits
