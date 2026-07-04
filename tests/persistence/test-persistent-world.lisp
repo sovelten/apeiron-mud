@@ -48,6 +48,33 @@ reflect the transient world's counter so new objects don't get duplicate IDs."
           "New room ID ~D should exceed the highest existing ID ~D"
           new-id max-id))))
 
+(test connections-not-duplicated-after-restore
+  "After closing and reopening the BKNR store, a room's connections list
+must not contain duplicates.  Connections are persisted in the store and
+INITIALIZE-TRANSIENT-INSTANCE pushes again on restore, so without marking
+the slot transient each restore doubles the list."
+  (let* ((world (apeiron.persistence:world-restore-or-initialize :force-new t))
+         (gathering (apeiron.core:starting-room world)))
+    ;; The Gathering has 4 connections (north, east, west, south)
+    (is (= 4 (length (apeiron.core:room-connections gathering)))
+        "Should have exactly 4 connections before restart")
+    ;; First restart
+    (apeiron.persistence:sync-world)
+    (bknr.datastore:close-store)
+    (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
+           (reloaded (apeiron.core:starting-room new-world)))
+      (is (= 4 (length (apeiron.core:room-connections reloaded)))
+          "After 1st restart: should have 4 connections, not ~D"
+          (length (apeiron.core:room-connections reloaded)))
+      ;; Second restart — this often reveals the duplication
+      (apeiron.persistence:sync-world)
+      (bknr.datastore:close-store)
+      (let* ((newer-world (apeiron.persistence:world-restore-or-initialize))
+             (reloaded2 (apeiron.core:starting-room newer-world)))
+        (is (= 4 (length (apeiron.core:room-connections reloaded2)))
+            "After 2nd restart: should have 4 connections, not ~D"
+            (length (apeiron.core:room-connections reloaded2)))))))
+
 (test guestbook-persistence
   "Test that guestbook entries survive store close/reopen via CSV persistence."
   ;; Clean up any leftover CSV from earlier runs
