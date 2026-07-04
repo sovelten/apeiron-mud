@@ -154,8 +154,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
 (define-command "exits" (world player args)
   (declare (ignore world args))
   (let ((room (object-location player)))
-    (let ((exits (loop for key being the hash-keys of (room-exits room)
-                       collect key)))
+    (let ((exits (mapcar #'first (room-all-exits room))))
       (if exits
           (player-send-message player (format nil "~A~{~A~^, ~}"
                                               (bold-white "Exits: ")

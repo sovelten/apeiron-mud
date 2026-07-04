@@ -137,6 +137,7 @@
    #:room-add-exits
    #:room-get-exit
    #:room-exit-blocked-p
+   #:room-all-exits
    #:room-describe
 
    ;; Connection system

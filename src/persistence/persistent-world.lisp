@@ -31,15 +31,11 @@
             (guestbook-load-from-csv (pathname fp))))))
 
 (defmethod bknr.datastore:initialize-transient-instance ((conn persistent-connection))
-  "Re-link the connection's rooms and rebuild exit hash-entries after restore."
+  "Re-register the connection in each room's connections list after restore."
   (call-next-method)
   (let ((room-a (connection-room-a conn))
         (room-b (connection-room-b conn)))
     (when (and room-a room-b)
-      ;; Rebuild the bidirectional exit hash-table entries
-      (room-add-exit room-a (connection-direction-a conn) room-b)
-      (room-add-exit room-b (connection-direction-b conn) room-a)
-      ;; Re-register in each room's connections list
       (push conn (room-connections room-a))
       (push conn (room-connections room-b)))))
 
@@ -157,9 +153,6 @@ by matching IDs in PERSISTENT-WORLD's object index."
                   (when (and room-a room-b)
                     (setf (connection-room-a p) room-a
                           (connection-room-b p) room-b)
-                    ;; Rebuild the connection's bidirectional exit hash entries
-                    (room-add-exit room-a (connection-direction-a p) room-b)
-                    (room-add-exit room-b (connection-direction-b p) room-a)
                     ;; Re-register in each room's connections list
                     (push p (room-connections room-a))
                     (push p (room-connections room-b)))))

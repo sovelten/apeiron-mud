@@ -2,8 +2,8 @@
 ;;;;
 ;;;; A Connection is a first-class MUD object representing a bidirectional
 ;;;; passage between two rooms.  It lives alongside the legacy string-based
-;;;; exit system: connecting two rooms populates the same exit hash-tables
-;;;; that ROOM-ADD-EXIT / ROOM-GET-EXIT use.
+;;;; exit system: ROOM-GET-EXIT falls back to CONNECTION-FIND when no
+;;;; hash-table entry exists, so connections work transparently.
 
 (in-package #:apeiron.core)
 
@@ -52,8 +52,9 @@ DIRECTION-A is the direction name from ROOM-A to ROOM-B (e.g. \"north\").
 DIRECTION-B is the direction name from ROOM-B to ROOM-A (e.g. \"south\").
 When BLOCKED is true the passage starts blocked and cannot be traversed.
 
-The connection is recorded in both rooms' EXITS hash-table (so
-ROOM-GET-EXIT still works) and in each room's CONNECTIONS list.
+The connection is recorded in each room's CONNECTIONS list.  Lookup
+happens via ROOM-GET-EXIT which falls back to CONNECTION-FIND when no
+hash-table entry exists.
 
 Returns the new MUD-CONNECTION instance."
   (let ((conn (make-instance 'mud-connection
@@ -63,9 +64,6 @@ Returns the new MUD-CONNECTION instance."
                              :direction-a (string-downcase direction-a)
                              :direction-b (string-downcase direction-b)
                              :blocked blocked)))
-    ;; Populate the room exit hash-tables (legacy compat)
-    (room-add-exit room-a (connection-direction-a conn) room-b)
-    (room-add-exit room-b (connection-direction-b conn) room-a)
     ;; Record the connection on both rooms
     (push conn (room-connections room-a))
     (push conn (room-connections room-b))
