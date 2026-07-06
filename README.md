@@ -31,12 +31,23 @@ Core is the shared foundation. Worlds and persistence build on it independently 
 
 ## Table of Contents
 
-1. [Quick Start (5 minutes)](#quick-start)
-2. [Features](#features)
-3. [Architecture](#architecture)
-4. [Development Guide](#development-guide)
-5. [Deployment](#deployment)
-6. [Troubleshooting](#troubleshooting)
+1. [MCP Server (LLM integration)](#mcp-server)
+2. [Quick Start (5 minutes)](#quick-start)
+3. [Features](#features)
+4. [Architecture](#architecture)
+5. [Development Guide](#development-guide)
+6. [Deployment](#deployment)
+7. [Troubleshooting](#troubleshooting)
+
+---
+
+## MCP Server
+
+An [MCP (Model Context Protocol)](https://spec.modelcontextprotocol.io/) server
+is included in `mcp/`.  It lets an LLM (Claude, Continue, etc.) connect to the
+MUD as a player character, issue commands, and run Lisp code in the game world.
+
+See [mcp/README.md](mcp/README.md) for setup and usage.
 
 ---
 

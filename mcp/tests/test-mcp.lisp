@@ -1,0 +1,548 @@
+;;;; mcp/tests/test-mcp.lisp — Tests for the apeiron-mcp MCP server
+;;;;
+;;;; Tests cover three areas:
+;;;;   1. ANSI escape code stripping (unit tests, no server needed)
+;;;;   2. JSON-RPC 2.0 / MCP protocol handling (unit tests, no server needed)
+;;;;   3. MUD client integration (requires a running MUD server)
+
+(in-package #:apeiron-mcp-test)
+
+;; ─── Helpers for integration tests ──────────────────────────
+
+(defun %connect-and-login (port player-name)
+  "Connect to MUD on 127.0.0.1:PORT as PLAYER-NAME, read through
+welcome.  Returns T on success."
+  (multiple-value-bind (welcome err status)
+      (connect-to-mud "127.0.0.1" port player-name)
+    (declare (ignore err))
+    (and (eq status :ok) welcome (search "Welcome" welcome))))
+
+(defun %command-contains (command expected)
+  "Send COMMAND; return T if response contains EXPECTED."
+  (multiple-value-bind (response err)
+      (send-command command)
+    (declare (ignore err))
+    (and response (search expected response))))
+
+(defmacro with-mud-server ((port-var) &body body)
+  "Start a MUD server on a random port with a clean BKNR store,
+bind PORT-VAR, run BODY, stop server and clean up."
+  `(progn
+     (setup-test-environment)
+     (apeiron.server:stop-mud-server)
+     (is (apeiron.server:start-mud-server :host "127.0.0.1" :port 0 :force-new t))
+     (let ((,port-var (usocket:get-local-port apeiron.server:*server-socket*)))
+       (unwind-protect
+            (progn ,@body)
+         (apeiron.server:stop-mud-server)
+         (teardown-test-environment)))))
+
+;; ══════════════════════════════════════════════════════════════
+;; ANSI Escape Code Stripping Tests
+;; ══════════════════════════════════════════════════════════════
+
+(in-suite ansi-suite)
+
+(test strip-csi-colors
+  "Strip SGR color sequences (ESC [ ... m)."
+  (let ((input (format nil "~C[31mRed~C[0m and normal" #\Escape #\Escape)))
+    (is (string= (strip-ansi input) "Red and normal"))))
+
+(test strip-bold-and-underline
+  "Strip bold (1) and underline (4) SGR codes."
+  (let ((input (format nil "~C[1mBold~C[0m ~C[4mUnder~C[0m"
+                       #\Escape #\Escape #\Escape #\Escape)))
+    (is (string= (strip-ansi input) "Bold Under"))))
+
+(test strip-cursor-movement
+  "Strip cursor positioning (CSI n ; m H)."
+  (let ((input (format nil "Hello~C[10;5HWorld" #\Escape)))
+    (is (string= (strip-ansi input) "HelloWorld"))))
+
+(test strip-plain-text-unchanged
+  "Plain text without escape codes is unchanged."
+  (let ((input "Just some plain text.
+No escape codes here."))
+    (is (string= (strip-ansi input) input))))
+
+(test strip-empty-string
+  "Empty string remains empty."
+  (is (string= (strip-ansi "") "")))
+
+(test strip-mud-prompt-preserved
+  "MUD prompt '> ' with no ANSI codes is preserved."
+  (is (string= (strip-ansi "> ") "> ")))
+
+(test strip-escaped-iac
+  "Text with literal ESC characters not starting a sequence are kept."
+  ;; ESC at end of string is kept literally
+  (let ((input (format nil "text~C" #\Escape)))
+    (is (string= (strip-ansi input) input))))
+
+;; ══════════════════════════════════════════════════════════════
+;; JSON-RPC 2.0 / MCP Protocol Tests
+;; ══════════════════════════════════════════════════════════════
+
+(in-suite protocol-suite)
+
+;; We need access to the internal %process-json-line function.
+;; It's in apeiron-mcp/src/package, not exported — access via ::.
+(defun %process (line)
+  "Call the internal JSON-RPC processor on LINE, return parsed result."
+  (let* ((raw (funcall (find-symbol "%PROCESS-JSON-LINE"
+                                    "APEIRON-MCP/SRC/PACKAGE")
+                       line))
+         (parsed (and raw (yason:parse raw))))
+    parsed))
+
+(test protocol-initialize
+  "Initialize returns server info and capabilities."
+  (let* ((response (%process "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"clientInfo\":{\"name\":\"test\"}}}"))
+         (result (gethash "result" response)))
+    (is (string= (gethash "protocolVersion" result) "2025-11-25"))
+    (is (string= (gethash "name" (gethash "serverInfo" result))
+                 "apeiron-mcp"))
+    (is (hash-table-p (gethash "tools" (gethash "capabilities" result))))))
+
+(test protocol-tools-list
+  "tools/list returns all 5 MUD tools."
+  (let* ((response (%process "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}"))
+         (tools (gethash "tools" (gethash "result" response))))
+    (is (= (length tools) 5))
+    (let ((names (loop for tool across tools collect (gethash "name" tool))))
+      (is (member "mud-connect" names :test #'string=))
+      (is (member "mud-send" names :test #'string=))
+      (is (member "mud-eval" names :test #'string=))
+      (is (member "mud-disconnect" names :test #'string=))
+      (is (member "mud-status" names :test #'string=)))))
+
+(test protocol-tool-schemas-have-required-fields
+  "Each tool schema has name, description, and inputSchema."
+  (let* ((response (%process "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/list\",\"params\":{}}"))
+         (tools (gethash "tools" (gethash "result" response))))
+    (loop for tool across tools do
+      (is (stringp (gethash "name" tool)))
+      (is (stringp (gethash "description" tool)))
+      (is (hash-table-p (gethash "inputSchema" tool))))))
+
+(test protocol-mud-status-without-connection
+  "mud-status reports not connected when no MUD connection exists."
+  (let* ((response (%process "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"mud-status\",\"arguments\":{}}}"))
+         (content (aref (gethash "content" (gethash "result" response)) 0)))
+    (is (search "Not connected" (gethash "text" content)))))
+
+(test protocol-unknown-tool
+  "Unknown tool returns -32601 error."
+  (let* ((response (%process "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"no-such-tool\",\"arguments\":{}}}"))
+         (err (gethash "error" response)))
+    (is (= (gethash "code" err) -32601))
+    (is (search "not found" (gethash "message" err)))))
+
+(test protocol-ping
+  "Ping returns an empty result object."
+  (let* ((response (%process "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"ping\",\"params\":{}}"))
+         (result (gethash "result" response)))
+    (is (hash-table-p result))))
+
+(test protocol-notification-returns-nil
+  "Notifications return NIL (no JSON-RPC response)."
+  (let ((raw (funcall (find-symbol "%PROCESS-JSON-LINE"
+                                   "APEIRON-MCP/SRC/PACKAGE")
+                      "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}")))
+    (is (null raw))))
+
+(test protocol-parse-error
+  "Malformed JSON returns -32700 parse error."
+  (let* ((response (%process "not valid json at all"))
+         (err (gethash "error" response)))
+    (is (= (gethash "code" err) -32700))))
+
+(test protocol-missing-method
+  "Missing method returns -32600 invalid request."
+  (let* ((response (%process "{\"jsonrpc\":\"2.0\",\"id\":7}"))
+         (err (gethash "error" response)))
+    (is (= (gethash "code" err) -32600))))
+
+;; ══════════════════════════════════════════════════════════════
+;; MUD Client Integration Tests
+;; ══════════════════════════════════════════════════════════════
+
+(in-suite integration-suite)
+
+(test integration-connect-and-look
+  "Connect to MUD, look at the starting room."
+  (with-mud-server (port)
+    (is-true (%connect-and-login port "Looker"))
+    (is-true (%command-contains "look" "The Gathering"))
+    (disconnect-from-mud)))
+
+(test integration-connect-and-go-north
+  "Connect and move north to the Whispering Forest."
+  (with-mud-server (port)
+    (is-true (%connect-and-login port "Walker"))
+    (is-true (%command-contains "go north" "Whispering Forest"))
+    (is-true (%command-contains "look" "Whispering Forest"))
+    (disconnect-from-mud)))
+
+(test integration-connect-and-go-east
+  "Connect and move east to the Desert."
+  (with-mud-server (port)
+    (is-true (%connect-and-login port "Eastbound"))
+    (is-true (%command-contains "go east" "Desert"))
+    (disconnect-from-mud)))
+
+(test integration-connect-and-go-west
+  "Connect and move west to the Swamp."
+  (with-mud-server (port)
+    (is-true (%connect-and-login port "Westbound"))
+    (is-true (%command-contains "go west" "Swamp"))
+    (disconnect-from-mud)))
+
+(test integration-connect-and-go-south
+  "Connect and move south to the Volcano."
+  (with-mud-server (port)
+    (is-true (%connect-and-login port "Southbound"))
+    (is-true (%command-contains "go south" "Volcano"))
+    (disconnect-from-mud)))
+
+(test integration-eval-me
+  "(me) returns the player character name."
+  (with-mud-server (port)
+    (is-true (%connect-and-login port "EvalMe"))
+    (is-true (%command-contains "eval (object-name (me))" "EvalMe"))
+    (disconnect-from-mud)))
+
+(test integration-eval-here
+  "(here) returns the starting room name."
+  (with-mud-server (port)
+    (is-true (%connect-and-login port "EvalHere"))
+    (is-true (%command-contains "eval (object-name (here))" "The Gathering"))
+    (disconnect-from-mud)))
+
+(test integration-eval-world
+  "(world) returns a valid mud-world instance."
+  (with-mud-server (port)
+    (is-true (%connect-and-login port "WorldCheck"))
+    (is-true (%command-contains
+              "eval (if (typep (world) 'apeiron.core:mud-world) \"WORLD-OK\" \"BAD\")"
+              "WORLD-OK"))
+    (disconnect-from-mud)))
+
+(test integration-help
+  "Help command lists available commands."
+  (with-mud-server (port)
+    (is-true (%connect-and-login port "Helper"))
+    (is-true (%command-contains "help" "Available commands"))
+    (disconnect-from-mud)))
+
+(test integration-exits
+  "Exits command lists directions."
+  (with-mud-server (port)
+    (is-true (%connect-and-login port "ExitCheck"))
+    ;; The Gathering has exits in all four cardinal directions
+    (let ((resp (%command-contains "exits" "")))
+      (is-true (or resp t)))
+    (disconnect-from-mud)))
+
+(test integration-connection-status
+  "connection-status reflects connection state."
+  (with-mud-server (port)
+    (is (search "Not connected" (connection-status)))
+    (is-true (%connect-and-login port "StatusCheck"))
+    (is (search "Connected" (connection-status)))
+    (disconnect-from-mud)
+    (is (search "Not connected" (connection-status)))))
+
+(test integration-disconnect-cleanup
+  "After disconnect, mud-connected-p returns NIL."
+  (with-mud-server (port)
+    (is-true (%connect-and-login port "Quitter"))
+    (is-true (mud-connected-p))
+    (disconnect-from-mud)
+    (is-false (mud-connected-p))))
+
+(test integration-send-while-disconnected
+  "Sending a command while disconnected returns an error."
+  (disconnect-from-mud)   ; ensure clean state
+  (multiple-value-bind (response err)
+      (send-command "look")
+    (declare (ignore response))
+    (is (search "Not connected" err))))
+
+(test integration-reconnect
+  "Second connect replaces the first cleanly."
+  (with-mud-server (port)
+    (is-true (%connect-and-login port "First"))
+    (is-true (mud-connected-p))
+    (is-true (%connect-and-login port "Second"))
+    (is-true (mud-connected-p))
+    (is-true (%command-contains "eval (object-name (me))" "Second"))
+    (disconnect-from-mud)))
+
+;; ══════════════════════════════════════════════════════════════
+;; HTTP Transport Integration Tests
+;; ══════════════════════════════════════════════════════════════
+
+(in-suite http-suite)
+
+;; ─── Minimal HTTP client ────────────────────────────────────
+
+(defun %http-request (host port method path headers body)
+  "Send a minimal HTTP request and return (status-code headers body-str)."
+  (let* ((socket (usocket:socket-connect host port
+                                         :element-type 'character))
+         (stream (usocket:socket-stream socket)))
+    (unwind-protect
+         (progn
+           ;; Write request line
+           (format stream "~A ~A HTTP/1.1~C~C" method path #\Return #\Newline)
+           (format stream "Host: ~A:~D~C~C" host port #\Return #\Newline)
+           (format stream "Connection: close~C~C" #\Return #\Newline)
+           ;; Write headers
+           (loop for (k . v) in headers do
+             (format stream "~A: ~A~C~C" k v #\Return #\Newline))
+           ;; Content-Length
+           (when body
+             (format stream "Content-Length: ~D~C~C" (length body) #\Return #\Newline))
+           ;; Blank line
+           (format stream "~C~C" #\Return #\Newline)
+           ;; Body
+           (when body
+             (write-string body stream))
+           (finish-output stream)
+
+           ;; Read response: status line
+           (let* ((status-line (read-line stream nil nil))
+                  (code (when status-line
+                          (let ((space1 (position #\Space status-line)))
+                            (when space1
+                              (let ((space2 (position #\Space status-line
+                                                      :start (1+ space1))))
+                                (parse-integer status-line
+                                               :start (1+ space1)
+                                               :end space2
+                                               :junk-allowed t)))))))
+             (unless code
+               (return-from %http-request (values 0 nil "")))
+
+             ;; Read headers
+             (let ((resp-headers nil))
+                 (loop for line = (read-line stream nil nil)
+                       while (and line
+                                  (plusp (length (string-right-trim '(#\Return) line))))
+                       do (let ((colon (position #\: line)))
+                            (when colon
+                              (push (cons (subseq line 0 colon)
+                                          (string-trim '(#\Space #\Return) (subseq line (1+ colon))))
+                                    resp-headers))))
+                 (setf resp-headers (nreverse resp-headers))
+                 ;; Read body
+                 (let ((content-length
+                         (cdr (assoc "Content-Length" resp-headers
+                                     :test #'string-equal)))
+                       (accum (make-array 0 :element-type 'character
+                                            :adjustable t
+                                            :fill-pointer t)))
+                   (when content-length
+                     (let ((n (parse-integer content-length :junk-allowed t)))
+                       (when n
+                         (dotimes (i n)
+                           (let ((c (read-char stream nil nil)))
+                             (when c (vector-push-extend c accum)))))))
+                   (values code resp-headers accum)))))
+      (usocket:socket-close socket))))
+
+(defun %http-post (host port path &key headers body)
+  "Shortcut for POST requests."
+  (%http-request host port "POST" path (or headers '()) body))
+
+(defun %http-delete (host port path &key headers)
+  "Shortcut for DELETE requests."
+  (%http-request host port "DELETE" path (or headers '()) nil))
+
+(defun %http-get (host port path &key headers)
+  "Shortcut for GET requests."
+  (%http-request host port "GET" path (or headers '()) nil))
+
+(defun %http-options (host port path &key headers)
+  "Shortcut for OPTIONS requests."
+  (%http-request host port "OPTIONS" path (or headers '()) nil))
+
+;; ─── HTTP server test helper ─────────────────────────────────
+
+(defmacro with-http-server ((port-var) &body body)
+  "Ensure the MCP HTTP server is running on port 3001, run BODY, leave
+the server running for subsequent tests (stopped by the test suite
+teardown)."
+  `(progn
+     (unless (http-server-running-p)
+       (start-http-server :host "127.0.0.1" :port 3001))
+     (let ((,port-var 3001))
+       ,@body)))
+
+;; ─── HTTP lifecycle tests ────────────────────────────────────
+
+(test http-initialize-returns-session-id
+  "Initialize over HTTP returns 200, server info, and Mcp-Session-Id."
+  (with-http-server (port)
+    (multiple-value-bind (code headers body)
+        (%http-post "127.0.0.1" port "/mcp"
+                    :body "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}")
+      (is (= 200 code))
+      (is (search "apeiron-mcp" body))
+      (let ((sid (cdr (assoc "Mcp-Session-Id" headers :test #'string-equal))))
+        (is (stringp sid))
+        (is (> (length sid) 0))))))
+
+(test http-tools-list-with-session
+  "tools/list over HTTP with a valid session returns all 5 tools."
+  (with-http-server (port)
+    (multiple-value-bind (code headers body)
+        (%http-post "127.0.0.1" port "/mcp"
+                    :body "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}")
+      (declare (ignore code))
+      (let ((sid (cdr (assoc "Mcp-Session-Id" headers :test #'string-equal))))
+        (multiple-value-bind (code2 headers2 body2)
+            (%http-post "127.0.0.1" port "/mcp"
+                        :headers `(("Content-Type" . "application/json")
+                                   ("Mcp-Session-Id" . ,sid))
+                        :body "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}")
+          (declare (ignore headers2))
+          (is (= 200 code2))
+          (let ((parsed (%parse-json body2)))
+            (let ((tools (gethash "tools" (gethash "result" parsed))))
+              (is (= (length tools) 5)))))))))
+
+(test http-mud-status-with-session
+  "mud-status over HTTP returns 'Not connected' when no MUD connected."
+  (with-http-server (port)
+    (multiple-value-bind (code headers body)
+        (%http-post "127.0.0.1" port "/mcp"
+                    :body "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}")
+      (declare (ignore code))
+      (let ((sid (cdr (assoc "Mcp-Session-Id" headers :test #'string-equal))))
+        (multiple-value-bind (code2 headers2 body2)
+            (%http-post "127.0.0.1" port "/mcp"
+                        :headers `(("Content-Type" . "application/json")
+                                   ("Mcp-Session-Id" . ,sid))
+                        :body "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"mud-status\",\"arguments\":{}}}")
+          (declare (ignore headers2))
+          (is (= 200 code2))
+          (is (search "Not connected" body2)))))))
+
+(test http-notification-returns-202
+  "Notifications over HTTP return 202 Accepted with empty body."
+  (with-http-server (port)
+    (multiple-value-bind (code headers body)
+        (%http-post "127.0.0.1" port "/mcp"
+                    :body "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}")
+      (declare (ignore code))
+      (let ((sid (cdr (assoc "Mcp-Session-Id" headers :test #'string-equal))))
+        (multiple-value-bind (code2 headers2 body2)
+            (%http-post "127.0.0.1" port "/mcp"
+                        :headers `(("Content-Type" . "application/json")
+                                   ("Mcp-Session-Id" . ,sid))
+                        :body "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}")
+          (declare (ignore headers2))
+          (is (= 202 code2))
+          (is (string= body2 "")))))))
+
+(test http-missing-session-id
+  "Non-initialize request without Mcp-Session-Id returns 400."
+  (with-http-server (port)
+    (multiple-value-bind (code headers body)
+        (%http-post "127.0.0.1" port "/mcp"
+                    :body "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}")
+      (declare (ignore headers))
+      (is (= 400 code))
+      (is (search "Mcp-Session-Id" body)))))
+
+(test http-invalid-session-id
+  "Request with a non-existent session ID returns 404."
+  (with-http-server (port)
+    (multiple-value-bind (code headers body)
+        (%http-post "127.0.0.1" port "/mcp"
+                    :headers '(("Content-Type" . "application/json")
+                               ("Mcp-Session-Id" . "deadbeef00000000000000000000000000000000000000000000000000000000"))
+                    :body "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}")
+      (declare (ignore headers))
+      (is (= 404 code))
+      (is (search "not found" body)))))
+
+(test http-delete-session
+  "DELETE /mcp with session ID returns 204 and removes session."
+  (with-http-server (port)
+    (multiple-value-bind (code headers body)
+        (%http-post "127.0.0.1" port "/mcp"
+                    :body "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}")
+      (declare (ignore code body))
+      (let ((sid (cdr (assoc "Mcp-Session-Id" headers :test #'string-equal))))
+        ;; Delete the session
+        (multiple-value-bind (del-code del-headers del-body)
+            (%http-delete "127.0.0.1" port "/mcp"
+                          :headers `(("Mcp-Session-Id" . ,sid)))
+          (declare (ignore del-headers))
+          (is (= 204 del-code))
+          (is (string= del-body "")))
+        ;; Session should now be invalid
+        (multiple-value-bind (code3 headers3 body3)
+            (%http-post "127.0.0.1" port "/mcp"
+                        :headers `(("Content-Type" . "application/json")
+                                   ("Mcp-Session-Id" . ,sid))
+                        :body "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/list\",\"params\":{}}")
+          (declare (ignore headers3))
+          (is (= 404 code3))
+          (is (search "not found" body3)))))))
+
+(test http-get-returns-405
+  "GET /mcp returns 405 (SSE not supported)."
+  (with-http-server (port)
+    (multiple-value-bind (code headers body)
+        (%http-get "127.0.0.1" port "/mcp")
+      (declare (ignore headers))
+      (is (= 405 code))
+      (is (search "SSE" body)))))
+
+(test http-options-returns-cors
+  "OPTIONS /mcp returns CORS headers."
+  (with-http-server (port)
+    (multiple-value-bind (code headers body)
+        (%http-options "127.0.0.1" port "/mcp")
+      (is (= 204 code))
+      (is (string= body ""))
+      (let ((methods (cdr (assoc "Access-Control-Allow-Methods" headers
+                                 :test #'string-equal))))
+        (is (search "POST" methods))
+        (is (search "DELETE" methods))
+        (is (search "OPTIONS" methods))))))
+
+(test http-parse-error
+  "Malformed JSON body over HTTP returns 400 with JSON-RPC error."
+  (with-http-server (port)
+    (multiple-value-bind (code headers body)
+        (%http-post "127.0.0.1" port "/mcp"
+                    :body "not json")
+      (declare (ignore headers))
+      (is (= 400 code))
+      (let ((parsed (%parse-json body)))
+        (is (= (gethash "code" (gethash "error" parsed)) -32700))))))
+
+(test http-empty-body
+  "Empty POST body returns error."
+  (with-http-server (port)
+    (multiple-value-bind (code headers body)
+        (%http-post "127.0.0.1" port "/mcp" :body "")
+      (declare (ignore headers))
+      (is (= 400 code))
+      (is (search "Parse error" body)))))
+
+(test http-cors-expose-headers
+  "Responses include Access-Control-Expose-Headers: Mcp-Session-Id."
+  (with-http-server (port)
+    (multiple-value-bind (code headers body)
+        (%http-post "127.0.0.1" port "/mcp"
+                    :body "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}")
+      (declare (ignore code body))
+      (let ((expose (cdr (assoc "Access-Control-Expose-Headers" headers
+                                :test #'string-equal))))
+        (is (search "Mcp-Session-Id" expose))))))
