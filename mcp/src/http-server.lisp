@@ -99,6 +99,19 @@ Uses prefix matching with boundary checks to prevent substring attacks."
 
 ;; ─── MCP dispatcher ─────────────────────────────────────────────
 
+(defun %session-restore-connection (state)
+  "Bind *MUD-CONNECTION* to the connection stored in STATE (if any).
+Returns the previous value so the caller can restore it."
+  (let ((old *mud-connection*)
+        (session-conn (gethash :mud-conn state)))
+    (when session-conn
+      (setf *mud-connection* session-conn))
+    old))
+
+(defun %session-save-connection (state)
+  "Save the current *MUD-CONNECTION* into STATE."
+  (setf (gethash :mud-conn state) *mud-connection*))
+
 (defun mcp-handler ()
   "Easy-handler function for POST /mcp.
 
@@ -156,17 +169,82 @@ teardown, OPTIONS for CORS preflight, GET returns 405 (no SSE)."
                                  (format nil "Session ~A not found or expired"
                                          session-id)
                                  :status 404)))
-                (let ((response (%process-json-line body state)))
-                  (if response
-                      (%json-response response)
-                      (progn
-                        (setf (hunchentoot:return-code*)
-                              hunchentoot:+http-accepted+)
-                        ""))))))))))
+                ;; Restore this session's MUD connection
+                (let ((old-conn (%session-restore-connection state)))
+                  (unwind-protect
+                       (let ((response (%process-json-line body state)))
+                         (%session-save-connection state)
+                         (if response
+                             (%json-response response)
+                             (progn
+                               (setf (hunchentoot:return-code*)
+                                     hunchentoot:+http-accepted+)
+                               "")))
+                    (setf *mud-connection* old-conn))))))))))
 
     (:get
-     (%json-error -32601 "SSE not supported.  Use POST for request/response."
-                  :status 405))
+     ;; SSE — Server-Sent Events for MUD output notifications.
+     (let ((session-id (%request-header :mcp-session-id)))
+       (unless session-id
+         (return-from mcp-handler
+           (%json-error -32600 "Missing Mcp-Session-Id header for SSE")))
+       (let ((state (%get-session-state session-id)))
+         (unless state
+           (return-from mcp-handler
+             (%json-error -32600 (format nil "Session ~A not found" session-id)
+                          :status 404)))
+         ;; Restore this session's MUD connection
+         (%session-restore-connection state)
+         (format *error-output* "~&SSE: connected-p=~A~%" (mud-connected-p))
+         (finish-output *error-output*)
+         (unless (mud-connected-p)
+           (return-from mcp-handler
+             (%json-error -32600
+                          "No active MUD connection. Use mud-connect first."
+                          :status 400)))
+
+         ;; Set SSE headers
+         (setf (hunchentoot:content-type*) "text/event-stream")
+         (setf (hunchentoot:return-code*) 200)
+         (setf (%response-header :cache-control) "no-cache")
+         (setf (%response-header :connection) "keep-alive")
+
+         ;; Use start-output to get a stream we can write to
+         (let ((stream (hunchentoot:send-headers)))
+           (format *error-output* "~&SSE: stream=~A, listening...~%" stream)
+           (finish-output *error-output*)
+           (force-output stream)
+           ;; Send initial comment to flush
+           (format stream ":ok~C~C" #\Newline #\Newline)
+           (finish-output stream)
+           (format *error-output* "~&SSE: initial comment sent~%")
+           (finish-output *error-output*)
+           ;; Stream MUD events
+           (listen-for-activity
+            :timeout (* 24 3600)
+            :idle-timeout 1.0
+            :callback
+            (lambda (text status)
+              (format *error-output* "~&SSE: event! text=~S status=~A~%" text status)
+              (finish-output *error-output*)
+              (handler-case
+                  (let ((notification
+                          (%encode-json
+                           (%make-ht
+                            "jsonrpc" "2.0"
+                            "method" "notifications/mud-output"
+                            "params" (%make-ht "text" text)))))
+                    (format stream "data: ~A~C~C"
+                            notification #\Newline #\Newline)
+                    (finish-output stream)
+                    nil)
+                (stream-error (e)
+                  (format *error-output* "~&SSE: stream-error ~A~%" e)
+                  (finish-output *error-output*)
+                  :stop))))
+           (format *error-output* "~&SSE: listen-for-activity returned~%")
+           (finish-output *error-output*)
+           nil))))
 
     (:delete
      (let ((session-id (%request-header :mcp-session-id)))

@@ -12,6 +12,7 @@
    #:disconnect-from-mud
    #:send-command
    #:send-eval
+   #:listen-for-activity
    #:strip-ansi
    #:connection-status
 

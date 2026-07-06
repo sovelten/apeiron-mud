@@ -280,3 +280,40 @@ Use this to verify your connection before sending commands.")
    (declare (ignore args))
    (let ((status (connection-status)))
      (%result id (%make-ht "content" (%text-content status) "isError" nil)))))
+
+;; ─── Tool: mud-listen ───────────────────────────────────────────
+
+(%register-tool
+ "mud-listen"
+ (%tool-schema
+  "mud-listen"
+  "Wait for activity from the MUD server without sending a command.
+
+Blocks until something happens in the game (another player speaks,
+enters the room, attacks, etc.) or the timeout expires.  This enables
+the LLM to wait for and react to in-game events rather than polling.
+
+When something happens, returns the MUD output (with ANSI codes stripped).
+When the timeout expires with no activity, returns a timeout message.
+Use the 'timeout' parameter (default 60 seconds) to control how long
+to wait.  Set timeout to a lower value (e.g. 10) to poll briefly."
+  '("timeout" :number "Seconds to wait (default 60)"
+    :default 60))
+
+ (lambda (id args)
+   (handler-case
+       (let ((timeout (or (%arg args "timeout") 60)))
+         (multiple-value-bind (text err status)
+             (listen-for-activity :timeout timeout :idle-timeout 1.0)
+           (cond
+             ((eq status :timeout)
+              (%result id (%make-ht "content" (%text-content "No activity (timeout).")
+                                    "isError" nil)))
+             ((eq status :error)
+              (%result id (%make-ht "content" (%text-content (or err text "Error"))
+                                    "isError" t)))
+             (t
+              (%result id (%make-ht "content" (%text-content (or text "(no output)"))
+                                    "isError" nil))))))
+     (error (e)
+       (%error id -32000 (format nil "mud-listen failed: ~A" e))))))

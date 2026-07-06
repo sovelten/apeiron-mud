@@ -180,11 +180,10 @@ Returns three values on success:
 Returns (nil error-message :error) on failure.
 
 The connection is stored in *MUD-CONNECTION* for use by subsequent
-calls to SEND-COMMAND and DISCONNECT-FROM-MUD."
-  ;; Close any existing connection first
-  (when (and *mud-connection*
-             (telnet:telnet-connection-alive-p *mud-connection*))
-    (disconnect-from-mud))
+calls to SEND-COMMAND and DISCONNECT-FROM-MUD.
+
+Note: does NOT disconnect existing connections — the HTTP session
+layer is responsible for saving/restoring per-session connections."
 
   (handler-case
       (let* ((usocket (usocket:socket-connect host port
@@ -333,3 +332,61 @@ Returns a string suitable for display to the user."
   (if (mud-connected-p)
       "Connected to Apeiron MUD server."
       "Not connected to MUD. Use mud-connect to connect."))
+
+;; ─── Public: listen for unsolicited MUD output ──────────────────
+
+(defun listen-for-activity (&key (timeout 60) (idle-timeout 1.0) (callback nil))
+  "Read from the MUD connection without sending a command.
+
+Blocks until the MUD sends output (another player speaks, enters the
+room, etc.) or TIMEOUT seconds elapse with no activity.
+
+When CALLBACK is a function, it is called with each non-empty chunk of
+output text as it arrives (\"streaming mode\").  The function returns
+after the connection is lost or CALLBACK returns :STOP.
+
+When CALLBACK is NIL (\"one-shot mode\"), returns three values:
+  (output-text nil :ok)          — something happened
+  (nil nil :timeout)             — nothing happened within TIMEOUT
+  (output-text nil :disconnected) — connection was lost
+
+In either mode, this reads the MUD prompt and any text that arrives
+between prompts — it does NOT send a command.  This enables the LLM
+to wait for and react to in-game events."
+  (unless (mud-connected-p)
+    (if callback
+        (funcall callback "Not connected to MUD." :error)
+        (return-from listen-for-activity
+          (values nil "Not connected to MUD." :error))))
+
+  (let ((conn *mud-connection*)
+        (deadline (+ (get-internal-real-time)
+                     (* timeout internal-time-units-per-second))))
+    (loop
+      (let ((remaining (/ (- deadline (get-internal-real-time))
+                          internal-time-units-per-second)))
+        (when (<= remaining 0)
+          (if callback
+              (return-from listen-for-activity :timeout)
+              (return-from listen-for-activity
+                (values nil nil :timeout))))
+        (multiple-value-bind (text status)
+            (%read-until-prompt conn :total-timeout (min idle-timeout remaining))
+          (case status
+            (:disconnected
+             (setf *mud-connection* nil)
+             (if callback
+                 (funcall callback "Connection to MUD was lost." :disconnected)
+                 (return-from listen-for-activity
+                   (values text nil :disconnected))))
+            (:ok
+             (let ((trimmed (string-trim '(#\Space #\Newline #\Return #\Tab) text)))
+               (when (> (length trimmed) 0)
+                 (if callback
+                     (let ((result (funcall callback trimmed nil)))
+                       (when (eq result :stop)
+                         (return-from listen-for-activity :stopped)))
+                     (return-from listen-for-activity
+                       (values text nil :ok))))))
+            ;; :timeout means no output — just loop and try again
+            (:timeout nil)))))))

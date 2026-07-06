@@ -105,16 +105,17 @@ No escape codes here."))
     (is (hash-table-p (gethash "tools" (gethash "capabilities" result))))))
 
 (test protocol-tools-list
-  "tools/list returns all 5 MUD tools."
+  "tools/list returns all 6 MUD tools."
   (let* ((response (%process "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}"))
          (tools (gethash "tools" (gethash "result" response))))
-    (is (= (length tools) 5))
+    (is (= (length tools) 6))
     (let ((names (loop for tool across tools collect (gethash "name" tool))))
       (is (member "mud-connect" names :test #'string=))
       (is (member "mud-send" names :test #'string=))
       (is (member "mud-eval" names :test #'string=))
       (is (member "mud-disconnect" names :test #'string=))
-      (is (member "mud-status" names :test #'string=)))))
+      (is (member "mud-status" names :test #'string=))
+      (is (member "mud-listen" names :test #'string=)))))
 
 (test protocol-tool-schemas-have-required-fields
   "Each tool schema has name, description, and inputSchema."
@@ -411,7 +412,7 @@ teardown)."
           (is (= 200 code2))
           (let ((parsed (%parse-json body2)))
             (let ((tools (gethash "tools" (gethash "result" parsed))))
-              (is (= (length tools) 5)))))))))
+              (is (= (length tools) 6)))))))))
 
 (test http-mud-status-with-session
   "mud-status over HTTP returns 'Not connected' when no MUD connected."
@@ -546,3 +547,135 @@ teardown)."
       (let ((expose (cdr (assoc "Access-Control-Expose-Headers" headers
                                 :test #'string-equal))))
         (is (search "Mcp-Session-Id" expose))))))
+
+;; ══════════════════════════════════════════════════════════════
+;; SSE Integration Tests
+;; ══════════════════════════════════════════════════════════════
+
+(in-suite http-suite)
+
+;; ─── SSE helpers ────────────────────────────────────────────
+
+(defun %http-stream-get (host port path headers)
+  "Open a GET connection and return the raw socket stream for reading
+the response body.  Returns (stream socket code headers) where STREAM
+is ready to read the body after headers."
+  (let* ((socket (usocket:socket-connect host port
+                                         :element-type 'character))
+         (stream (usocket:socket-stream socket)))
+    ;; Write GET request
+    (format stream "GET ~A HTTP/1.1~C~C" path #\Return #\Newline)
+    (format stream "Host: ~A:~D~C~C" host port #\Return #\Newline)
+    (format stream "Connection: close~C~C" #\Return #\Newline)
+    (loop for (k . v) in headers do
+      (format stream "~A: ~A~C~C" k v #\Return #\Newline))
+    (format stream "~C~C" #\Return #\Newline)
+    (finish-output stream)
+
+    ;; Read status line
+    (let* ((status-line (read-line stream nil nil))
+           (code (when status-line
+                   (let ((sp (position #\Space status-line)))
+                     (when sp
+                       (parse-integer status-line
+                                      :start (1+ sp)
+                                      :junk-allowed t))))))
+      (unless code
+        (usocket:socket-close socket)
+        (return-from %http-stream-get (values nil nil 0 nil)))
+
+      ;; Read headers
+      (let ((resp-headers nil))
+        (loop for line = (read-line stream nil nil)
+              while (and line
+                         (plusp (length (string-right-trim '(#\Return) line))))
+              do (let ((colon (position #\: line)))
+                   (when colon
+                     (push (cons (subseq line 0 colon)
+                                 (string-trim
+                                  '(#\Space #\Return)
+                                  (subseq line (1+ colon))))
+                           resp-headers))))
+        (values stream socket code (nreverse resp-headers))))))
+
+(defun %read-sse-line (stream timeout-seconds)
+  "Read one line from STREAM with TIMEOUT-SECONDS.  Returns the line
+or NIL on timeout/eof."
+  (let ((deadline (+ (get-internal-real-time)
+                     (* timeout-seconds internal-time-units-per-second))))
+    (loop
+      (when (listen stream)
+        (return-from %read-sse-line
+          (read-line stream nil nil)))
+      (when (>= (get-internal-real-time) deadline)
+        (return-from %read-sse-line nil))
+      (sleep 0.05))))
+
+(test http-sse-receives-mud-output
+  "SSE stream receives MUD output when another player speaks."
+  (with-http-server (http-port)
+    (with-mud-server (mud-port)
+      ;; Create listener session and connect to MUD
+      (multiple-value-bind (code headers body)
+          (%http-post "127.0.0.1" http-port "/mcp"
+                      :body "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}")
+        (declare (ignore code body))
+        (let ((listener-sid (cdr (assoc "Mcp-Session-Id" headers
+                                        :test #'string-equal))))
+          ;; Connect listener to MUD
+          (%http-post "127.0.0.1" http-port "/mcp"
+                      :headers `(("Content-Type" . "application/json")
+                                 ("Mcp-Session-Id" . ,listener-sid))
+                      :body (format nil "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"mud-connect\",\"arguments\":{\"host\":\"127.0.0.1\",\"port\":~D,\"name\":\"SSE-Listener\"}}}"
+                                    mud-port))
+
+          ;; Create speaker session and connect to MUD
+          (multiple-value-bind (code2 headers2 body2)
+              (%http-post "127.0.0.1" http-port "/mcp"
+                          :body "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}")
+            (declare (ignore code2 body2))
+            (let ((speaker-sid (cdr (assoc "Mcp-Session-Id" headers2
+                                           :test #'string-equal))))
+              (%http-post "127.0.0.1" http-port "/mcp"
+                          :headers `(("Content-Type" . "application/json")
+                                     ("Mcp-Session-Id" . ,speaker-sid))
+                          :body (format nil "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"mud-connect\",\"arguments\":{\"host\":\"127.0.0.1\",\"port\":~D,\"name\":\"SSE-Speaker\"}}}"
+                                        mud-port))
+
+              ;; Open SSE stream for the listener
+              (multiple-value-bind (sse-stream sse-socket sse-code sse-headers)
+                  (%http-stream-get "127.0.0.1" http-port "/mcp"
+                                    `(("Accept" . "text/event-stream")
+                                      ("Mcp-Session-Id" . ,listener-sid)))
+                (unwind-protect
+                     (progn
+                       (is (not (null sse-stream)))
+                       (is (= 200 sse-code))
+                       (let ((ct (cdr (assoc "Content-Type" sse-headers
+                                             :test #'string-equal))))
+                         (is (search "text/event-stream" ct)))
+
+                       ;; Small delay to ensure SSE stream is established
+                       (sleep 0.5)
+
+                       ;; Speaker says something
+                       (%http-post "127.0.0.1" http-port "/mcp"
+                                   :headers `(("Content-Type" . "application/json")
+                                              ("Mcp-Session-Id" . ,speaker-sid))
+                                   :body "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"mud-send\",\"arguments\":{\"command\":\"say Hello from SSE test!\"}}}")
+
+                       ;; Read SSE events — should get the notification
+                       (let ((event-found nil))
+                         (loop repeat 20
+                               for line = (%read-sse-line sse-stream 0.5)
+                               while line
+                               do (when (and (> (length line) 6)
+                                             (string= (subseq line 0 6) "data: "))
+                                    (let ((payload (subseq line 6)))
+                                      (when (search "Hello from SSE test" payload)
+                                        (setf event-found t)
+                                        (loop-finish)))))
+                         (is event-found "SSE stream should receive the 'say' event"))))
+                  ;; Cleanup
+                  (when sse-socket
+                    (ignore-errors (usocket:socket-close sse-socket)))))))))))
