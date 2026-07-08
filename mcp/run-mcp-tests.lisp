@@ -5,9 +5,9 @@
 (asdf:load-asd #P"~/apeiron-mud/mcp/apeiron-mcp.asd")
 (asdf:load-asd #P"~/apeiron-mud/mcp/apeiron-mcp-test.asd")
 
-;; Load the MCP systems (avoid double-load with quickload)
-(asdf:load-system :apeiron-mcp)
-(asdf:load-system :apeiron-mcp-test)
+;; Load the MCP systems — :force t ensures we pick up the latest source changes
+(asdf:load-system :apeiron-mcp :force t)
+(asdf:load-system :apeiron-mcp-test :force t)
 
 ;; Run the tests
 (format t "~%=== Running Apeiron MCP Server Tests ===~%~%")

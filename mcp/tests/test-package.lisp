@@ -96,34 +96,37 @@
 
 (defun run-tests ()
   "Run all MCP tests with a clean BKNR test store."
-  (setup-test-environment)
-  (unwind-protect
-       (let ((results (run 'mcp-suite)))
-         (let* ((fiveam-pkg (find-package :fiveam))
-                (passed-class (and fiveam-pkg
-                                   (find-class (find-symbol "TEST-PASSED" fiveam-pkg) nil)))
-                (failed-class (and fiveam-pkg
-                                   (find-class (find-symbol "TEST-FAILURE" fiveam-pkg) nil)))
-                (error-class  (and fiveam-pkg
-                                   (find-class (find-symbol "TEST-ERROR" fiveam-pkg) nil)))
-                (skipped-class (and fiveam-pkg
-                                    (find-class (find-symbol "TEST-SKIPPED" fiveam-pkg) nil)))
-                (passed 0) (failed 0) (errors 0) (pending 0))
-           (dolist (r results)
-             (cond
-               ((and passed-class (typep r passed-class)) (incf passed))
-               ((and error-class (typep r error-class))
-                (incf errors)
-                (format t "~&ERROR: ~A~%" (fiveam::test-name r))
-                (handler-case
-                    (let* ((cond-slot (find-symbol "CONDITION" fiveam-pkg))
-                           (c (and cond-slot (slot-value r cond-slot))))
-                      (when c (format t "  condition: ~A~%" c)))
-                  (error () (format t "  (condition unavailable)~%"))))
-               ((and failed-class (typep r failed-class)) (incf failed))
-               ((and skipped-class (typep r skipped-class)) (incf pending))
-               (t (incf passed))))
-           (format t "~&=== MCP Results: ~D passed, ~D failed, ~D errors, ~D pending ===~%"
-                   passed failed errors pending)
-           (values passed failed pending)))
-    (teardown-test-environment)))
+  (let ((fiveam-pkg (find-package :fiveam))
+        (all-results nil))
+    ;; Run each suite separately to isolate state pollution
+    (dolist (suite '(ansi-suite protocol-suite integration-suite http-suite))
+      (setup-test-environment)
+      (let ((results (run suite)))
+        (setf all-results (append results all-results)))
+      (teardown-test-environment))
+    ;; Report combined results
+    (let* ((passed-class (and fiveam-pkg
+                               (find-class (find-symbol "TEST-PASSED" fiveam-pkg) nil)))
+              (failed-class (and fiveam-pkg
+                                 (find-class (find-symbol "TEST-FAILURE" fiveam-pkg) nil)))
+              (error-class  (and fiveam-pkg
+                                 (find-class (find-symbol "UNEXPECTED-TEST-FAILURE" fiveam-pkg) nil)))
+              (skipped-class (and fiveam-pkg
+                                  (find-class (find-symbol "TEST-SKIPPED" fiveam-pkg) nil)))
+              (passed 0) (failed 0) (errors 0) (pending 0))
+         (dolist (r all-results)
+           (cond
+             ((and passed-class (typep r passed-class)) (incf passed))
+             ((and error-class (typep r error-class))
+              (incf errors)
+              (format t "~&=== ERROR ===~%")
+              (describe r))
+             ((and failed-class (typep r failed-class))
+              (incf failed)
+              (format t "~&=== FAIL ===~%")
+              (describe r))
+             ((and skipped-class (typep r skipped-class)) (incf pending))
+             (t (incf passed))))
+         (format t "~&=== MCP Results: ~D passed, ~D failed, ~D errors, ~D pending ===~%"
+                 passed failed errors pending)
+         (values passed failed pending))))

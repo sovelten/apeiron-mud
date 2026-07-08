@@ -91,13 +91,12 @@ adjustable strings that usocket and telnet reject."
 
 (defun %get-tool-descriptors ()
   "Return a vector of all tool descriptor hash-tables."
-  (let ((result (make-array (hash-table-count *tool-registry*)
-                            :fill-pointer 0)))
+  (let ((descriptors '()))
     (maphash (lambda (k v)
                (declare (ignore k))
-               (vector-push (car v) result))
+               (push (car v) descriptors))
              *tool-registry*)
-    result))
+    (coerce (nreverse descriptors) 'vector)))
 
 (defun %get-tool-handler (name)
   "Return the handler function for the tool named NAME, or NIL."
@@ -149,10 +148,12 @@ me (your character), here (current room), and world bound)."
               (name (%require-arg args "name" "Player character name")))
          (multiple-value-bind (welcome err status)
              (connect-to-mud host port name)
-           (if (eq status :ok)
+           (if (and (eq status :ok) (mud-connected-p))
                (%result id (%make-ht "content" (%text-content welcome)
                                      "isError" nil))
-               (%result id (%make-ht "content" (%text-content err)
+               (%result id (%make-ht "content"
+                                     (%text-content
+                                      (or err "Connected but connection not alive"))
                                      "isError" t)))))
      (error (e)
        (%error id -32000 (format nil "mud-connect failed: ~A" e))))))

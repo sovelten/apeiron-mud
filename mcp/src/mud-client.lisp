@@ -10,6 +10,39 @@
 
 (in-package #:apeiron-mcp/src/package)
 
+;; ─── Server constants ─────────────────────────────────────────────
+
+(defparameter +server-name+ "apeiron-mcp"
+  "Name reported to MCP clients during initialization.")
+
+(defparameter +server-version+ "0.1.0"
+  "Version reported to MCP clients during initialization.")
+
+;; ─── Connection state ─────────────────────────────────────────────
+
+(defvar *mud-connection* nil
+  "The current telnet connection to the MUD server, or NIL if not
+connected.  Bound to a TELNET:TELNET-CONNECTION instance.")
+
+;; ── Internal accessors ───────────────────────────────────────
+;; Use SYMBOL-VALUE so that compiled code always uses the correct
+;; TLS index, even after the system is reloaded (SBCL may cache an
+;; old TLS index when compiling direct variable access).
+
+(defun %mud-conn ()
+  "Return the current *MUD-CONNECTION* value."
+  (symbol-value '*mud-connection*))
+
+(defun (setf %mud-conn) (new-value)
+  "Set *MUD-CONNECTION* to NEW-VALUE."
+  (setf (symbol-value '*mud-connection*) new-value))
+
+(defun mud-connected-p ()
+  "Return true when we have an active connection to the MUD."
+  (let ((conn (%mud-conn)))
+    (and conn
+         (telnet:telnet-connection-alive-p conn))))
+
 ;; ─── Internal: ANSI escape code stripping ──────────────────────────
 
 (defun strip-ansi (text)
@@ -219,23 +252,23 @@ layer is responsible for saving/restoring per-session connections."
                        (write-string msg s)))))
 
               ;; Store the connection
-              (setf *mud-connection* conn)
+              (setf (%mud-conn) conn)
 
               (values full-welcome nil :ok)))))
 
     (usocket:connection-refused-error (e)
       (declare (ignore e))
-      (setf *mud-connection* nil)
+      (setf (%mud-conn) nil)
       (values nil (format nil "Connection refused: ~A:~D" host port) :error))
     (usocket:ns-host-not-found-error (e)
       (declare (ignore e))
       (values nil (format nil "Host not found: ~A" host) :error))
     (usocket:socket-error (e)
       (declare (ignore e))
-      (setf *mud-connection* nil)
+      (setf (%mud-conn) nil)
       (values nil (format nil "Socket error connecting to ~A:~D" host port) :error))
     (error (e)
-      (setf *mud-connection* nil)
+      (setf (%mud-conn) nil)
       (values nil (format nil "Connection error: ~A" e) :error))))
 
 ;; ─── Public: send a command ──────────────────────────────────────
@@ -258,7 +291,7 @@ receiving the next prompt, with ANSI codes stripped."
       (values nil "Not connected to MUD. Use mud-connect first.")))
 
   (handler-case
-      (let ((conn *mud-connection*))
+      (let ((conn (%mud-conn)))
         ;; Send the command
         (telnet:telnet-write-string conn command-string :end :crlf)
 
@@ -269,13 +302,13 @@ receiving the next prompt, with ANSI codes stripped."
             (:ok (values text nil))
             (:timeout (values text "Response may be incomplete (timeout)"))
             (:disconnected
-             (setf *mud-connection* nil)
+             (setf (%mud-conn) nil)
              (values text "Connection lost while reading response"))
             (otherwise (values text nil)))))
 
     (telnet:telnet-connection-lost (e)
       (declare (ignore e))
-      (setf *mud-connection* nil)
+      (setf (%mud-conn) nil)
       (values nil "Connection to MUD was lost"))
     (error (e)
       (values nil (format nil "Error sending command: ~A" e)))))
@@ -306,21 +339,21 @@ Returns (nil error-message) on failure."
 Sends the 'quit' command and closes the telnet connection.
 Returns two values: (message nil) on success, (nil error) on failure."
   (unless (mud-connected-p)
-    (setf *mud-connection* nil)
+    (setf (%mud-conn) nil)
     (return-from disconnect-from-mud
       (values "Not connected" nil)))
 
   (handler-case
-      (let ((conn *mud-connection*))
+      (let ((conn (%mud-conn)))
         ;; Try to send quit gracefully
         (ignore-errors
           (telnet:telnet-write-string conn "quit" :end :crlf)
           (sleep 0.1))
         (telnet:telnet-connection-close conn)
-        (setf *mud-connection* nil)
+        (setf (%mud-conn) nil)
         (values "Disconnected from MUD" nil))
     (error (e)
-      (setf *mud-connection* nil)
+      (setf (%mud-conn) nil)
       (values nil (format nil "Error during disconnect: ~A" e)))))
 
 ;; ─── Public: connection status ───────────────────────────────────
@@ -359,7 +392,7 @@ to wait for and react to in-game events."
         (return-from listen-for-activity
           (values nil "Not connected to MUD." :error))))
 
-  (let ((conn *mud-connection*)
+  (let ((conn (%mud-conn))
         (deadline (+ (get-internal-real-time)
                      (* timeout internal-time-units-per-second))))
     (loop
@@ -374,7 +407,7 @@ to wait for and react to in-game events."
             (%read-until-prompt conn :total-timeout (min idle-timeout remaining))
           (case status
             (:disconnected
-             (setf *mud-connection* nil)
+             (setf (%mud-conn) nil)
              (if callback
                  (funcall callback "Connection to MUD was lost." :disconnected)
                  (return-from listen-for-activity

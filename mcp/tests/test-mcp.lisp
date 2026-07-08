@@ -27,6 +27,7 @@ welcome.  Returns T on success."
 (defmacro with-mud-server ((port-var) &body body)
   "Start a MUD server on a random port with a clean BKNR store,
 bind PORT-VAR, run BODY, stop server and clean up."
+  (declare (ignorable body))
   `(progn
      (setup-test-environment)
      (apeiron.server:stop-mud-server)
@@ -109,7 +110,7 @@ No escape codes here."))
   (let* ((response (%process "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}"))
          (tools (gethash "tools" (gethash "result" response))))
     (is (= (length tools) 6))
-    (let ((names (loop for tool across tools collect (gethash "name" tool))))
+    (let ((names (loop for tool in tools collect (gethash "name" tool))))
       (is (member "mud-connect" names :test #'string=))
       (is (member "mud-send" names :test #'string=))
       (is (member "mud-eval" names :test #'string=))
@@ -121,7 +122,7 @@ No escape codes here."))
   "Each tool schema has name, description, and inputSchema."
   (let* ((response (%process "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/list\",\"params\":{}}"))
          (tools (gethash "tools" (gethash "result" response))))
-    (loop for tool across tools do
+    (loop for tool in tools do
       (is (stringp (gethash "name" tool)))
       (is (stringp (gethash "description" tool)))
       (is (hash-table-p (gethash "inputSchema" tool))))))
@@ -129,7 +130,7 @@ No escape codes here."))
 (test protocol-mud-status-without-connection
   "mud-status reports not connected when no MUD connection exists."
   (let* ((response (%process "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"mud-status\",\"arguments\":{}}}"))
-         (content (aref (gethash "content" (gethash "result" response)) 0)))
+         (content (elt (gethash "content" (gethash "result" response)) 0)))
     (is (search "Not connected" (gethash "text" content)))))
 
 (test protocol-unknown-tool
@@ -355,31 +356,73 @@ No escape codes here."))
 
 (defun %http-post (host port path &key headers body)
   "Shortcut for POST requests."
-  (%http-request host port "POST" path (or headers '()) body))
+  (%http-request host port "POST" path headers body))
 
 (defun %http-delete (host port path &key headers)
   "Shortcut for DELETE requests."
-  (%http-request host port "DELETE" path (or headers '()) nil))
+  (%http-request host port "DELETE" path headers nil))
 
 (defun %http-get (host port path &key headers)
   "Shortcut for GET requests."
-  (%http-request host port "GET" path (or headers '()) nil))
+  (%http-request host port "GET" path headers nil))
 
 (defun %http-options (host port path &key headers)
   "Shortcut for OPTIONS requests."
-  (%http-request host port "OPTIONS" path (or headers '()) nil))
+  (%http-request host port "OPTIONS" path headers nil))
 
 ;; ─── HTTP server test helper ─────────────────────────────────
 
 (defmacro with-http-server ((port-var) &body body)
-  "Ensure the MCP HTTP server is running on port 3001, run BODY, leave
-the server running for subsequent tests (stopped by the test suite
-teardown)."
+  "Start a fresh MCP HTTP server on port 3001, run BODY, stop the server
+afterwards.  Each test gets a clean server with no stale sessions."
+  (declare (ignorable body))
   `(progn
-     (unless (http-server-running-p)
-       (start-http-server :host "127.0.0.1" :port 3001))
-     (let ((,port-var 3001))
-       ,@body)))
+     (when (http-server-running-p)
+       (stop-http-server))
+     (start-http-server :host "127.0.0.1" :port 3001)
+     (unwind-protect
+          (let ((,port-var 3001))
+            ,@body)
+       (when (http-server-running-p)
+         (stop-http-server)))))
+
+;; ─── HTTP session helpers ─────────────────────────────────────
+
+(defun %http-initialize (port)
+  "Create a new MCP session via initialize, return the session-id."
+  (multiple-value-bind (code headers body)
+      (%http-post "127.0.0.1" port "/mcp"
+                  :body "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}")
+    (declare (ignore code body))
+    (cdr (assoc "Mcp-Session-Id" headers :test #'string-equal))))
+
+(defun %http-connect-mud (port session-id mud-port player-name)
+  "Connect SESSION-ID to the MUD at MUD-PORT as PLAYER-NAME.
+Returns the response body string."
+  (multiple-value-bind (code headers body)
+      (%http-post "127.0.0.1" port "/mcp"
+                  :headers `(("Content-Type" . "application/json")
+                             ("Mcp-Session-Id" . ,session-id))
+                  :body (format nil "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"mud-connect\",\"arguments\":{\"host\":\"127.0.0.1\",\"port\":~D,\"name\":\"~A\"}}}"
+                                mud-port player-name))
+    (declare (ignore headers))
+    (when (/= 200 code)
+      (format t "~&HTTP ~D for mud-connect ~A:~%~A~%" code player-name body))
+    body))
+
+(defun %http-send (port session-id command &key (id 3))
+  "Send COMMAND via SESSION-ID, return (values status-code body)."
+  (let ((body (format nil "{\"jsonrpc\":\"2.0\",\"id\":~D,\"method\":\"tools/call\",\"params\":{\"name\":\"mud-send\",\"arguments\":{\"command\":\"~A\"}}}"
+                      id command)))
+    (multiple-value-bind (code headers resp-body)
+        (%http-post "127.0.0.1" port "/mcp"
+                    :headers `(("Content-Type" . "application/json")
+                               ("Mcp-Session-Id" . ,session-id))
+                    :body body)
+      (declare (ignore headers))
+      (when (/= 200 code)
+        (format t "~&HTTP ~D for ~S:~%~A~%" code command resp-body))
+      (values code resp-body))))
 
 ;; ─── HTTP lifecycle tests ────────────────────────────────────
 
@@ -398,55 +441,42 @@ teardown)."
 (test http-tools-list-with-session
   "tools/list over HTTP with a valid session returns all 5 tools."
   (with-http-server (port)
-    (multiple-value-bind (code headers body)
-        (%http-post "127.0.0.1" port "/mcp"
-                    :body "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}")
-      (declare (ignore code))
-      (let ((sid (cdr (assoc "Mcp-Session-Id" headers :test #'string-equal))))
-        (multiple-value-bind (code2 headers2 body2)
-            (%http-post "127.0.0.1" port "/mcp"
-                        :headers `(("Content-Type" . "application/json")
-                                   ("Mcp-Session-Id" . ,sid))
-                        :body "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}")
-          (declare (ignore headers2))
-          (is (= 200 code2))
-          (let ((parsed (%parse-json body2)))
-            (let ((tools (gethash "tools" (gethash "result" parsed))))
-              (is (= (length tools) 6)))))))))
+    (let ((sid (%http-initialize port)))
+      (multiple-value-bind (code2 headers2 body2)
+          (%http-post "127.0.0.1" port "/mcp"
+                      :headers `(("Content-Type" . "application/json")
+                                 ("Mcp-Session-Id" . ,sid))
+                      :body "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}")
+        (declare (ignore headers2))
+        (is (= 200 code2))
+        (let ((tools (gethash "tools" (gethash "result" (%parse-json body2)))))
+          (is (= (length tools) 6)))))))
 
 (test http-mud-status-with-session
   "mud-status over HTTP returns 'Not connected' when no MUD connected."
   (with-http-server (port)
-    (multiple-value-bind (code headers body)
-        (%http-post "127.0.0.1" port "/mcp"
-                    :body "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}")
-      (declare (ignore code))
-      (let ((sid (cdr (assoc "Mcp-Session-Id" headers :test #'string-equal))))
-        (multiple-value-bind (code2 headers2 body2)
-            (%http-post "127.0.0.1" port "/mcp"
-                        :headers `(("Content-Type" . "application/json")
-                                   ("Mcp-Session-Id" . ,sid))
-                        :body "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"mud-status\",\"arguments\":{}}}")
-          (declare (ignore headers2))
-          (is (= 200 code2))
-          (is (search "Not connected" body2)))))))
+    (let ((sid (%http-initialize port)))
+      (multiple-value-bind (code2 headers2 body2)
+          (%http-post "127.0.0.1" port "/mcp"
+                      :headers `(("Content-Type" . "application/json")
+                                 ("Mcp-Session-Id" . ,sid))
+                      :body "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"mud-status\",\"arguments\":{}}}")
+        (declare (ignore headers2))
+        (is (= 200 code2))
+        (is (search "Not connected" body2))))))
 
 (test http-notification-returns-202
   "Notifications over HTTP return 202 Accepted with empty body."
   (with-http-server (port)
-    (multiple-value-bind (code headers body)
-        (%http-post "127.0.0.1" port "/mcp"
-                    :body "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}")
-      (declare (ignore code))
-      (let ((sid (cdr (assoc "Mcp-Session-Id" headers :test #'string-equal))))
-        (multiple-value-bind (code2 headers2 body2)
-            (%http-post "127.0.0.1" port "/mcp"
-                        :headers `(("Content-Type" . "application/json")
-                                   ("Mcp-Session-Id" . ,sid))
-                        :body "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}")
-          (declare (ignore headers2))
-          (is (= 202 code2))
-          (is (string= body2 "")))))))
+    (let ((sid (%http-initialize port)))
+      (multiple-value-bind (code2 headers2 body2)
+          (%http-post "127.0.0.1" port "/mcp"
+                      :headers `(("Content-Type" . "application/json")
+                                 ("Mcp-Session-Id" . ,sid))
+                      :body "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}")
+        (declare (ignore headers2))
+        (is (= 202 code2))
+        (is (string= body2 ""))))))
 
 (test http-missing-session-id
   "Non-initialize request without Mcp-Session-Id returns 400."
@@ -473,27 +503,23 @@ teardown)."
 (test http-delete-session
   "DELETE /mcp with session ID returns 204 and removes session."
   (with-http-server (port)
-    (multiple-value-bind (code headers body)
-        (%http-post "127.0.0.1" port "/mcp"
-                    :body "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}")
-      (declare (ignore code body))
-      (let ((sid (cdr (assoc "Mcp-Session-Id" headers :test #'string-equal))))
-        ;; Delete the session
-        (multiple-value-bind (del-code del-headers del-body)
-            (%http-delete "127.0.0.1" port "/mcp"
-                          :headers `(("Mcp-Session-Id" . ,sid)))
-          (declare (ignore del-headers))
-          (is (= 204 del-code))
-          (is (string= del-body "")))
-        ;; Session should now be invalid
-        (multiple-value-bind (code3 headers3 body3)
-            (%http-post "127.0.0.1" port "/mcp"
-                        :headers `(("Content-Type" . "application/json")
-                                   ("Mcp-Session-Id" . ,sid))
-                        :body "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/list\",\"params\":{}}")
-          (declare (ignore headers3))
-          (is (= 404 code3))
-          (is (search "not found" body3)))))))
+    (let ((sid (%http-initialize port)))
+      ;; Delete the session
+      (multiple-value-bind (del-code del-headers del-body)
+          (%http-delete "127.0.0.1" port "/mcp"
+                        :headers `(("Mcp-Session-Id" . ,sid)))
+        (declare (ignore del-headers))
+        (is (= 204 del-code))
+        (is (string= del-body "")))
+      ;; Session should now be invalid
+      (multiple-value-bind (code3 headers3 body3)
+          (%http-post "127.0.0.1" port "/mcp"
+                      :headers `(("Content-Type" . "application/json")
+                                 ("Mcp-Session-Id" . ,sid))
+                      :body "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/list\",\"params\":{}}")
+        (declare (ignore headers3))
+        (is (= 404 code3))
+        (is (search "not found" body3))))))
 
 (test http-get-requires-session-id
   "GET /mcp without session-id returns 400 with missing session error."
@@ -615,157 +641,99 @@ or NIL on timeout/eof."
   "SSE stream receives MUD output when another player speaks."
   (with-http-server (http-port)
     (with-mud-server (mud-port)
-      ;; Create listener session and connect to MUD
-      (multiple-value-bind (code headers body)
-          (%http-post "127.0.0.1" http-port "/mcp"
-                      :body "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}")
-        (declare (ignore code body))
-        (let ((listener-sid (cdr (assoc "Mcp-Session-Id" headers
-                                        :test #'string-equal))))
-          ;; Connect listener to MUD
-          (%http-post "127.0.0.1" http-port "/mcp"
-                      :headers `(("Content-Type" . "application/json")
-                                 ("Mcp-Session-Id" . ,listener-sid))
-                      :body (format nil "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"mud-connect\",\"arguments\":{\"host\":\"127.0.0.1\",\"port\":~D,\"name\":\"SSE-Listener\"}}}"
-                                    mud-port))
-
-          ;; Create speaker session and connect to MUD
-          (multiple-value-bind (code2 headers2 body2)
-              (%http-post "127.0.0.1" http-port "/mcp"
-                          :body "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}")
-            (declare (ignore code2 body2))
-            (let ((speaker-sid (cdr (assoc "Mcp-Session-Id" headers2
-                                           :test #'string-equal))))
-              (%http-post "127.0.0.1" http-port "/mcp"
-                          :headers `(("Content-Type" . "application/json")
-                                     ("Mcp-Session-Id" . ,speaker-sid))
-                          :body (format nil "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"mud-connect\",\"arguments\":{\"host\":\"127.0.0.1\",\"port\":~D,\"name\":\"SSE-Speaker\"}}}"
-                                        mud-port))
-
-              ;; Open SSE stream for the listener
-              (multiple-value-bind (sse-stream sse-socket sse-code sse-headers)
-                  (%http-stream-get "127.0.0.1" http-port "/mcp"
-                                    `(("Accept" . "text/event-stream")
-                                      ("Mcp-Session-Id" . ,listener-sid)))
-                (unwind-protect
-                     (progn
-                       (is (not (null sse-stream)))
-                       (is (= 200 sse-code))
-                       (let ((ct (cdr (assoc "Content-Type" sse-headers
-                                             :test #'string-equal))))
-                         (is (search "text/event-stream" ct)))
-
-                       ;; Small delay to ensure SSE stream is established
-                       (sleep 0.5)
-
-                       ;; Speaker says something
-                       (%http-post "127.0.0.1" http-port "/mcp"
-                                   :headers `(("Content-Type" . "application/json")
-                                              ("Mcp-Session-Id" . ,speaker-sid))
-                                   :body "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"mud-send\",\"arguments\":{\"command\":\"say Hello from SSE test!\"}}}")
-
-                       ;; Read SSE events — should get the notification
-                       (let ((event-found nil))
-                         (loop repeat 20
-                               for line = (%read-sse-line sse-stream 0.5)
-                               while line
-                               do (when (and (> (length line) 6)
-                                             (string= (subseq line 0 6) "data: "))
-                                    (let ((payload (subseq line 6)))
-                                      (when (search "Hello from SSE test" payload)
-                                        (setf event-found t)
-                                        (loop-finish)))))
-                         (is-true event-found "SSE stream should receive the 'say' event"))))
-                  ;; Cleanup
-                  (when sse-socket
-                    (ignore-errors (usocket:socket-close sse-socket)))))))))))
+      (let ((listener-sid (%http-initialize http-port))
+            (speaker-sid (%http-initialize http-port)))
+        (%http-connect-mud http-port listener-sid mud-port "SSE-Listener")
+        (%http-connect-mud http-port speaker-sid mud-port "SSE-Speaker")
+        ;; Open SSE stream for the listener
+        (multiple-value-bind (sse-stream sse-socket sse-code sse-headers)
+            (%http-stream-get "127.0.0.1" http-port "/mcp"
+                              `(("Accept" . "text/event-stream")
+                                ("Mcp-Session-Id" . ,listener-sid)))
+          (unwind-protect
+               (progn
+                 (is (not (null sse-stream)))
+                 (is (= 200 sse-code))
+                 (let ((ct (cdr (assoc "Content-Type" sse-headers
+                                       :test #'string-equal))))
+                   (is (search "text/event-stream" ct)))
+                 ;; Small delay to ensure SSE stream is established
+                 (sleep 0.5)
+                 ;; Speaker says something
+                 (%http-send http-port speaker-sid "say Hello from SSE test!")
+                 ;; Read SSE events — should get the notification
+                 (let ((event-found nil))
+                   (loop repeat 20
+                         for line = (%read-sse-line sse-stream 0.5)
+                         while line
+                         do (when (and (> (length line) 6)
+                                       (string= (subseq line 0 6) "data: "))
+                              (let ((payload (subseq line 6)))
+                                (when (search "Hello from SSE test" payload)
+                                  (setf event-found t)
+                                  (loop-finish)))))
+                   (is-true event-found "SSE stream should receive the 'say' event"))))
+            ;; Cleanup
+            (when sse-socket
+              (ignore-errors (usocket:socket-close sse-socket))))))))
 
 (test http-sse-without-connection
   "SSE GET without a MUD connection returns 400 error."
   (with-http-server (http-port)
     (with-mud-server (mud-port)
-      mud-port  ;; silence unused warning
-      ;; Create session but do NOT connect to MUD
-      (multiple-value-bind (code headers body)
-          (%http-post "127.0.0.1" http-port "/mcp"
-                      :body "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}")
-        (let ((sid (cdr (assoc "Mcp-Session-Id" headers :test #'string-equal))))
-          (multiple-value-bind (sse-stream sse-socket sse-code sse-headers)
-              (%http-stream-get "127.0.0.1" http-port "/mcp"
-                                `(("Accept" . "text/event-stream")
-                                  ("Mcp-Session-Id" . ,sid)))
-            (is (= 400 sse-code))
-            (when sse-socket
-              (ignore-errors (usocket:socket-close sse-socket)))))))))
+      mud-port  ; silence unused warning
+      (let ((sid (%http-initialize http-port)))
+        (multiple-value-bind (sse-stream sse-socket sse-code sse-headers)
+            (%http-stream-get "127.0.0.1" http-port "/mcp"
+                              `(("Accept" . "text/event-stream")
+                                ("Mcp-Session-Id" . ,sid)))
+          (declare (ignore sse-stream sse-headers))
+          (is (= 400 sse-code))
+          (when sse-socket
+            (ignore-errors (usocket:socket-close sse-socket))))))))
 
 (test http-sse-receives-multiple-events
   "SSE stream receives multiple MUD events."
   (with-http-server (http-port)
     (with-mud-server (mud-port)
-      (multiple-value-bind (code headers body)
-          (%http-post "127.0.0.1" http-port "/mcp"
-                      :body "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}")
-        (declare (ignore code body))
-        (let ((listener-sid (cdr (assoc "Mcp-Session-Id" headers
-                                        :test #'string-equal))))
-          (%http-post "127.0.0.1" http-port "/mcp"
-                      :headers `(("Content-Type" . "application/json")
-                                 ("Mcp-Session-Id" . ,listener-sid))
-                      :body (format nil "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"mud-connect\",\"arguments\":{\"host\":\"127.0.0.1\",\"port\":~D,\"name\":\"SSE-Multi\"}}}"
-                                    mud-port))
-          (multiple-value-bind (code2 headers2 body2)
-              (%http-post "127.0.0.1" http-port "/mcp"
-                          :body "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}")
-            (declare (ignore code2 body2))
-            (let ((speaker-sid (cdr (assoc "Mcp-Session-Id" headers2
-                                           :test #'string-equal))))
-              (%http-post "127.0.0.1" http-port "/mcp"
-                          :headers `(("Content-Type" . "application/json")
-                                     ("Mcp-Session-Id" . ,speaker-sid))
-                          :body (format nil "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"mud-connect\",\"arguments\":{\"host\":\"127.0.0.1\",\"port\":~D,\"name\":\"SSE-Speaker2\"}}}"
-                                        mud-port))
-              (multiple-value-bind (sse-stream sse-socket sse-code sse-headers)
-                  (%http-stream-get "127.0.0.1" http-port "/mcp"
-                                    `(("Accept" . "text/event-stream")
-                                      ("Mcp-Session-Id" . ,listener-sid)))
-                (unwind-protect
-                     (progn
-                       (is (= 200 sse-code))
-                       ;; Drain initial SSE comment
-                       (%read-sse-line sse-stream 0.5)
-                       (%read-sse-line sse-stream 0.5)
-                       ;; Send BOTH messages before collecting events
-                       (multiple-value-bind (c3 h3 b3)
-                           (%http-post "127.0.0.1" http-port "/mcp"
-                                       :headers `(("Content-Type" . "application/json")
-                                                  ("Mcp-Session-Id" . ,speaker-sid))
-                                       :body "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"mud-send\",\"arguments\":{\"command\":\"say First event!\"}}}")
-                         (declare (ignore h3))
-                         (format t "  say resp: ~A~%" (subseq b3 0 (min 100 (length b3)))))
-                       (sleep 0.4)
-                       (multiple-value-bind (c4 h4 b4)
-                           (%http-post "127.0.0.1" http-port "/mcp"
-                                       :headers `(("Content-Type" . "application/json")
-                                                  ("Mcp-Session-Id" . ,speaker-sid))
-                                       :body "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"mud-send\",\"arguments\":{\"command\":\"say Second event!\"}}}")
-                         (declare (ignore h4))
-                         (format t "  say2 resp: ~A~%" (subseq b4 0 (min 100 (length b4)))))
-                       (sleep 1.0)
-                       ;; Collect ALL events in a single pass
-                       (let ((event-count 0))
-                         (loop with deadline = (+ (get-internal-real-time) 6.0)
-                               while (< (get-internal-real-time) deadline)
-                               do (let ((line (%read-sse-line sse-stream 0.2)))
-                                    (when line
-                                      (when (search "mud-output" line)
-                                        (incf event-count))))
-                                  (sleep 0.1))
-                         (format t "  events: ~D~%" event-count)
-                         (is-true (>= event-count 1)
-                                  (format nil "Should get >=1 event(s) for two say commands, got ~D" event-count))))
-                  ;; Cleanup
-                  (when sse-socket
-                    (ignore-errors (usocket:socket-close sse-socket))))))))))))
+      (let ((listener-sid (%http-initialize http-port))
+            (speaker-sid (%http-initialize http-port)))
+        (%http-connect-mud http-port listener-sid mud-port "SSE-Multi")
+        (%http-connect-mud http-port speaker-sid mud-port "SSE-Speaker2")
+        ;; Open SSE stream for listener
+        (multiple-value-bind (sse-stream sse-socket sse-code sse-headers)
+            (%http-stream-get "127.0.0.1" http-port "/mcp"
+                              `(("Accept" . "text/event-stream")
+                                ("Mcp-Session-Id" . ,listener-sid)))
+          (unwind-protect
+               (progn
+                 (is (not (null sse-stream)))
+                 (is (= 200 sse-code))
+                 (let ((ct (cdr (assoc "Content-Type" sse-headers
+                                       :test #'string-equal))))
+                   (is (search "text/event-stream" ct)))
+                 (sleep 0.5)
+                 ;; Speaker says two things — log response bodies for debugging
+                 (multiple-value-bind (status body)
+                     (%http-send http-port speaker-sid "say First event!")
+                   (is (= 200 status) (format nil "Should return 200, returned ~D: ~A" status body)))
+                 (sleep 0.4)
+                 (multiple-value-bind (status body)
+                     (%http-send http-port speaker-sid "say Second event!")
+                   (is (= 200 status) (format nil "Should return 200, returned ~D: ~A" status body)))
+                 ;; Collect events and verify both messages arrived
+                 (let ((all-data (make-string-output-stream)))
+                   (loop repeat 20
+                         for line = (%read-sse-line sse-stream 0.5)
+                         while line
+                         do (write-string line all-data))
+                   (let ((data (get-output-stream-string all-data)))
+                     (is (search "First event" data)
+                         "Should receive 'First event' via SSE")
+                     (is (search "Second event" data)
+                         "Should receive 'Second event' via SSE"))))
+            (when sse-socket
+              (ignore-errors (usocket:socket-close sse-socket)))))))))
 
 ;; ══════════════════════════════════════════════════════════════
 ;; listen-for-activity One-Shot Mode Tests
@@ -785,6 +753,7 @@ or NIL on timeout/eof."
       (sleep 0.3)
       (loop repeat 10 do
         (multiple-value-bind (l s) (telnet:telnet-read-line c :timeout 0.3)
+          (declare (ignore l))
           (when (eq s :timeout) (return))))
       (telnet:telnet-write-string c "say Hello from listen test!" :end :crlf)
       (sleep 0.3)
@@ -807,6 +776,7 @@ or NIL on timeout/eof."
       (sleep 0.3)
       (loop repeat 10 do
         (multiple-value-bind (l s) (telnet:telnet-read-line c :timeout 0.3)
+          (declare (ignore l))
           (when (eq s :timeout) (return))))
       ;; First speech
       (telnet:telnet-write-string c "say First speech!" :end :crlf)
