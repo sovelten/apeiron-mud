@@ -87,6 +87,19 @@ Uses prefix matching with boundary checks to prevent substring attacks."
       (setf (%response-header :access-control-allow-origin) origin)))
   (setf (%response-header :access-control-expose-headers) "Mcp-Session-Id"))
 
+(defun %sse-write (stream string)
+  "Write STRING as UTF-8 bytes to the SSE binary STREAM.
+
+Hunchentoot's SEND-HEADERS returns a binary (CHUNKED-IO-STREAM) that
+only handles byte writes (WRITE-SEQUENCE, WRITE-BYTE).  Character I/O
+calls via FORMAT or WRITE-STRING fail with 'no applicable method for
+STREAM-WRITE-STRING'.  This helper encodes STRING to UTF-8 octets first
+so the SSE handler can safely write event data."
+  (let ((bytes (flexi-streams:string-to-octets string
+                                               :external-format :utf-8)))
+    (write-sequence bytes stream)
+    (force-output stream)))
+
 (defun %json-response (content &key (status 200))
   "Send a JSON response with the given HTTP status."
   (setf (hunchentoot:return-code*) status)
@@ -113,10 +126,13 @@ Returns the previous value so the caller can restore it."
   (setf (gethash :mud-conn state) *mud-connection*))
 
 (defun mcp-handler ()
-  "Easy-handler function for POST /mcp.
+  "Easy-handler function for /mcp.
 
-Routes based on HTTP method: POST for JSON-RPC, DELETE for session
-teardown, OPTIONS for CORS preflight, GET returns 405 (no SSE)."
+Routes based on HTTP method:
+- POST — JSON-RPC 2.0 requests (initialize, tools/list, tools/call, etc.)
+- GET  — SSE stream for MUD activity notifications (requires active session + MUD connection)
+- DELETE — tear down an HTTP session
+- OPTIONS — CORS preflight"
   (%set-cors-headers)
 
   (case (hunchentoot:request-method*)
@@ -209,24 +225,19 @@ teardown, OPTIONS for CORS preflight, GET returns 405 (no SSE)."
          (setf (%response-header :cache-control) "no-cache")
          (setf (%response-header :connection) "keep-alive")
 
-         ;; Use start-output to get a stream we can write to
+         ;; Use start-output to get a binary stream we can write to.
+         ;; NOTE: SEND-HEADERS returns a CHUNKED-IO-STREAM (binary stream)
+         ;; that does NOT support FORMAT / WRITE-STRING.  Use %SSE-WRITE.
          (let ((stream (hunchentoot:send-headers)))
-           (format *error-output* "~&SSE: stream=~A, listening...~%" stream)
-           (finish-output *error-output*)
-           (force-output stream)
-           ;; Send initial comment to flush
-           (format stream ":ok~C~C" #\Newline #\Newline)
-           (finish-output stream)
-           (format *error-output* "~&SSE: initial comment sent~%")
-           (finish-output *error-output*)
-           ;; Stream MUD events
+           ;; Send initial SSE comment to flush headers through
+           (%sse-write stream ":ok~%~%")
+           ;; Stream MUD events via listen-for-activity callbacks
            (listen-for-activity
             :timeout (* 24 3600)
             :idle-timeout 1.0
             :callback
             (lambda (text status)
-              (format *error-output* "~&SSE: event! text=~S status=~A~%" text status)
-              (finish-output *error-output*)
+              (declare (ignore status))
               (handler-case
                   (let ((notification
                           (%encode-json
@@ -234,16 +245,11 @@ teardown, OPTIONS for CORS preflight, GET returns 405 (no SSE)."
                             "jsonrpc" "2.0"
                             "method" "notifications/mud-output"
                             "params" (%make-ht "text" text)))))
-                    (format stream "data: ~A~C~C"
-                            notification #\Newline #\Newline)
-                    (finish-output stream)
+                    (%sse-write stream (format nil "data: ~A~%~%" notification))
                     nil)
                 (stream-error (e)
-                  (format *error-output* "~&SSE: stream-error ~A~%" e)
-                  (finish-output *error-output*)
+                  (declare (ignore e))
                   :stop))))
-           (format *error-output* "~&SSE: listen-for-activity returned~%")
-           (finish-output *error-output*)
            nil))))
 
     (:delete
