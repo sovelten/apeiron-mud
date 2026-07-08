@@ -37,8 +37,7 @@
 Returns the state hash-table."
   (unless state
     (setf state (make-hash-table :test 'equal))
-    (when (eq state *server-state*)
-      (setf *server-state* state)))
+    (setf *server-state* state))
   state)
 
 ;; ─── JSON encode/decode ─────────────────────────────────────────

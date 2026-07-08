@@ -209,15 +209,16 @@ Routes based on HTTP method:
            (return-from mcp-handler
              (%json-error -32600 (format nil "Session ~A not found" session-id)
                           :status 404)))
-         ;; Restore this session's MUD connection
-         (%session-restore-connection state)
-         (format *error-output* "~&SSE: connected-p=~A~%" (mud-connected-p))
-         (finish-output *error-output*)
-         (unless (mud-connected-p)
-           (return-from mcp-handler
-             (%json-error -32600
-                          "No active MUD connection. Use mud-connect first."
-                          :status 400)))
+         ;; Restore this session's MUD connection, saving/restoring
+         ;; *MUD-CONNECTION* so state doesn't leak between requests.
+         (let ((sse-old-conn (%session-restore-connection state)))
+           (unwind-protect
+                (progn
+                  (unless (mud-connected-p)
+                    (return-from mcp-handler
+                      (%json-error -32600
+                                   "No active MUD connection. Use mud-connect first."
+                                   :status 400)))
 
          ;; Set SSE headers
          (setf (hunchentoot:content-type*) "text/event-stream")
@@ -237,20 +238,31 @@ Routes based on HTTP method:
             :idle-timeout 1.0
             :callback
             (lambda (text status)
-              (declare (ignore status))
               (handler-case
-                  (let ((notification
-                          (%encode-json
-                           (%make-ht
-                            "jsonrpc" "2.0"
-                            "method" "notifications/mud-output"
-                            "params" (%make-ht "text" text)))))
-                    (%sse-write stream (format nil "data: ~A~%~%" notification))
-                    nil)
+                  (cond
+                    ;; Connection lost → stop listening
+                    ((eq status :disconnected)
+                     :stop)
+                    ;; MUD activity → encode as SSE notification
+                    (t
+                     (let ((notification
+                             (%encode-json
+                              (%make-ht
+                               "jsonrpc" "2.0"
+                               "method" "notifications/mud-output"
+                               "params" (%make-ht "text" text)))))
+                       (%sse-write stream (format nil "data: ~A~%~%" notification))
+                       nil)))
                 (stream-error (e)
                   (declare (ignore e))
                   :stop))))
-           nil))))
+           nil)
+         ;; Restore *MUD-CONNECTION* after SSE ends
+         (setf *mud-connection* sse-old-conn))
+       ;; Close unwind-protect
+       )
+      ;; Close let(sse-old-conn)
+      ))))
 
     (:delete
      (let ((session-id (%request-header :mcp-session-id)))
