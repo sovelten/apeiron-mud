@@ -25,17 +25,19 @@
 connected.  Bound to a TELNET:TELNET-CONNECTION instance.")
 
 ;; ── Internal accessors ───────────────────────────────────────
-;; Use SYMBOL-VALUE so that compiled code always uses the correct
-;; TLS index, even after the system is reloaded (SBCL may cache an
-;; old TLS index when compiling direct variable access).
+;; Use a thread-local hash-table instead of a global special variable.
+;; SBCL's TLS index for special variables may become stale across
+;; system reloads or server restarts, causing writes and reads to
+;; target different storage locations.
+
+(defvar *mud-connections* (make-hash-table)
+  "Hash-table mapping thread → telnet connection.")
 
 (defun %mud-conn ()
-  "Return the current *MUD-CONNECTION* value."
-  (symbol-value '*mud-connection*))
+  (gethash (bordeaux-threads:current-thread) *mud-connections*))
 
 (defun (setf %mud-conn) (new-value)
-  "Set *MUD-CONNECTION* to NEW-VALUE."
-  (setf (symbol-value '*mud-connection*) new-value))
+  (setf (gethash (bordeaux-threads:current-thread) *mud-connections*) new-value))
 
 (defun mud-connected-p ()
   "Return true when we have an active connection to the MUD."

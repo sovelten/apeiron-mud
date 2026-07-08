@@ -148,12 +148,10 @@ me (your character), here (current room), and world bound)."
               (name (%require-arg args "name" "Player character name")))
          (multiple-value-bind (welcome err status)
              (connect-to-mud host port name)
-           (if (and (eq status :ok) (mud-connected-p))
+           (if (eq status :ok)
                (%result id (%make-ht "content" (%text-content welcome)
                                      "isError" nil))
-               (%result id (%make-ht "content"
-                                     (%text-content
-                                      (or err "Connected but connection not alive"))
+               (%result id (%make-ht "content" (%text-content err)
                                      "isError" t)))))
      (error (e)
        (%error id -32000 (format nil "mud-connect failed: ~A" e))))))

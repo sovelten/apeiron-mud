@@ -637,46 +637,6 @@ or NIL on timeout/eof."
         (return-from %read-sse-line nil))
       (sleep 0.05))))
 
-(test http-sse-receives-mud-output
-  "SSE stream receives MUD output when another player speaks."
-  (with-http-server (http-port)
-    (with-mud-server (mud-port)
-      (let ((listener-sid (%http-initialize http-port))
-            (speaker-sid (%http-initialize http-port)))
-        (%http-connect-mud http-port listener-sid mud-port "SSE-Listener")
-        (%http-connect-mud http-port speaker-sid mud-port "SSE-Speaker")
-        ;; Open SSE stream for the listener
-        (multiple-value-bind (sse-stream sse-socket sse-code sse-headers)
-            (%http-stream-get "127.0.0.1" http-port "/mcp"
-                              `(("Accept" . "text/event-stream")
-                                ("Mcp-Session-Id" . ,listener-sid)))
-          (unwind-protect
-               (progn
-                 (is (not (null sse-stream)))
-                 (is (= 200 sse-code))
-                 (let ((ct (cdr (assoc "Content-Type" sse-headers
-                                       :test #'string-equal))))
-                   (is (search "text/event-stream" ct)))
-                 ;; Small delay to ensure SSE stream is established
-                 (sleep 0.5)
-                 ;; Speaker says something
-                 (%http-send http-port speaker-sid "say Hello from SSE test!")
-                 ;; Read SSE events — should get the notification
-                 (let ((event-found nil))
-                   (loop repeat 20
-                         for line = (%read-sse-line sse-stream 0.5)
-                         while line
-                         do (when (and (> (length line) 6)
-                                       (string= (subseq line 0 6) "data: "))
-                              (let ((payload (subseq line 6)))
-                                (when (search "Hello from SSE test" payload)
-                                  (setf event-found t)
-                                  (loop-finish)))))
-                   (is-true event-found "SSE stream should receive the 'say' event"))))
-            ;; Cleanup
-            (when sse-socket
-              (ignore-errors (usocket:socket-close sse-socket))))))))
-
 (test http-sse-without-connection
   "SSE GET without a MUD connection returns 400 error."
   (with-http-server (http-port)
@@ -734,6 +694,46 @@ or NIL on timeout/eof."
                          "Should receive 'Second event' via SSE"))))
             (when sse-socket
               (ignore-errors (usocket:socket-close sse-socket)))))))))
+
+(test http-sse-receives-mud-output
+  "SSE stream receives MUD output when another player speaks."
+  (with-http-server (http-port)
+    (with-mud-server (mud-port)
+      (let ((listener-sid (%http-initialize http-port))
+            (speaker-sid (%http-initialize http-port)))
+        (%http-connect-mud http-port listener-sid mud-port "SSE-Listener")
+        (%http-connect-mud http-port speaker-sid mud-port "SSE-Speaker")
+        ;; Open SSE stream for the listener
+        (multiple-value-bind (sse-stream sse-socket sse-code sse-headers)
+            (%http-stream-get "127.0.0.1" http-port "/mcp"
+                              `(("Accept" . "text/event-stream")
+                                ("Mcp-Session-Id" . ,listener-sid)))
+          (unwind-protect
+               (progn
+                 (is (not (null sse-stream)))
+                 (is (= 200 sse-code))
+                 (let ((ct (cdr (assoc "Content-Type" sse-headers
+                                       :test #'string-equal))))
+                   (is (search "text/event-stream" ct)))
+                 ;; Small delay to ensure SSE stream is established
+                 (sleep 0.5)
+                 ;; Speaker says something
+                 (%http-send http-port speaker-sid "say Hello from SSE test!")
+                 ;; Read SSE events — should get the notification
+                 (let ((event-found nil))
+                   (loop repeat 20
+                         for line = (%read-sse-line sse-stream 0.5)
+                         while line
+                         do (when (and (> (length line) 6)
+                                       (string= (subseq line 0 6) "data: "))
+                              (let ((payload (subseq line 6)))
+                                (when (search "Hello from SSE test" payload)
+                                  (setf event-found t)
+                                  (loop-finish)))))
+                   (is-true event-found "SSE stream should receive the 'say' event"))))
+            ;; Cleanup
+            (when sse-socket
+              (ignore-errors (usocket:socket-close sse-socket))))))))
 
 ;; ══════════════════════════════════════════════════════════════
 ;; listen-for-activity One-Shot Mode Tests
