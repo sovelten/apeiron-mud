@@ -6,7 +6,9 @@
 
 (defwrapping-persistent-class persistent-object (mud-object)
   ()
-  (:transient-slots properties))
+  ;; properties is intentionally NOT transient — objects store meaningful
+  ;; game state via object-set-property that must survive restarts.
+  (:transient-slots))
 
 (defwrapping-persistent-class persistent-room (mud-room persistent-object)
   ()
@@ -46,10 +48,28 @@ Usage from the MUD: eval (refresh-guestbooks)"
   ()
   (:transient-slots players objects rooms))
 
+(defmethod object-set-property ((obj persistent-object) property-name value)
+  "Set a property on a persistent object, ensuring BKNR tracks the change.
+
+The default method modifies the hash-table in-place, which is invisible
+to BKNR.  This method additionally writes the hash-table reference back
+to the slot.  The write triggers wrapping-persistent-class's auto-wrap
+(which creates a transaction when needed) and BKNR's (setf
+slot-value-using-class) :after method, which encodes
+tx-change-slot-values into the transaction log.
+
+When called from within an existing transaction (e.g. during
+materialize-object), the auto-wrap passes through and BKNR records the
+change in the outer transaction's buffer."
+  (setf (gethash property-name (object-properties obj)) value)
+  ;; Write the slot so BKNR records the change — see docstring above.
+  (setf (object-properties obj) (object-properties obj)))
+
 (defmethod create-object! ((world persistent-world) object)
   "Register OBJECT in WORLD by materializing a persistent copy."
   (bknr.datastore:with-transaction ("create-object")
-    (materialize-object object world)))
+    (let ((pobj (materialize-object object world)))
+      (world-add-object! world pobj))))
 
 ;; ─── Store lifecycle ────────────────────────────────────────────────────────
 

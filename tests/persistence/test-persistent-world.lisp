@@ -128,6 +128,34 @@ in the room's connections list."
       (when (probe-file csv-path)
         (ignore-errors (delete-file csv-path))))))
 
+(test properties-tracked-via-slot-write
+  "object-set-property on a persistent object must write the slot
+so BKNR records the change in the transaction log."
+  (let* ((world (world-restore-or-initialize :force-new t))
+         (transient-obj (new-object :name "test-prop"))
+         (obj (progn (world-add-object! world transient-obj)
+                     (create-object! world transient-obj))))
+    ;; Set a property — should trigger a slot write via the method
+    (object-set-property obj "color" "blue")
+    ;; Verify the value is set
+    (is (equal "blue" (object-get-property obj "color")))
+    ;; Verify the property is in the hash-table
+    (is (equal "blue" (gethash "color" (object-properties obj))))))
+
+(test properties-survive-snapshot-restart
+  "Object properties set via object-set-property on a persistent object
+must survive a snapshot + close-store + reopen cycle."
+  (let* ((world (world-restore-or-initialize :force-new t))
+         (obj (create-object! world (new-object :name "restore-prop-test"))))
+    (object-set-property obj "color" "green")
+    (bknr.datastore:close-store)
+    (let* ((new-world (world-restore-or-initialize))
+           (restored (world-object-by-id new-world (object-id obj))))
+      (is (not (null restored))
+          "Object should be found after restart")
+      (is (equal "green" (object-get-property restored "color"))
+          "Property should survive snapshot + restart"))))
+
 (test guestbook-present-after-restore
   "After closing and reopening the BKNR store, the guestbook should still
 be present in 'The Gathering' room.  This guards against a bug where

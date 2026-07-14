@@ -92,8 +92,10 @@ current value of *EVENT-LOG-FILE*.  When LOG-FILE is NIL, logging is
 not started.
 
 Registers queued-handler instances on the standard Deeds event loop that
-write formatted log lines for info/error/warning/player-input/player-output
-events.  Returns T if logging was started, NIL otherwise."
+write formatted log lines for info/error/warning and player-input events.
+Player-output events are intentionally NOT logged — they produce the
+bulk of the log volume and are rarely needed for debugging.  Returns T
+if logging was started, NIL otherwise."
   (when log-file
     ;; Close any previously open log.
     (stop-event-logging)
@@ -116,11 +118,6 @@ events.  Returns T if logging was started, NIL otherwise."
           *event-log-handlers*)
     (push (deeds:with-handler player-input-event (ev input session-id character-name)
             (%write-log-line :INPUT input
-                             :session-id session-id
-                             :character-name character-name))
-          *event-log-handlers*)
-    (push (deeds:with-handler player-output-event (ev output session-id character-name)
-            (%write-log-line :OUTPUT output
                              :session-id session-id
                              :character-name character-name))
           *event-log-handlers*)
