@@ -33,8 +33,17 @@
   "Get a property value from an object."
   (gethash property-name (object-properties obj)))
 
-(defun object-set-property (obj property-name value)
-  "Set a property value on an object."
+(defgeneric object-set-property (obj property-name value)
+  (:documentation
+   "Set a property value on an object.
+
+The default method modifies the hash-table in-place.
+
+Specialized methods on persistent objects should also ensure the slot
+is written so BKNR's transaction logging captures the change."))
+
+(defmethod object-set-property (obj property-name value)
+  "Default: modify the properties hash-table in-place."
   (setf (gethash property-name (object-properties obj)) value))
 
 (defun object-move (obj new-location)
