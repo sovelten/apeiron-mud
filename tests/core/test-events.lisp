@@ -172,8 +172,9 @@ Example:
     (is (search "session=1" contents))
     (is (search "char=Hero" contents))))
 
-(test log-file-captures-player-output-event
-  "A player-output-event issued while logging is active should appear in the log."
+(test log-file-does-not-capture-player-output-event
+  "A player-output-event issued while logging is active should NOT appear
+in the log — output events are intentionally excluded to reduce log volume."
   (let ((contents
           (with-temp-log-file
             (lambda (lp)
@@ -182,9 +183,9 @@ Example:
               (sleep 0.2)
               (stop-event-logging)
               (log-file-contents lp)))))
-    (is (search "OUTPUT The room is dark." contents))
-    (is (search "session=2" contents))
-    (is (search "char=Mage" contents))))
+    (is (not (search "OUTPUT The room is dark." contents)))
+    (is (not (search "session=2" contents)))
+    (is (not (search "char=Mage" contents)))))
 
 (test start-event-logging-no-file-is-noop
   "start-event-logging with NIL should be a no-op."
