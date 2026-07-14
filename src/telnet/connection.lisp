@@ -173,17 +173,17 @@ When PROTOCOL is provided, it is used instead of creating a fresh
 telnet-protocol instance.  This is useful for pre-configuring option
 handlers (e.g. registering the START_TLS option)."
   (let* ((fd (%socket-fd usocket))
-         ;; Use SEPARATE input and output streams, each on its own dup'd
-         ;; file descriptor.  Two reasons:
-         ;;   1. A single bidirectional fd-stream is unreliable on SBCL —
-         ;;      issuing a write + FORCE-OUTPUT and then reading on the same
-         ;;      fd-stream can corrupt the input side and stall subsequent
-         ;;      reads.  Telnet constantly interleaves reads (incoming data)
-         ;;      with writes (negotiation responses), so this bug bites hard.
-         ;;   2. Dup'ing also prevents the usocket character stream from
-         ;;      stealing bytes from the shared socket receive queue.
-         (in-stream  (%make-binary-fd-stream (sb-posix:dup fd) :input t :output nil))
-         (out-stream (%make-binary-fd-stream (sb-posix:dup fd) :input nil :output t))
+         (in-fd  (sb-posix:dup fd))
+         (out-fd (sb-posix:dup fd))
+         (in-stream  (%make-binary-fd-stream in-fd  :input t :output nil))
+         (out-stream
+           (handler-case
+               (%make-binary-fd-stream out-fd :input nil :output t)
+             (error (e)
+               ;; If the second stream creation fails, close the first
+               ;; dup'd fd so it doesn't leak.
+               (ignore-errors (close in-stream))
+               (error e))))
          (conn (make-instance 'telnet-connection
                               :usocket usocket
                               :raw-stream in-stream

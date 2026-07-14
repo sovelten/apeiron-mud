@@ -100,7 +100,12 @@ with all standard telnet I/O functions; all traffic is encrypted.
 
 On handshake failure, a telnet-tls-error is signalled."
   (let* ((fd (%socket-fd usocket))
-         (plain-stream (%make-binary-bidi-stream fd))
+         ;; Dup the fd so the SSL stream owns its own fd, independent of
+         ;; the usocket's internal stream.  The usocket is kept only for
+         ;; socket-close at teardown; the dup'd fd is used by the SSL
+         ;; layer.  A single bidirectional stream is required because the
+         ;; SSL BIO layer needs a single transport for TLS records.
+         (plain-stream (%make-binary-bidi-stream (sb-posix:dup fd)))
          (ssl-stream
            (handler-case
                (cl+ssl:make-ssl-server-stream
