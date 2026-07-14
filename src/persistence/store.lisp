@@ -44,6 +44,21 @@ persistent-direct-slot-definition, preserving all attributes
                             :index-subclasses (bknr.indices::index-direct-slot-definition-index-subclasses slotd))))
         (apply #'make-instance 'bknr.datastore::persistent-direct-slot-definition common))))
 
+(defmethod bknr.datastore::class-slot-indices
+    ((class wrapping-persistent-class) slot-name)
+  "Walk up the superclass chain to find index information.
+BKNR's persistent-class method looks at the slot definition on the class
+itself.  For wrapping-persistent-class subclasses, inherited slot
+definitions from STORE-OBJECT may have indices attached to the parent
+class's effective slot definition but not to the subclass's.
+Fall back to the first superclass that has indices for this slot."
+  (dolist (super (sb-mop:class-direct-superclasses class))
+    (let ((super-indices
+            (ignore-errors
+              (bknr.datastore::class-slot-indices super slot-name))))
+      (when super-indices
+        (return super-indices)))))
+
 (defmethod sb-mop:compute-effective-slot-definition :around
     ((class wrapping-persistent-class) name direct-slots)
   ;; Convert any inherited non-persistent direct-slot-definition instances
