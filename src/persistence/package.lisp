@@ -35,4 +35,7 @@
    ;; World persistence
    #:initial-world
    #:world-restore-or-initialize
-   #:get-persistent-world))
+   #:get-persistent-world
+
+   ;; Utilities
+   #:refresh-guestbooks))
