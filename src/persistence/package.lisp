@@ -19,6 +19,7 @@
    #:persistent-object
    #:persistent-room
    #:persistent-guestbook
+   #:persistent-wordle
    #:persistent-connection
    #:persistent-world
 

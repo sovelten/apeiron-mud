@@ -15,6 +15,7 @@
                  (:file "core/test-events" :depends-on ("test-package"))
                  (:file "core/test-world" :depends-on ("test-package"))
                  (:file "core/test-commands" :depends-on ("test-package"))
+                 (:file "core/test-wordle" :depends-on ("test-package"))
                  (:file "persistence/test-persistent-world" :depends-on ("test-package"))
                  (:file "worlds/test-world-areas" :depends-on ("test-package"))
                  (:file "server/test-network" :depends-on ("test-package"))

@@ -162,6 +162,30 @@
    #:guestbook-add-entry
    #:guestbook-format-entries
 
+   ;; Wordle puzzle
+   #:*wordle-default-words*
+   #:*wordle-override-time*
+   #:mud-wordle-puzzle
+   #:new-wordle-puzzle
+   #:wordle-target-word
+   #:wordle-player-guesses
+   #:wordle-max-guesses
+   #:wordle-word-list
+   #:wordle-evaluate-guess
+   #:wordle-guess
+   #:wordle-display
+   #:wordle-reset
+   #:wordle-reset-player
+   #:wordle-player-guesses-list
+   #:wordle-player-solved-p
+   #:wordle-player-failed-p
+   #:wordle-help-text
+   #:wordle-daily-word
+   #:wordle-set-daily-word!
+   #:wordle-date-key
+   #:wordle-ensure-fresh-word!
+   #:wordle-word-date
+
    ;; Session protocols / base
    #:mud-read-line
    #:mud-write
@@ -258,4 +282,5 @@
    #:issue-player-output-event
 
    ;; Extensibility
-   #:handle-event))
+   #:handle-event
+   #:handle-speech))

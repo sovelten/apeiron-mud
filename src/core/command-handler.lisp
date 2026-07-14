@@ -267,6 +267,48 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
   (world-remove-character! world player)
   (session-disconnect (character-session player)))
 
+;; ─── Speech handling ──────────────────────────────────────────────────────
+;; Objects can implement HANDLE-SPEECH to respond when spoken/told to.
+
+(defgeneric handle-speech (object speaker message)
+  (:documentation "Called when SPEAKER directs MESSAGE at OBJECT.
+  Returns non-NIL if the speech was handled, NIL otherwise.")
+  (:method (object speaker message)
+    (declare (ignore object speaker message))
+    nil))
+
+(define-command "tell" (world player args)
+  (declare (ignore world))
+  (if (zerop (length args))
+      (player-send-message player "Tell who what? Usage: tell <name> <message>")
+      (let* ((space-pos (position #\Space args))
+             (target-name (if space-pos
+                              (string-downcase (subseq args 0 space-pos))
+                              (string-downcase args)))
+             (message (if space-pos
+                          (string-trim '(#\Space #\Tab) (subseq args (1+ space-pos)))
+                          "")))
+        (if (zerop (length message))
+            (player-send-message player "Tell who what? Usage: tell <name> <message>")
+            (let* ((room (object-location player))
+                   (target (find-if (lambda (obj)
+                                      (and (not (eq obj player))
+                                           (search target-name (string-downcase (object-name obj)))))
+                                    (container-all-objects room))))
+              (cond
+                ((null target)
+                 (player-send-message player (format nil "There's no ~A here to tell that to." args)))
+                ((typep target 'mud-character)
+                 ;; Send private message to another player
+                 (player-send-message player (format nil "~A ~A ~A" (bold-white "You tell") (bright-green (format nil "~A:" (object-name target))) message))
+                 (player-send-message target (format nil "~A ~A ~A" (bright-green (format nil "~A tells you" (object-name player))) (bold-white "privately:") message)))
+                (t
+                 ;; Tell an object — give it a chance to handle the speech
+                 (player-send-message player (format nil "~A ~A ~A" (bold-white "You tell") (cyan (format nil "~A:" (object-name target))) message))
+                 (unless (handle-speech target player message)
+                   ;; Object didn't respond
+                   (player-send-message player (format nil "~A doesn't seem to understand." (object-name target)))))))))))
+
 (defun parse-command (input)
   "Parse a command string into command name and raw args string.
    Returns: (values command-name raw-args-string)"

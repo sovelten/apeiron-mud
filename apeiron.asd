@@ -33,6 +33,7 @@
                  (:file "container" :depends-on ("object"))
                  (:file "room" :depends-on ("object" "container"))
                  (:file "guestbook" :depends-on ("object"))
+                 (:file "wordle" :depends-on ("object"))
                  (:file "connection" :depends-on ("room"))
                  (:file "npc" :depends-on ("object"))
                  (:file "combat" :depends-on ("npc" "character"))
