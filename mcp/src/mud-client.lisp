@@ -33,6 +33,11 @@ connected.  Bound to a TELNET:TELNET-CONNECTION instance.")
 (defvar *mud-connections* (make-hash-table)
   "Hash-table mapping thread → telnet connection.")
 
+(defvar *mud-connection-lock* (bordeaux-threads:make-lock "mud-conn-lock")
+  "Lock serialising access to the MUD telnet connection.
+Synchronises the GET SSE stream (which reads unsolicited output) with
+POST tool calls (which send commands and read responses).")
+
 (defun %mud-conn ()
   (gethash (bordeaux-threads:current-thread) *mud-connections*))
 
@@ -292,28 +297,29 @@ receiving the next prompt, with ANSI codes stripped."
     (return-from send-command
       (values nil "Not connected to MUD. Use mud-connect first.")))
 
-  (handler-case
-      (let ((conn (%mud-conn)))
-        ;; Send the command
-        (telnet:telnet-write-string conn command-string :end :crlf)
+  (bordeaux-threads:with-lock-held (*mud-connection-lock*)
+    (handler-case
+        (let ((conn (%mud-conn)))
+          ;; Send the command
+          (telnet:telnet-write-string conn command-string :end :crlf)
 
-        ;; Read the response
-        (multiple-value-bind (text status)
-            (%read-until-prompt conn)
-          (case status
-            (:ok (values text nil))
-            (:timeout (values text "Response may be incomplete (timeout)"))
-            (:disconnected
-             (setf (%mud-conn) nil)
-             (values text "Connection lost while reading response"))
-            (otherwise (values text nil)))))
+          ;; Read the response
+          (multiple-value-bind (text status)
+              (%read-until-prompt conn)
+            (case status
+              (:ok (values text nil))
+              (:timeout (values text "Response may be incomplete (timeout)"))
+              (:disconnected
+               (setf (%mud-conn) nil)
+               (values text "Connection lost while reading response"))
+              (otherwise (values text nil)))))
 
-    (telnet:telnet-connection-lost (e)
-      (declare (ignore e))
-      (setf (%mud-conn) nil)
-      (values nil "Connection to MUD was lost"))
-    (error (e)
-      (values nil (format nil "Error sending command: ~A" e)))))
+      (telnet:telnet-connection-lost (e)
+        (declare (ignore e))
+        (setf (%mud-conn) nil)
+        (values nil "Connection to MUD was lost"))
+      (error (e)
+        (values nil (format nil "Error sending command: ~A" e))))))
 
 ;; ─── Public: send an eval command ────────────────────────────────
 
@@ -405,23 +411,28 @@ to wait for and react to in-game events."
               (return-from listen-for-activity :timeout)
               (return-from listen-for-activity
                 (values nil nil :timeout))))
-        (multiple-value-bind (text status)
-            (%read-until-prompt conn :total-timeout (min idle-timeout remaining))
-          (case status
-            (:disconnected
-             (setf (%mud-conn) nil)
-             (if callback
-                 (funcall callback "Connection to MUD was lost." :disconnected)
-                 (return-from listen-for-activity
-                   (values text nil :disconnected))))
-            (:ok
-             (let ((trimmed (string-trim '(#\Space #\Newline #\Return #\Tab) text)))
-               (when (> (length trimmed) 0)
-                 (if callback
-                     (let ((result (funcall callback trimmed nil)))
-                       (when (eq result :stop)
-                         (return-from listen-for-activity :stopped)))
-                     (return-from listen-for-activity
-                       (values text nil :ok))))))
-            ;; :timeout means no output — just loop and try again
-            (:timeout nil)))))))
+        ;; Acquire the MUD connection lock so we do not read from the
+        ;; connection while send-command (called from a POST handler)
+        ;; is sending a command and reading its response.  The lock is
+        ;; released after each iteration so POST handlers don't starve.
+        (bordeaux-threads:with-lock-held (*mud-connection-lock*)
+          (multiple-value-bind (text status)
+              (%read-until-prompt conn :total-timeout (min idle-timeout remaining))
+            (case status
+              (:disconnected
+               (setf (%mud-conn) nil)
+               (if callback
+                   (funcall callback "Connection to MUD was lost." :disconnected)
+                   (return-from listen-for-activity
+                     (values text nil :disconnected))))
+              (:ok
+               (let ((trimmed (string-trim '(#\Space #\Newline #\Return #\Tab) text)))
+                 (when (> (length trimmed) 0)
+                   (if callback
+                       (let ((result (funcall callback trimmed nil)))
+                         (when (eq result :stop)
+                           (return-from listen-for-activity :stopped)))
+                       (return-from listen-for-activity
+                         (values text nil :ok))))))
+              ;; :timeout means no output — just loop and try again
+              (:timeout nil))))))))

@@ -131,7 +131,7 @@ Returns the previous value so the caller can restore it."
 
 Routes based on HTTP method:
 - POST — JSON-RPC 2.0 requests (initialize, tools/list, tools/call, etc.)
-- GET  — SSE stream for MUD activity notifications (requires active session + MUD connection)
+- GET  — SSE stream for MUD activity notifications
 - DELETE — tear down an HTTP session
 - OPTIONS — CORS preflight"
   (%set-cors-headers)
@@ -206,6 +206,9 @@ Routes based on HTTP method:
 
     (:get
      ;; SSE — Server-Sent Events for MUD output notifications.
+     ;; The stream is opened by plumcp after initialization, before
+     ;; mud-connect.  Accept it eagerly and wait for a MUD connection
+     ;; to become available in the session state.
      (let ((session-id (%request-header :mcp-session-id)))
        (unless session-id
          (return-from mcp-handler
@@ -215,53 +218,57 @@ Routes based on HTTP method:
            (return-from mcp-handler
              (%json-error -32600 (format nil "Session ~A not found" session-id)
                           :status 404)))
-         ;; Restore this session's MUD connection
-         (let ((sse-old-conn (%session-restore-connection state)))
-           (unless (mud-connected-p)
-             (setf (%mud-conn) sse-old-conn)
-             (return-from mcp-handler
-               (%json-error -32600
-                            "No active MUD connection. Use mud-connect first."
-                            :status 400)))
+         ;; Set SSE headers immediately
+         (setf (hunchentoot:content-type*) "text/event-stream")
+         (setf (hunchentoot:return-code*) 200)
+         (setf (%response-header :cache-control) "no-cache")
+         (setf (%response-header :connection) "keep-alive")
 
-           ;; Set SSE headers
-           (setf (hunchentoot:content-type*) "text/event-stream")
-           (setf (hunchentoot:return-code*) 200)
-           (setf (%response-header :cache-control) "no-cache")
-           (setf (%response-header :connection) "keep-alive")
-
-           (unwind-protect
-                (let ((stream (hunchentoot:send-headers)))
-                  ;; Send initial SSE comment to flush headers through
-                  (%sse-write stream ":ok~%~%")
-                  ;; Stream MUD events via listen-for-activity callbacks
-                  (listen-for-activity
-                   :timeout (* 24 3600)
-                   :idle-timeout 1.0
-                   :callback
-                   (lambda (text status)
-                     (handler-case
-                         (cond
-                           ;; Connection lost → stop listening
-                           ((eq status :disconnected)
-                            :stop)
-                           ;; MUD activity → encode as SSE notification
-                           (t
-                            (let ((notification
-                                    (%encode-json
-                                     (%make-ht
-                                      "jsonrpc" "2.0"
-                                      "method" "notifications/mud-output"
-                                      "params" (%make-ht "text" text)))))
-                              (%sse-write stream (format nil "data: ~A~%~%" notification))
-                              nil)))
-                       (stream-error (e)
-                         (declare (ignore e))
-                         :stop))))
-                  nil)
-             ;; Always restore *MUD-CONNECTION*, even if the SSE stream
-             ;; exits abnormally (client disconnect, stream error, etc.)
-             (setf (%mud-conn) sse-old-conn))))))
+         (let ((stream (hunchentoot:send-headers)))
+           ;; Send initial SSE comment to flush headers through
+           (%sse-write stream ":ok~%~%")
+           ;; Wait for a MUD connection to appear in the session state
+           ;; (set by mud-connect's %session-save-connection).  Poll
+           ;; every second with a 5-minute timeout.
+           (loop with deadline = (+ (get-internal-real-time)
+                                    (* 300 internal-time-units-per-second))
+                 for remaining = (/ (- deadline (get-internal-real-time))
+                                    internal-time-units-per-second)
+                 until (<= remaining 0)
+                 do (let ((old-conn (%session-restore-connection state)))
+                      (when (mud-connected-p)
+                        ;; Got the connection — enter the listen loop.
+                        ;; send-command coordinates via *mud-connection-lock*.
+                        (listen-for-activity
+                         :timeout (* 24 3600)
+                         :idle-timeout 1.0
+                         :callback
+                         (lambda (text status)
+                           (handler-case
+                               (cond
+                                 ((eq status :disconnected)
+                                  :stop)
+                                 (t
+                                  (let ((notification
+                                          (%encode-json
+                                           (%make-ht
+                                            "jsonrpc" "2.0"
+                                            "method" "notifications/message"
+                                            "params" (%make-ht "level" "info"
+                                                               "data" text)))))
+                                    (%sse-write stream
+                                                (format nil "data: ~A~%~%" notification))
+                                    nil)))
+                             (stream-error (e)
+                               (declare (ignore e))
+                               :stop))))
+                        ;; After listen-for-activity exits, save connection
+                        (%session-save-connection state)
+                        (return))
+                      ;; No connection yet — restore and retry
+                      (setf (%mud-conn) old-conn)
+                      (sleep 1)))
+           nil))))
 
     (:delete
      (let ((session-id (%request-header :mcp-session-id)))

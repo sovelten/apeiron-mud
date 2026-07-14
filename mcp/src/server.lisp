@@ -77,7 +77,8 @@ When STATE is provided, it is used instead of the global *SERVER-STATE*
              (%make-ht
               "protocolVersion" chosen
               "capabilities" (%make-ht
-                              "tools" (%make-ht))
+                              "tools" (%make-ht)
+                              "streamingHttp" t)
               "serverInfo" (%make-ht
                             "name" +server-name+
                             "version" +server-version+)))))
