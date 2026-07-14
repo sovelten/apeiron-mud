@@ -347,7 +347,7 @@ We'll use the in-game `eval` command, which runs Lisp code inside the live serve
 
 1. Create a hidden room: *The Ancient Library*
 2. Create a secret diary (guestbook) and place it in the library
-3. Connect the library to *The Gathering* (the starting room) through a *crack in the wall*
+3. Connect the library to **the room you are standing in** through a *crack in the wall*
 4. Lock the passage with a password challenge â€” players must `answer` correctly to enter
 
 ### Step-by-Step
@@ -358,7 +358,7 @@ We'll use the in-game `eval` command, which runs Lisp code inside the live serve
 telnet localhost 8888
 ```
 
-Log in with any name. You'll start in **The Gathering**.
+Log in with any name. You'll start in the hub room, your current location.
 
 #### 2. Create the secret room
 
@@ -390,7 +390,7 @@ The return value shows the new room and its world-level ID (yours will differ â€
 
 Replace `12` and `13` with the IDs you got in steps 2 and 3.
 
-#### 5. Connect the library to The Gathering
+#### 5. Connect the library to your current room
 
 ```
 > eval (connect-rooms! (world) (here) "north" (world-object-by-id (world) 12) "south" :name "a crack in the wall")
@@ -398,7 +398,7 @@ Replace `12` and `13` with the IDs you got in steps 2 and 3.
 #<MUD-CONNECTION a crack in the wall (ID: 14)>
 ```
 
-A player in The Gathering can now `go north` and find the crack, and a player in the library can `go south` back.
+A player in the hub room can now `go north` and find the crack, and a player in the library can `go south` back.
 
 #### 6. Add the password challenge
 
