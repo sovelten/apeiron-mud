@@ -146,7 +146,7 @@ so BKNR records the change in the transaction log."
   "Object properties set via object-set-property on a persistent object
 must survive a snapshot + close-store + reopen cycle."
   (let* ((world (world-restore-or-initialize :force-new t))
-         (obj (create-object! (new-object :name "restore-prop-test"))))
+         (obj (create-object! world (new-object :name "restore-prop-test"))))
     (object-set-property obj "color" "green")
     (bknr.datastore:close-store)
     (let* ((new-world (world-restore-or-initialize))
