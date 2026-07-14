@@ -30,6 +30,18 @@
       (setf (guestbook-entries gb)
             (guestbook-load-from-csv (pathname fp))))))
 
+(defun refresh-guestbooks ()
+  "Reload all guestbook entries from their CSV files.
+Run this after restarting the server if guestbook entries look stale.
+Usage from the MUD: eval (refresh-guestbooks)"
+  (dolist (gb (bknr.datastore:store-objects-with-class 'persistent-guestbook))
+    (let ((fp (guestbook-filepath gb)))
+      (when fp
+        (setf (guestbook-entries gb)
+              (guestbook-load-from-csv (pathname fp))))
+      (log-message "Refreshed guestbook ~A from ~A" (object-name gb) fp)))
+  (values))
+
 (defwrapping-persistent-class persistent-world (mud-world)
   ()
   (:transient-slots players objects rooms))

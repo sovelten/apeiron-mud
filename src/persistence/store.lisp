@@ -61,8 +61,11 @@ persistent-direct-slot-definition, preserving all attributes
                         ;; Convert to persistent while preserving index attrs
                         (upgrade-to-persistent-slot
                          slotd
-                         :transient (if (member (sb-mop:slot-definition-name slotd)
-                                                transient-slot-names)
+                         :transient (if (find (sb-mop:slot-definition-name slotd)
+                                              transient-slot-names
+                                              :test (lambda (a b)
+                                                      (string= (symbol-name a)
+                                                               (symbol-name b))))
                                         t
                                         nil))))
                   direct-slots)))
