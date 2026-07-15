@@ -237,13 +237,16 @@ Detection covers:
     (unless (%input-ready-p raw timeout)
       ;; No data yet — not necessarily a problem; raw-TCP clients may be slow
       (return-from telnet-validate-connection t))
-    ;; Read up to 16 bytes directly from the raw stream into peek-buffer
-    (loop for i below 16 do
-      (let ((b (read-byte raw nil :eof)))
-        (when (eq b :eof)
-          (setf (telnet-connection-alive-p conn) nil)
-          (return-from telnet-validate-connection nil))
-        (vector-push-extend b peek)))
+    ;; Read available bytes directly from the raw stream into peek-buffer.
+    ;; Read at most 16 bytes, but stop when no more data is immediately
+    ;; available — we do NOT block waiting for the client to send more.
+    (loop for i below 16
+          while (listen raw)
+          do (let ((b (read-byte raw nil :eof)))
+               (when (eq b :eof)
+                 (setf (telnet-connection-alive-p conn) nil)
+                 (return-from telnet-validate-connection nil))
+               (vector-push-extend b peek)))
     ;; Protocol detection on the first byte(s)
     (when (> (fill-pointer peek) 0)
       (let ((b0 (aref peek 0)))
@@ -561,15 +564,17 @@ Returns (values nil :connection-lost) on fatal error."
         (decf (fill-pointer line))
         (return-from telnet-read-char (values c nil))))
 
-    ;; Wait until the stream is readable (data available OR EOF).  We do
-    ;; not use usocket:wait-for-input because the usocket character stream
-    ;; would steal bytes from the kernel buffer ahead of our binary stream.
-    (unless (%input-ready-p (telnet-conn-raw-stream conn) timeout)
+    ;; Wait until the stream is readable (data available OR EOF), or
+    ;; the peek-buffer has pre-read bytes from protocol validation.
+    ;; We do not use usocket:wait-for-input because the usocket
+    ;; character stream would steal bytes from the kernel buffer
+    ;; ahead of our binary stream.
+    (unless (or (> (fill-pointer (slot-value conn 'peek-buffer)) 0)
+                (%input-ready-p (telnet-conn-raw-stream conn) timeout))
       (return-from telnet-read-char (values nil :timeout)))
 
     ;; Read and process bytes from the raw binary stream
-    (let* ((raw-stream (telnet-conn-raw-stream conn))
-           (buf (slot-value conn 'read-buffer)))
+    (let ((buf (slot-value conn 'read-buffer)))
       (setf (fill-pointer buf) 0)
 
       (let ((b (%connection-read-byte conn buf 0)))

@@ -909,3 +909,411 @@ should send IAC SB EOR IAC SE = #(255 250 25 255 240)."
            (is-false (telnet:telnet-send-eor conn)
                      "send-eor should return nil when EOR was refused"))
       (close-test-connection conn write-stream))))
+
+;; ===============================================================
+;; Connection Validation Tests — telnet-validate-connection
+;; ===============================================================
+
+;; ----------------------------------------------------------------------
+;; Test: HTTP GET request is rejected
+;; ----------------------------------------------------------------------
+
+(test telnet-validate-rejects-http-get
+  "telnet-validate-connection should return NIL and close the connection
+when an HTTP GET request arrives on the telnet port."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           ;; Write an HTTP GET request
+           (write-bytes write-stream
+                        (map '(vector (unsigned-byte 8)) #'char-code
+                             "GET / HTTP/1.1"))
+           (sleep 0.1)
+           (let ((result (telnet:telnet-validate-connection conn :timeout 2)))
+             (is-false result
+                       "HTTP GET request should be rejected"))
+           ;; Connection should be marked as dead
+           (is-false (telnet:telnet-connection-alive-p conn)
+                     "Connection should be closed after HTTP rejection"))
+      ;; conn may already be closed by validate-connection
+      (ignore-errors (close-test-connection conn write-stream)))))
+
+;; ----------------------------------------------------------------------
+;; Test: HTTP POST request is rejected
+;; ----------------------------------------------------------------------
+
+(test telnet-validate-rejects-http-post
+  "telnet-validate-connection should reject HTTP POST requests."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           (write-bytes write-stream
+                        (map '(vector (unsigned-byte 8)) #'char-code
+                             "POST /login HTTP/1.1"))
+           (sleep 0.1)
+           (is-false (telnet:telnet-validate-connection conn :timeout 2)
+                     "HTTP POST request should be rejected"))
+      (ignore-errors (close-test-connection conn write-stream)))))
+
+;; ----------------------------------------------------------------------
+;; Test: HTTP CONNECT request is rejected
+;; ----------------------------------------------------------------------
+
+(test telnet-validate-rejects-http-connect
+  "telnet-validate-connection should reject HTTP CONNECT (proxy) requests."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           (write-bytes write-stream
+                        (map '(vector (unsigned-byte 8)) #'char-code
+                             "CONNECT 10.0.0.1:443 HTTP/1.1"))
+           (sleep 0.1)
+           (is-false (telnet:telnet-validate-connection conn :timeout 2)
+                     "HTTP CONNECT request should be rejected"))
+      (ignore-errors (close-test-connection conn write-stream)))))
+
+;; ----------------------------------------------------------------------
+;; Test: HTTP HEAD request is rejected
+;; ----------------------------------------------------------------------
+
+(test telnet-validate-rejects-http-head
+  "telnet-validate-connection should reject HTTP HEAD requests."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           (write-bytes write-stream
+                        (map '(vector (unsigned-byte 8)) #'char-code
+                             "HEAD / HTTP/1.0"))
+           (sleep 0.1)
+           (is-false (telnet:telnet-validate-connection conn :timeout 2)
+                     "HTTP HEAD request should be rejected"))
+      (ignore-errors (close-test-connection conn write-stream)))))
+
+;; ----------------------------------------------------------------------
+;; Test: HTTP PUT request is rejected
+;; ----------------------------------------------------------------------
+
+(test telnet-validate-rejects-http-put
+  "telnet-validate-connection should reject HTTP PUT requests."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           (write-bytes write-stream
+                        (map '(vector (unsigned-byte 8)) #'char-code
+                             "PUT /resource HTTP/1.1"))
+           (sleep 0.1)
+           (is-false (telnet:telnet-validate-connection conn :timeout 2)
+                     "HTTP PUT request should be rejected"))
+      (ignore-errors (close-test-connection conn write-stream)))))
+
+;; ----------------------------------------------------------------------
+;; Test: HTTP DELETE request is rejected
+;; ----------------------------------------------------------------------
+
+(test telnet-validate-rejects-http-delete
+  "telnet-validate-connection should reject HTTP DELETE requests."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           (write-bytes write-stream
+                        (map '(vector (unsigned-byte 8)) #'char-code
+                             "DELETE /obj/42 HTTP/1.1"))
+           (sleep 0.1)
+           (is-false (telnet:telnet-validate-connection conn :timeout 2)
+                     "HTTP DELETE request should be rejected"))
+      (ignore-errors (close-test-connection conn write-stream)))))
+
+;; ----------------------------------------------------------------------
+;; Test: HTTP OPTIONS request is rejected
+;; ----------------------------------------------------------------------
+
+(test telnet-validate-rejects-http-options
+  "telnet-validate-connection should reject HTTP OPTIONS requests."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           (write-bytes write-stream
+                        (map '(vector (unsigned-byte 8)) #'char-code
+                             "OPTIONS * HTTP/1.1"))
+           (sleep 0.1)
+           (is-false (telnet:telnet-validate-connection conn :timeout 2)
+                     "HTTP OPTIONS request should be rejected"))
+      (ignore-errors (close-test-connection conn write-stream)))))
+
+;; ----------------------------------------------------------------------
+;; Test: HTTP PATCH request is rejected
+;; ----------------------------------------------------------------------
+
+(test telnet-validate-rejects-http-patch
+  "telnet-validate-connection should reject HTTP PATCH requests."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           (write-bytes write-stream
+                        (map '(vector (unsigned-byte 8)) #'char-code
+                             "PATCH /data HTTP/1.1"))
+           (sleep 0.1)
+           (is-false (telnet:telnet-validate-connection conn :timeout 2)
+                     "HTTP PATCH request should be rejected"))
+      (ignore-errors (close-test-connection conn write-stream)))))
+
+;; ----------------------------------------------------------------------
+;; Test: HTTP TRACE request is rejected
+;; ----------------------------------------------------------------------
+
+(test telnet-validate-rejects-http-trace
+  "telnet-validate-connection should reject HTTP TRACE requests."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           (write-bytes write-stream
+                        (map '(vector (unsigned-byte 8)) #'char-code
+                             "TRACE / HTTP/1.1"))
+           (sleep 0.1)
+           (is-false (telnet:telnet-validate-connection conn :timeout 2)
+                     "HTTP TRACE request should be rejected"))
+      (ignore-errors (close-test-connection conn write-stream)))))
+
+;; ----------------------------------------------------------------------
+;; Test: TLS ClientHello is rejected
+;; ----------------------------------------------------------------------
+
+(test telnet-validate-rejects-tls-clienthello
+  "telnet-validate-connection should reject TLS ClientHello (0x16 0x03)."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           ;; TLS record header: 0x16 = handshake, 0x03 0x01 = TLS 1.0
+           (write-bytes write-stream #(#x16 #x03 #x01 #x00 #x00 #x00))
+           (sleep 0.1)
+           (is-false (telnet:telnet-validate-connection conn :timeout 2)
+                     "TLS ClientHello should be rejected")
+           (is-false (telnet:telnet-connection-alive-p conn)
+                     "Connection should be closed after TLS rejection"))
+      (ignore-errors (close-test-connection conn write-stream)))))
+
+;; ----------------------------------------------------------------------
+;; Test: TLS 1.2 ClientHello is rejected
+;; ----------------------------------------------------------------------
+
+(test telnet-validate-rejects-tls12-clienthello
+  "telnet-validate-connection should reject TLS 1.2 ClientHello (0x16 0x03 0x03)."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           ;; TLS 1.2 record header: 0x16 = handshake, 0x03 0x03 = TLS 1.2
+           (write-bytes write-stream #(#x16 #x03 #x03))
+           (sleep 0.1)
+           (is-false (telnet:telnet-validate-connection conn :timeout 2)
+                     "TLS 1.2 ClientHello should be rejected"))
+      (ignore-errors (close-test-connection conn write-stream)))))
+
+;; ----------------------------------------------------------------------
+;; Test: RDP/TPKT is rejected
+;; ----------------------------------------------------------------------
+
+(test telnet-validate-rejects-rdp-tpkt
+  "telnet-validate-connection should reject RDP/TPKT connections (0x03 0x00)."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           ;; TPKT header: version 3, reserved = 0
+           (write-bytes write-stream #(#x03 #x00 #x00 #x00))
+           (sleep 0.1)
+           (is-false (telnet:telnet-validate-connection conn :timeout 2)
+                     "RDP/TPKT connection should be rejected")
+           (is-false (telnet:telnet-connection-alive-p conn)
+                     "Connection should be closed after RDP rejection"))
+      (ignore-errors (close-test-connection conn write-stream)))))
+
+;; ----------------------------------------------------------------------
+;; Test: Telnet IAC response is accepted
+;; ----------------------------------------------------------------------
+
+(test telnet-validate-accepts-iac-response
+  "telnet-validate-connection should accept a connection whose first
+byte is IAC (0xFF), indicating a proper telnet negotiation response."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           ;; IAC DO SGA = telnet client responding to our WILL SGA
+           (write-bytes write-stream #(#xFF #xFD #x03))
+           (sleep 0.1)
+           (is-true (telnet:telnet-validate-connection conn :timeout 2)
+                    "Telnet IAC response should be accepted")
+           ;; Connection should still be alive
+           (is-true (telnet:telnet-connection-alive-p conn)
+                    "Connection should remain alive after telnet response")
+           ;; Peek-buffer should contain the IAC bytes for subsequent reads
+           (let ((peek (slot-value conn 'telnet::peek-buffer)))
+             (is (= (fill-pointer peek) 3)
+                 "Peek-buffer should have 3 bytes (IAC DO SGA)")
+             (is (= (aref peek 0) #xFF) "First peek byte should be IAC")))
+      (close-test-connection conn write-stream))))
+
+;; ----------------------------------------------------------------------
+;; Test: Plain text / raw TCP is accepted
+;; ----------------------------------------------------------------------
+
+(test telnet-validate-accepts-plain-text
+  "telnet-validate-connection should accept a connection sending plain
+text (simulating a raw-TCP / netcat client)."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           ;; Plain ASCII text (lowercase = not an HTTP method)
+           (write-bytes write-stream
+                        (map '(vector (unsigned-byte 8)) #'char-code
+                             "hello server"))
+           (sleep 0.1)
+           (is-true (telnet:telnet-validate-connection conn :timeout 2)
+                    "Plain text should be accepted (raw TCP client)")
+           (is-true (telnet:telnet-connection-alive-p conn)
+                    "Connection should remain alive")
+           ;; Peek-buffer should contain the text bytes
+           (let ((peek (slot-value conn 'telnet::peek-buffer)))
+             (is (> (fill-pointer peek) 0)
+                 "Peek-buffer should contain the pre-read text bytes")))
+      (close-test-connection conn write-stream))))
+
+;; ----------------------------------------------------------------------
+;; Test: Timeout (no data) is accepted
+;; ----------------------------------------------------------------------
+
+(test telnet-validate-accepts-timeout
+  "telnet-validate-connection should return T when no data arrives
+within the timeout, allowing slow clients to connect."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           ;; Don't write anything - simulate a client that hasn't sent yet
+           (is-true (telnet:telnet-validate-connection conn :timeout 0.3)
+                    "Timeout with no data should be accepted (slow client)")
+           (is-true (telnet:telnet-connection-alive-p conn)
+                    "Connection should remain alive after timeout"))
+      (close-test-connection conn write-stream))))
+
+;; ----------------------------------------------------------------------
+;; Test: Validation drains into peek-buffer for correct subsequent reads
+;; ----------------------------------------------------------------------
+
+(test telnet-validate-peek-buffer-drain
+  "After successful validation, the peek-buffer bytes should be consumed
+by telnet-read-char in the correct order."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           ;; Write some data that will pass validation
+           (write-bytes write-stream
+                        (map '(vector (unsigned-byte 8)) #'char-code
+                             "ABCD"))
+           (sleep 0.1)
+           ;; Validate - should pass (plain text)
+           (is-true (telnet:telnet-validate-connection conn :timeout 2))
+           ;; Now read chars via telnet-read-char: they should come from
+           ;; the peek-buffer in order
+           (multiple-value-bind (c1 s1)
+               (telnet:telnet-read-char conn :timeout 1)
+             (is (and c1 (char= c1 #\A))
+                 "First char from peek-buffer should be 'A'")
+             (is (null s1)))
+           (multiple-value-bind (c2 s2)
+               (telnet:telnet-read-char conn :timeout 1)
+             (is (and c2 (char= c2 #\B))
+                 "Second char from peek-buffer should be 'B'")
+             (is (null s2)))
+           (multiple-value-bind (c3 s3)
+               (telnet:telnet-read-char conn :timeout 1)
+             (is (and c3 (char= c3 #\C))
+                 "Third char from peek-buffer should be 'C'")
+             (is (null s3)))
+           (multiple-value-bind (c4 s4)
+               (telnet:telnet-read-char conn :timeout 1)
+             (is (and c4 (char= c4 #\D))
+                 "Fourth char from peek-buffer should be 'D'")
+             (is (null s4))))
+      (close-test-connection conn write-stream))))
+
+;; ----------------------------------------------------------------------
+;; Test: HTTP partial method not followed by space is NOT rejected
+;; ----------------------------------------------------------------------
+
+(test telnet-validate-does-not-false-positive-on-words
+  "telnet-validate-connection should NOT reject text that starts with
+HTTP-method-like letters but is not actually an HTTP request (no space
+after the method word). This prevents false positives on real user input."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           ;; "GetOut" starts with 'G' like GET but has no space - should pass
+           (write-bytes write-stream
+                        (map '(vector (unsigned-byte 8)) #'char-code
+                             "GetOut"))
+           (sleep 0.1)
+           (is-true (telnet:telnet-validate-connection conn :timeout 2)
+                    "Text starting with 'G' without space should NOT be rejected"))
+      (close-test-connection conn write-stream))))
+
+;; ----------------------------------------------------------------------
+;; Test: Non-HTTP uppercase text (like a player name) is accepted
+;; ----------------------------------------------------------------------
+
+(test telnet-validate-accepts-uppercase-name
+  "telnet-validate-connection should accept a connection whose first
+word starts with uppercase and looks like a player name, not an HTTP method."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           ;; "Gandalf" starts with 'G' but is a name, not an HTTP method
+           (write-bytes write-stream
+                        (map '(vector (unsigned-byte 8)) #'char-code
+                             "Gandalf"))
+           (sleep 0.1)
+           (is-true (telnet:telnet-validate-connection conn :timeout 2)
+                    "Player name starting with uppercase should be accepted"))
+      (close-test-connection conn write-stream))))
+
+;; ----------------------------------------------------------------------
+;; Test: Single-byte IAC is accepted
+;; ----------------------------------------------------------------------
+
+(test telnet-validate-accepts-single-iac
+  "telnet-validate-connection should accept a connection whose only
+first byte is IAC (0xFF)."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           (write-bytes write-stream #(#xFF))
+           (sleep 0.1)
+           (is-true (telnet:telnet-validate-connection conn :timeout 2)
+                    "Single IAC byte should be accepted as telnet"))
+      (close-test-connection conn write-stream))))
+
+;; ----------------------------------------------------------------------
+;; Test: Empty peek-buffer after validation clears it
+;; ----------------------------------------------------------------------
+
+(test telnet-validate-clears-peek-buffer-first
+  "telnet-validate-connection should clear the peek-buffer before filling
+it, so stale data from a previous call does not remain."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           ;; Manually put junk in the peek-buffer
+           (let ((peek (slot-value conn 'telnet::peek-buffer)))
+             (vector-push-extend #xFF peek)
+             (vector-push-extend #xFF peek))
+           ;; Now write actual data for validation
+           (write-bytes write-stream
+                        (map '(vector (unsigned-byte 8)) #'char-code
+                             "X"))
+           (sleep 0.1)
+           (is-true (telnet:telnet-validate-connection conn :timeout 2)
+                    "Validation should pass")
+           ;; Peek-buffer should contain only the new data
+           (let ((peek (slot-value conn 'telnet::peek-buffer)))
+             (is (= (fill-pointer peek) 1)
+                 "Peek-buffer should have 1 byte after clearing")
+             (is (char= (code-char (aref peek 0)) #\X)
+                 "Peek-buffer should contain the new byte, not stale data")))
+      (close-test-connection conn write-stream))))
