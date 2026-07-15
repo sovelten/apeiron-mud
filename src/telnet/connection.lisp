@@ -117,6 +117,12 @@ this connection to TLS.  Called from %HANDLE-TELNET-COMMAND when the
 START_TLS option (46) is successfully negotiated (we receive DO START_TLS
 after offering WILL START_TLS).  Set by the network layer when the server
 wants to offer START_TLS on the plain-text port.")
+   (preamble-buffer
+    :initform (make-array 0 :element-type '(unsigned-byte 8)
+                            :adjustable t :fill-pointer 0)
+    :accessor telnet-conn-preamble-buffer
+    :documentation "Bytes pre-read by the connection guard that must be
+re-injected before reading from the raw socket stream.")
    ;; Read-side state
    (read-buffer
     :initform (make-array 256 :element-type '(unsigned-byte 8)
@@ -156,10 +162,108 @@ full-duplex socket case where the same stream is read and written)."
       (telnet-conn-raw-stream conn)))
 
 ;;; ----------------------------------------------------------------
+;;; Connection guard — reject non-telnet protocols before they reach
+;;; the RFC 854 state machine.
+;;; ----------------------------------------------------------------
+
+(defun %peek-first-byte (usocket)
+  "Read the first available byte from USOCKET (consumptive read).
+Returns (values byte nil) where byte is 0-255, or (values nil :no-data)
+if no data is available, or (values nil :error) on failure.
+
+The byte is consumed from the socket — the caller MUST pass it back
+through MAKE-TELNET-CONNECTION'S :INITIAL-BYTE parameter, otherwise
+the byte is lost.
+
+Uses a temporary dup of the fd for reading so the original fd within
+the usocket remains open and usable by MAKE-TELNET-CONNECTION."
+  (handler-case
+      (let* ((fd (%socket-fd usocket))
+             ;; Dup: the check-stream will close its own fd on close,
+             ;; leaving the original fd intact for make-telnet-connection.
+             (check-fd (and fd (sb-posix:dup fd)))
+             (check-stream (and check-fd
+                                (%make-binary-fd-stream check-fd
+                                                        :input t
+                                                        :output nil))))
+        (if (and check-stream (listen check-stream))
+            (let ((byte (read-byte check-stream nil nil)))
+              (close check-stream :abort t)
+              (if byte
+                  (values byte nil)
+                  (values nil :no-data)))
+            (progn
+              (when check-stream
+                (close check-stream :abort t))
+              (values nil :no-data))))
+    (error ()
+      (values nil :error))))
+
+(defun %non-telnet-byte-p (byte)
+  "Return T if BYTE is not valid in a telnet protocol handshake.
+
+Telnet connections begin with IAC negotiation (byte 255) or sit idle
+waiting for the server's banner.  Any other byte pattern that arrives
+unprompted indicates a non-telnet protocol.
+
+Rejects:
+  - Uppercase ASCII letters in the A-Z range that match common
+    protocol method initials (G, P, C, H, D, O, T, U, B, E).
+  - Control characters (0-31) excluding tab(9), LF(10), CR(13), and
+    ESC(27) which can appear in legitimate telnet sequences.
+  - High bytes (128-254) which are never valid in a telnet handshake;
+    only IAC (255) is expected."
+  (let ((byte byte))
+    (or
+     ;; Uppercase ASCII letter — not valid telnet handshake data
+     (and (>= byte 65) (<= byte 90)
+          (member byte '(65 66 67 68 69 71 72 79 80 84 85)
+                  :test #'=))
+     ;; Control character (0-31) excluding legitimate telnet values
+     (and (< byte 32)
+          (not (member byte '(9 10 13 27) :test #'=)))
+     ;; High byte (128-254) — only IAC (255) is valid in telnet
+     (and (>= byte 128)
+          (not (= byte 255))))))
+
+(defun telnet-guard-connection (usocket)
+  "Check whether USOCKET carries genuine telnet traffic.
+
+Reads the first available byte (consumptive read).  If the byte is not
+a valid telnet negotiation byte (not IAC, not idle), the usocket is
+closed and NIL is returned.
+
+Returns (values T byte) if the connection should be allowed — BYTE is
+the first byte read from the socket (0-255) and MUST be passed to
+MAKE-TELNET-CONNECTION's :INITIAL-BYTE parameter to avoid data loss.
+Returns (values NIL nil) if the connection was rejected (socket closed).
+
+Call this BEFORE creating a telnet-connection — it prevents
+non-telnet clients from ever reaching the telnet protocol handler."
+  (multiple-value-bind (byte status) (%peek-first-byte usocket)
+    (case status
+      (:no-data
+       ;; No data yet — normal telnet client waiting for server banner.
+       (values t nil))
+      (:error
+       ;; Can't peek for some reason — fail-open, let it through.
+       (values t nil))
+      (t
+       ;; Got a byte — check if it looks like telnet
+       (if (%non-telnet-byte-p byte)
+           (progn
+             (handler-case
+                 (usocket:socket-close usocket)
+               (error () nil))
+             (values nil nil))
+           (values t byte))))))
+
+;;; ----------------------------------------------------------------
 ;;; Construction
 ;;; ----------------------------------------------------------------
 
-(defun make-telnet-connection (usocket &key (protocol (make-instance 'telnet-protocol)))
+(defun make-telnet-connection (usocket &key (protocol (make-instance 'telnet-protocol))
+                                       initial-byte)
   "Create a new telnet-connection from a usocket.
 
 Duplicates the socket FD to create a dedicated binary stream, keeping
@@ -171,7 +275,12 @@ or usocket:socket-connect.
 
 When PROTOCOL is provided, it is used instead of creating a fresh
 telnet-protocol instance.  This is useful for pre-configuring option
-handlers (e.g. registering the START_TLS option)."
+handlers (e.g. registering the START_TLS option).
+
+INITIAL-BYTE is an optional byte (0-255) that was pre-read from the
+socket by telnet-guard-connection.  It is injected into the connection's
+preamble buffer so the telnet protocol handler still processes it.
+Pass NIL or omit when no byte was pre-read."
   (let* ((fd (%socket-fd usocket))
          (in-fd  (sb-posix:dup fd))
          (out-fd (sb-posix:dup fd))
@@ -189,6 +298,9 @@ handlers (e.g. registering the START_TLS option)."
                               :raw-stream in-stream
                               :out-stream out-stream
                               :protocol protocol)))
+    ;; Store pre-read byte in the preamble buffer, if any.
+    (when initial-byte
+      (vector-push-extend initial-byte (telnet-conn-preamble-buffer conn)))
     ;; Perform initial option negotiation
     (let ((out-stream (telnet-conn-out-stream conn))
           (init-cmds (telnet-init-negotiation protocol)))
@@ -240,22 +352,31 @@ first check.  Each iteration:
 ;;; Internal: Read a single byte, handling errors
 ;;; ----------------------------------------------------------------
 
-(defun %read-byte-into (stream buffer pos)
-  "Read one byte from STREAM and store it at POS in BUFFER.
-Returns the byte value, or :eof if the stream is exhausted."
-  (handler-case
-      (let ((b (read-byte stream nil :eof)))
-        (if (eq b :eof)
-            :eof
-            (progn
-              (setf (aref buffer pos) b)
-              b)))
-    (stream-error (e)
-      (declare (ignore e))
-      :eof)
-    (error (e)
-      (error 'telnet-connection-lost
-             :message (format nil "Read error: ~A" e)))))
+(defun %read-byte-into (conn stream buffer pos)
+  "Read one byte from CONN's preamble buffer or STREAM, and store it
+at POS in BUFFER.  Returns the byte value, or :eof if the stream is
+exhausted."
+  (let ((preamble (telnet-conn-preamble-buffer conn)))
+    (if (plusp (fill-pointer preamble))
+        ;; Consume from preamble first (bytes saved by the connection guard)
+        (let ((b (aref preamble 0)))
+          (%vector-shift-left preamble 1)
+          (setf (aref buffer pos) b)
+          b)
+        ;; Normal read from the binary stream
+        (handler-case
+            (let ((b (read-byte stream nil :eof)))
+              (if (eq b :eof)
+                  :eof
+                  (progn
+                    (setf (aref buffer pos) b)
+                    b)))
+          (stream-error (e)
+            (declare (ignore e))
+            :eof)
+          (error (e)
+            (error 'telnet-connection-lost
+                   :message (format nil "Read error: ~A" e)))))))
 
 ;;; ----------------------------------------------------------------
 ;;; Internal: Process incoming bytes through the telnet state machine
@@ -467,14 +588,14 @@ Returns (values nil :connection-lost) on fatal error."
            (buf (slot-value conn 'read-buffer)))
       (setf (fill-pointer buf) 0)
 
-      (let ((b (%read-byte-into raw-stream buf 0)))
+      (let ((b (%read-byte-into conn raw-stream buf 0)))
         (when (eq b :eof)
           (setf (telnet-connection-alive-p conn) nil)
           (return-from telnet-read-char (values nil :eof)))
 
         (if (= b iac)
             ;; IAC — telnet command
-            (let ((cmd (%read-byte-into raw-stream buf 1)))
+            (let ((cmd (%read-byte-into conn raw-stream buf 1)))
               (when (eq cmd :eof)
                 (setf (telnet-connection-alive-p conn) nil)
                 (return-from telnet-read-char (values nil :eof)))
@@ -489,7 +610,7 @@ Returns (values nil :connection-lost) on fatal error."
                  (setf (telnet-in-subneg-p (telnet-conn-protocol conn)) t)
                  (setf (fill-pointer (telnet-subneg-buffer (telnet-conn-protocol conn))) 0)
                  (loop
-                   (let ((sbb (%read-byte-into raw-stream buf 0)))
+                   (let ((sbb (%read-byte-into conn raw-stream buf 0)))
                      (when (eq sbb :eof)
                        (setf (telnet-connection-alive-p conn) nil)
                        (return-from telnet-read-char (values nil :eof)))
@@ -499,7 +620,7 @@ Returns (values nil :connection-lost) on fatal error."
 
                 ;; WILL/WONT/DO/DONT — 3-byte negotiation
                 ((or (= cmd will) (= cmd wont) (= cmd do) (= cmd dont))
-                 (let ((opt (%read-byte-into raw-stream buf 2)))
+                 (let ((opt (%read-byte-into conn raw-stream buf 2)))
                    (when (eq opt :eof)
                      (setf (telnet-connection-alive-p conn) nil)
                      (return-from telnet-read-char (values nil :eof)))

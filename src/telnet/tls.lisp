@@ -125,16 +125,27 @@ On handshake failure, a telnet-tls-error is signalled."
                                 :usocket usocket
                                 :raw-stream ssl-stream
                                 :protocol protocol)))
-      ;; Send initial telnet option negotiation (now encrypted)
+      ;; Send initial telnet option negotiation (now encrypted).
+      ;; If this write fails (e.g. the TLS handshake succeeded at the
+      ;; OpenSSL level but the peer immediately closed the connection,
+      ;; or the negotiated cipher/credentials were rejected), the
+      ;; connection is unusable — signal an error rather than returning
+      ;; a dead connection that would waste a session thread.
       (let ((init-cmds (telnet-init-negotiation protocol)))
-        (dolist (cmd init-cmds)
-          (handler-case
-              (write-sequence cmd (telnet-conn-out-stream conn))
-            (stream-error (e)
-              (declare (ignore e))
-              (setf (telnet-connection-alive-p conn) nil)
-              (return-from make-telnet-tls-connection conn))))
-        (force-output (telnet-conn-out-stream conn)))
+        (handler-case
+            (dolist (cmd init-cmds)
+              (write-sequence cmd (telnet-conn-out-stream conn)))
+          (stream-error (e)
+            ;; Clean up the connection we already created
+            (ignore-errors (telnet-connection-close conn))
+            (error 'telnet-tls-error
+                   :message (format nil "Initial telnet negotiation over TLS failed: ~A" e))))
+        (handler-case
+            (force-output (telnet-conn-out-stream conn))
+          (stream-error (e)
+            (ignore-errors (telnet-connection-close conn))
+            (error 'telnet-tls-error
+                   :message (format nil "Initial telnet negotiation flush over TLS failed: ~A" e)))))
       conn)))
 
 ;;; ----------------------------------------------------------------

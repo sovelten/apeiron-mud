@@ -87,31 +87,33 @@ is offered on each connection, allowing clients to upgrade to TLS."
                   (when client-socket
                     (if (not *server-running*)
                         (usocket:socket-close client-socket)
-                        (handler-case
-                            (let ((session
-                                    (if (and *server-tls-prefer-start-tls*
-                                             *server-ssl-certificate*
-                                             *server-ssl-key*)
-                                        (new-telnet-session
-                                         client-socket
-                                         :start-tls t
-                                         :certificate *server-ssl-certificate*
-                                         :key *server-ssl-key*
-                                         :password *server-ssl-password*)
-                                        (new-telnet-session client-socket))))
-                              ;; Start session thread
-                              (let ((thread (bordeaux-threads:make-thread
-                                             (lambda () (handle-client world session))
-                                             :name (format nil "session-~A"
-                                                           (session-id session)))))
-                                (log-message
-                                 "Thread for session ~A created" (session-id session))
-                                (setf (gethash (session-id session) *player-threads*)
-                                      thread)))
-                          (error (e)
-                            ;; Session creation failed — close the socket so it doesn't leak
-                            (usocket:socket-close client-socket)
-                            (log-error "Failed to create session: ~A" e))))))
+                        ;; Quick non-telnet guard before any resource allocation
+                        (when (telnet:telnet-guard-connection client-socket)
+                          (handler-case
+                              (let ((session
+                                      (if (and *server-tls-prefer-start-tls*
+                                               *server-ssl-certificate*
+                                               *server-ssl-key*)
+                                          (new-telnet-session
+                                           client-socket
+                                           :start-tls t
+                                           :certificate *server-ssl-certificate*
+                                           :key *server-ssl-key*
+                                           :password *server-ssl-password*)
+                                          (new-telnet-session client-socket))))
+                                ;; Start session thread
+                                (let ((thread (bordeaux-threads:make-thread
+                                               (lambda () (handle-client world session))
+                                               :name (format nil "session-~A"
+                                                             (session-id session)))))
+                                  (log-message
+                                   "Thread for session ~A created" (session-id session))
+                                  (setf (gethash (session-id session) *player-threads*)
+                                        thread)))
+                            (error (e)
+                              ;; Session creation failed — close the socket so it doesn't leak
+                              (usocket:socket-close client-socket)
+                              (log-error "Failed to create session: ~A" e)))))))
               (usocket:timeout-error ()
                 ;; Just a timeout, continue accepting
                 nil)

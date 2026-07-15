@@ -103,34 +103,43 @@ a session ready for I/O.
 When START-TLS is true, the START_TLS telnet option (46) is offered
 during initial negotiation.  If the client responds DO START_TLS, the
 connection is automatically upgraded to TLS in-band.  CERTIFICATE,
-KEY, and PASSWORD are required when START-TLS is true."
-  (let* ((protocol (if start-tls
-                       (telnet:telnet-register-start-tls
-                        (make-instance 'telnet:telnet-protocol))
-                       (make-instance 'telnet:telnet-protocol)))
-         (conn (telnet:make-telnet-connection usocket :protocol protocol)))
-    ;; Install START_TLS upgrade callback if requested
-    (when start-tls
-      (setf (telnet:telnet-conn-tls-upgrade-fn conn)
-            (let ((cert certificate)
-                  (key key)
-                  (pwd password))
-              (lambda ()
-                (handler-case
-                    (progn
-                      (telnet:telnet-start-tls conn
-                                               :certificate cert
-                                               :key key
-                                               :password pwd)
-                      (log-message
-                       "Connection upgraded to TLS via START_TLS"))
-                  (telnet:telnet-tls-error (e)
-                    (log-error
-                     "START_TLS upgrade failed: ~A"
-                     (telnet:telnet-error-message e))))))))
-    (make-instance 'telnet-session
-                   :id (make-id)
-                   :telnet-conn conn)))
+KEY, and PASSWORD are required when START-TLS is true.
+
+A connection guard rejects non-telnet clients (HTTP, TLS probes,
+binary garbage) before any MUD resources are allocated."
+  (multiple-value-bind (ok initial-byte)
+      (telnet:telnet-guard-connection usocket)
+    (unless ok
+      (error 'telnet:telnet-error
+             :message "Connection rejected by telnet guard"))
+    (let* ((protocol (if start-tls
+                         (telnet:telnet-register-start-tls
+                          (make-instance 'telnet:telnet-protocol))
+                         (make-instance 'telnet:telnet-protocol)))
+           (conn (telnet:make-telnet-connection usocket
+                                                :protocol protocol
+                                                :initial-byte initial-byte)))
+      (when start-tls
+        (setf (telnet:telnet-conn-tls-upgrade-fn conn)
+              (let ((cert certificate)
+                    (key key)
+                    (pwd password))
+                (lambda ()
+                  (handler-case
+                      (progn
+                        (telnet:telnet-start-tls conn
+                                                 :certificate cert
+                                                 :key key
+                                                 :password pwd)
+                        (log-message
+                         "Connection upgraded to TLS via START_TLS"))
+                    (telnet:telnet-tls-error (e)
+                      (log-error
+                       "START_TLS upgrade failed: ~A"
+                       (telnet:telnet-error-message e))))))))
+      (make-instance 'telnet-session
+                     :id (make-id)
+                     :telnet-conn conn))))
 
 (defun new-telnet-tls-session (usocket &key certificate key password)
   "Create a new telnet-session with immediate TLS encryption from an

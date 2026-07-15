@@ -91,10 +91,10 @@ this method to provide their own line-reading implementation."
          (t
           (return (values nil status)))))))
 
-(defun ask-input (obj question &optional (default ""))
-  "Asks input from the user"
+(defun ask-input (obj question &optional (default "") &key (timeout 300))
+  "Asks input from the user with the given TIMEOUT (seconds)."
   (mud-write obj question :newline t)
-  (multiple-value-bind (line status) (mud-read-line obj)
+  (multiple-value-bind (line status) (mud-read-line obj :timeout timeout)
     (if (and line (null status))
         (let ((trimmed (string-trim '(#\Return #\Newline) line)))
           (if (and trimmed (> (length trimmed) 0))

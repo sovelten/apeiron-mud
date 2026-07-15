@@ -33,6 +33,9 @@
    #:telnet-connection-alive-p
    #:telnet-connection-close
 
+   ;; Connection guard
+   #:telnet-guard-connection
+
    ;; I/O API
    #:telnet-read-line
    #:telnet-read-char
