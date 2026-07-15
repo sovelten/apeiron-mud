@@ -99,15 +99,19 @@ is offered on each connection, allowing clients to upgrade to TLS."
                                          :key *server-ssl-key*
                                          :password *server-ssl-password*)
                                         (new-telnet-session client-socket))))
-                              ;; Start session thread
-                              (let ((thread (bordeaux-threads:make-thread
-                                             (lambda () (handle-client world session))
-                                             :name (format nil "session-~A"
-                                                           (session-id session)))))
-                                (log-message
-                                 "Thread for session ~A created" (session-id session))
-                                (setf (gethash (session-id session) *player-threads*)
-                                      thread)))
+                              ;; Session may be NIL if the connection was rejected
+                              ;; as non-telnet traffic (HTTP, TLS ClientHello, etc.).
+                              ;; The session constructor already closed the socket.
+                              (when session
+                                ;; Start session thread
+                                (let ((thread (bordeaux-threads:make-thread
+                                               (lambda () (handle-client world session))
+                                               :name (format nil "session-~A"
+                                                             (session-id session)))))
+                                  (log-message
+                                   "Thread for session ~A created" (session-id session))
+                                  (setf (gethash (session-id session) *player-threads*)
+                                        thread))))
                           (error (e)
                             ;; Session creation failed — close the socket so it doesn't leak
                             (usocket:socket-close client-socket)
@@ -154,6 +158,8 @@ is offered on each connection, allowing clients to upgrade to TLS."
                                        "Failed to create TLS session: ~A" e)
                                       (usocket:socket-close client-socket)
                                       nil))))
+                            ;; Session may be NIL if the connection was rejected
+                            ;; as non-telnet traffic (HTTP-over-TLS, etc.).
                             (when session
                               (let ((thread
                                       (bordeaux-threads:make-thread

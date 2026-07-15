@@ -30,6 +30,7 @@
    ;; Connection lifecycle
    #:telnet-connection
    #:make-telnet-connection
+   #:telnet-validate-connection
    #:telnet-connection-alive-p
    #:telnet-connection-close
 
