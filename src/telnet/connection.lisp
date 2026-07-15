@@ -132,7 +132,14 @@ reads is decoded correctly once all its bytes have arrived.")
    (line-buffer
     :initform (make-array 256 :element-type 'character
                                :adjustable t :fill-pointer 0)
-    :documentation "Characters accumulated for the current line being read."))
+    :documentation "Characters accumulated for the current line being read.")
+   (peek-buffer
+    :initform (make-array 16 :element-type '(unsigned-byte 8)
+                              :adjustable t :fill-pointer 0)
+    :documentation "Bytes pre-read from the raw stream for protocol validation.
+Drained by %CONNECTION-READ-BYTE before reading from the raw stream.  Used by
+TELNET-VALIDATE-CONNECTION to inspect the first few bytes of a new connection
+without losing them for subsequent telnet processing."))
   (:documentation "A telnet connection wrapping a raw TCP socket.
 
 Provides:
@@ -202,6 +209,87 @@ handlers (e.g. registering the START_TLS option)."
       (force-output out-stream))
     conn))
 
+(defun telnet-validate-connection (conn &key (timeout 1.5))
+  "Validate that a newly created telnet connection is not receiving
+non-telnet traffic (HTTP, TLS, RDP, etc.).
+
+After the initial telnet option negotiation has been sent, this waits up
+to TIMEOUT seconds for the first data from the client.  If the data
+starts with a known non-telnet protocol signature, the connection is
+closed and NIL is returned.  Otherwise T is returned, with any pre-read
+bytes left in the connection's peek-buffer for normal telnet processing.
+
+Per RFC 854, a conforming telnet client responds to option negotiation
+with IAC-prefixed commands (byte 0xFF).  Non-telnet clients (HTTP
+scanners, TLS probes, RDP crawlers) send protocol-specific data that
+can be identified by inspecting the first few bytes.
+
+Detection covers:
+  HTTP methods   — GET, POST, PUT, HEAD, DELETE, CONNECT, OPTIONS,
+                    PATCH, TRACE (starts with uppercase ASCII letter)
+  TLS ClientHello — 0x16 0x03 (record header)
+  RDP / TPKT      — 0x03 0x00 (TPKT version 0)"
+  (let* ((raw (telnet-conn-raw-stream conn))
+         (peek (slot-value conn 'peek-buffer)))
+    ;; Drain any bytes already in peek-buffer (should be empty for a new conn)
+    (setf (fill-pointer peek) 0)
+    ;; Wait for initial data
+    (unless (%input-ready-p raw timeout)
+      ;; No data yet — not necessarily a problem; raw-TCP clients may be slow
+      (return-from telnet-validate-connection t))
+    ;; Read up to 16 bytes directly from the raw stream into peek-buffer
+    (loop for i below 16 do
+      (let ((b (read-byte raw nil :eof)))
+        (when (eq b :eof)
+          (setf (telnet-connection-alive-p conn) nil)
+          (return-from telnet-validate-connection nil))
+        (vector-push-extend b peek)))
+    ;; Protocol detection on the first byte(s)
+    (when (> (fill-pointer peek) 0)
+      (let ((b0 (aref peek 0)))
+        (cond
+          ;; TLS ClientHello: 0x16 0x03 (TLS record, version 3.x)
+          ((= b0 #x16)
+           (when (and (>= (fill-pointer peek) 3)
+                      (= (aref peek 1) #x03))
+             (telnet-connection-close conn)
+             (return-from telnet-validate-connection nil)))
+          ;; RDP / TPKT: 0x03 0x00 (TPKT v3, length follows)
+          ((= b0 #x03)
+           (when (and (>= (fill-pointer peek) 2)
+                      (= (aref peek 1) #x00))
+             (telnet-connection-close conn)
+             (return-from telnet-validate-connection nil)))
+          ;; HTTP methods all start with an uppercase ASCII letter.
+          ;; Check the first 8 bytes for a known HTTP method prefix
+          ;; followed by a space.
+          ((<= #x41 b0 #x5A)
+           (when (>= (fill-pointer peek) 4)
+             (let ((prefix (map 'string #'code-char
+                                (subseq peek 0 (min 8 (fill-pointer peek))))))
+               (flet ((http-method-p (s)
+                        (let ((len (length s)))
+                          (and (>= (length prefix) (1+ len))
+                               (string= prefix s :end1 len)
+                               (char= (aref prefix len) #\Space)))))
+                 (when (or (http-method-p "GET")
+                           (http-method-p "POST")
+                           (http-method-p "PUT")
+                           (http-method-p "HEAD")
+                           (http-method-p "DELETE")
+                           (http-method-p "CONNECT")
+                           (http-method-p "OPTIONS")
+                           (http-method-p "PATCH")
+                           (http-method-p "TRACE"))
+                   (telnet-connection-close conn)
+                   (return-from telnet-validate-connection nil))))))
+          ;; Telnet IAC (0xFF) — valid telnet negotiation response
+          ((= b0 #xFF) t)
+          ;; Anything else (raw TCP / netcat, bogus binary) — allow through;
+          ;; the application layer can decide what to do with it.
+          (t t))))
+    t))
+
 ;;; ----------------------------------------------------------------
 ;;; Internal: Input readiness (data-available OR end-of-file)
 ;;; ----------------------------------------------------------------
@@ -256,6 +344,23 @@ Returns the byte value, or :eof if the stream is exhausted."
     (error (e)
       (error 'telnet-connection-lost
              :message (format nil "Read error: ~A" e)))))
+
+(defun %connection-read-byte (conn buffer pos)
+  "Read one byte from the connection, consuming from the peek-buffer first.
+When the peek-buffer has buffered bytes (placed there by protocol
+validation), they are drained first.  Once the peek-buffer is empty,
+reads fall through to the raw socket stream via %READ-BYTE-INTO.
+
+Same calling convention as %READ-BYTE-INTO: stores the byte at POS in
+BUFFER and returns it, or returns :EOF on stream exhaustion."
+  (let ((peek (slot-value conn 'peek-buffer)))
+    (when (> (fill-pointer peek) 0)
+      (let ((b (aref peek 0)))
+        (setf (aref buffer pos) b)
+        (replace peek peek :start2 1 :end2 (fill-pointer peek))
+        (decf (fill-pointer peek))
+        (return-from %connection-read-byte b))))
+  (%read-byte-into (telnet-conn-raw-stream conn) buffer pos))
 
 ;;; ----------------------------------------------------------------
 ;;; Internal: Process incoming bytes through the telnet state machine
@@ -467,14 +572,14 @@ Returns (values nil :connection-lost) on fatal error."
            (buf (slot-value conn 'read-buffer)))
       (setf (fill-pointer buf) 0)
 
-      (let ((b (%read-byte-into raw-stream buf 0)))
+      (let ((b (%connection-read-byte conn buf 0)))
         (when (eq b :eof)
           (setf (telnet-connection-alive-p conn) nil)
           (return-from telnet-read-char (values nil :eof)))
 
         (if (= b iac)
             ;; IAC — telnet command
-            (let ((cmd (%read-byte-into raw-stream buf 1)))
+            (let ((cmd (%connection-read-byte conn buf 1)))
               (when (eq cmd :eof)
                 (setf (telnet-connection-alive-p conn) nil)
                 (return-from telnet-read-char (values nil :eof)))
@@ -489,7 +594,7 @@ Returns (values nil :connection-lost) on fatal error."
                  (setf (telnet-in-subneg-p (telnet-conn-protocol conn)) t)
                  (setf (fill-pointer (telnet-subneg-buffer (telnet-conn-protocol conn))) 0)
                  (loop
-                   (let ((sbb (%read-byte-into raw-stream buf 0)))
+                   (let ((sbb (%connection-read-byte conn buf 0)))
                      (when (eq sbb :eof)
                        (setf (telnet-connection-alive-p conn) nil)
                        (return-from telnet-read-char (values nil :eof)))
@@ -499,7 +604,7 @@ Returns (values nil :connection-lost) on fatal error."
 
                 ;; WILL/WONT/DO/DONT — 3-byte negotiation
                 ((or (= cmd will) (= cmd wont) (= cmd do) (= cmd dont))
-                 (let ((opt (%read-byte-into raw-stream buf 2)))
+                 (let ((opt (%connection-read-byte conn buf 2)))
                    (when (eq opt :eof)
                      (setf (telnet-connection-alive-p conn) nil)
                      (return-from telnet-read-char (values nil :eof)))

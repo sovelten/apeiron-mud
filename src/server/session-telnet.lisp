@@ -103,12 +103,20 @@ a session ready for I/O.
 When START-TLS is true, the START_TLS telnet option (46) is offered
 during initial negotiation.  If the client responds DO START_TLS, the
 connection is automatically upgraded to TLS in-band.  CERTIFICATE,
-KEY, and PASSWORD are required when START-TLS is true."
+KEY, and PASSWORD are required when START-TLS is true.
+
+Returns NIL if the connection is rejected as non-telnet traffic
+(e.g., HTTP requests or TLS ClientHello on the plain-text port)."
   (let* ((protocol (if start-tls
                        (telnet:telnet-register-start-tls
                         (make-instance 'telnet:telnet-protocol))
                        (make-instance 'telnet:telnet-protocol)))
          (conn (telnet:make-telnet-connection usocket :protocol protocol)))
+    ;; Validate that the client is actually speaking telnet, not HTTP/TLS/etc.
+    (unless (telnet-validate-connection conn :timeout 1.5)
+      (log-message "Rejected non-telnet connection on plain-text port")
+      (usocket:socket-close usocket)
+      (return-from new-telnet-session nil))
     ;; Install START_TLS upgrade callback if requested
     (when start-tls
       (setf (telnet:telnet-conn-tls-upgrade-fn conn)
@@ -140,14 +148,20 @@ initial RFC 854 telnet option negotiation.
 CERTIFICATE and KEY are paths to PEM-encoded certificate and private
 key files.  PASSWORD is the optional decryption password for the key.
 
-Returns a telnet-session ready for I/O — all traffic is encrypted."
-  (make-instance 'telnet-session
-                 :id (make-id)
-                 :telnet-conn
-                 (telnet:make-telnet-tls-connection usocket
-                                                    :certificate certificate
-                                                    :key key
-                                                    :password password)))
+Returns NIL if the connection is rejected as non-telnet traffic
+(e.g., HTTP-over-TLS on the secure port)."
+  (let ((conn (telnet:make-telnet-tls-connection usocket
+                                                  :certificate certificate
+                                                  :key key
+                                                  :password password)))
+    ;; Validate that the TLS client is actually speaking telnet, not HTTP/etc.
+    (unless (telnet-validate-connection conn :timeout 1.5)
+      (log-message "Rejected non-telnet TLS connection on secure port")
+      (usocket:socket-close usocket)
+      (return-from new-telnet-tls-session nil))
+    (make-instance 'telnet-session
+                   :id (make-id)
+                   :telnet-conn conn)))
 
 (defun new-telnet-session-with-start-tls (usocket &key certificate key password)
   "Create a telnet-session that offers the START_TLS telnet option (46).
