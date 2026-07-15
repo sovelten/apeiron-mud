@@ -21,6 +21,10 @@
 (defwrapping-persistent-class persistent-npc (mud-npc persistent-object)
   ())
 
+(defwrapping-persistent-class persistent-wordle (mud-wordle-puzzle persistent-object)
+  ()
+  (:transient-slots player-guesses))
+
 (defwrapping-persistent-class persistent-connection (mud-connection persistent-object)
   ())
 
@@ -118,6 +122,16 @@ close/reopen cycles that trigger BKNR transaction log replay warnings."
                            :victory-flag (npc-victory-flag obj))))
                   (clone-properties obj n)
                   n))
+               (mud-wordle-puzzle
+                (let ((w (make-instance 'persistent-wordle
+                           :name (object-name obj)
+                           :description (object-description obj)
+                           :target-word (wordle-target-word obj)
+                           :max-guesses (wordle-max-guesses obj)
+                           :word-list (wordle-word-list obj)
+                           :word-date (wordle-word-date obj))))
+                  (clone-properties obj w)
+                  w))
                (mud-guestbook
                 (let ((gb (make-instance 'persistent-guestbook
                             :name (object-name obj)

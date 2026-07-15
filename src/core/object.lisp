@@ -64,6 +64,8 @@ is written so BKNR's transaction logging captures the change."))
 - Characters (players): bright green
 - NPCs: bright red
 - Items: cyan
+- Guestbooks: cyan
+- Wordle puzzles: magenta
 - Rooms: bold white
 - Generic: default (no color)"
   (let ((name (object-name obj)))
@@ -72,6 +74,8 @@ is written so BKNR's transaction logging captures the change."))
        (bright-red (format nil "~A (ID: ~D)" name (object-id obj))))
       ((typep obj 'mud-character)
        (bright-green (format nil "~A (ID: ~D)" name (object-id obj))))
+      ((typep obj 'mud-wordle-puzzle)
+       (magenta (format nil "~A (ID: ~D)" name (object-id obj))))
       ((typep obj 'mud-guestbook)
        (cyan (format nil "~A (ID: ~D)" name (object-id obj))))
       ((typep obj 'mud-room)
