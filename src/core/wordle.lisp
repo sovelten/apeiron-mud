@@ -269,7 +269,7 @@ gets :absent."
   (let ((letter (string char)))
     (ecase result
       (:correct (color-text letter +sgr-bold+ +sgr-fg-white+ +sgr-bg-green+))
-      (:present (color-text letter +sgr-bold+ +sgr-fg-white+ +sgr-bg-yellow+))
+      (:present (color-text letter +sgr-bold+ +sgr-fg-black+ +sgr-bg-bright-yellow+))
       (:absent  (color-text letter +sgr-dim+)))))
 
 (defun wordle-format-guess-line (guess-word results)
@@ -432,7 +432,7 @@ where RESULT-CODE is one of:
             (format nil "  ~A - Letter is correct and in the right position"
                     (color-text " G " +sgr-bold+ +sgr-fg-white+ +sgr-bg-green+))
             (format nil "  ~A - Letter is in the word but wrong position"
-                    (color-text " Y " +sgr-bold+ +sgr-fg-white+ +sgr-bg-yellow+))
+                    (color-text " Y " +sgr-bold+ +sgr-fg-black+ +sgr-bg-bright-yellow+))
             (format nil "  ~A - Letter is not in the word at all"
                     (color-text " . " +sgr-dim+))
             "")))
