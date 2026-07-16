@@ -88,96 +88,157 @@ close/reopen cycles that trigger BKNR transaction log replay warnings."
   (ensure-directories-exist *data-directory*)
   (unless (and (boundp 'bknr.datastore:*store*)
                bknr.datastore:*store*)
+    ;; Ensure the APEIRON.EVAL package exists before BKNR reads snapshot
+    ;; data.  The /eval command creates symbols in this package at runtime,
+    ;; and those may be persisted in the snapshot.  If the package doesn't
+    ;; exist when BKNR tries to restore them, we get a
+    ;; FIND-SYMBOL-INTERACTIVELY error.
+    (apeiron.core::eval-context-package)
     (setf bknr.datastore:*store*
           (make-instance 'bknr.datastore:mp-store
                          :directory *store-directory*
-                         :subsystems (list (make-instance 'bknr.datastore:store-object-subsystem))))
-    ))
+                         :subsystems (list (make-instance 'bknr.datastore:store-object-subsystem))))))
 
 (defun sync-world ()
   "Snapshot the datastore so all persistent objects are written to disk."
   (bknr.datastore:snapshot)
   t)
 
+;; ─── Persistent class mapping ───────────────────────────────────────────────
+
+(defvar *transient->persistent-class-map*
+  (make-hash-table :test #'eq)
+  "Maps a transient game-object class to its wrapping persistent class.")
+
+(defun build-persistent-class-map ()
+  "Auto-discover the transient→persistent class mapping.
+
+Walks all direct subclasses of STORE-OBJECT.  For each with
+WRAPPING-PERSISTENT-CLASS as metaclass, finds the non-store-object
+parent (the transient game class) and records the mapping."
+  (clrhash *transient->persistent-class-map*)
+  (dolist (subclass (sb-mop:class-direct-subclasses
+                     (find-class 'bknr.datastore:store-object)))
+    (when (typep subclass 'wrapping-persistent-class)
+      (dolist (super (sb-mop:class-direct-superclasses subclass))
+        (when (and (typep super 'sb-mop:standard-class)
+                   (not (subtypep super 'bknr.datastore:store-object)))
+          (setf (gethash super *transient->persistent-class-map*) subclass))))))
+
+(defun transient->persistent-class (transient-class)
+  "Return the persistent class that wraps TRANSIENT-CLASS."
+  (or (gethash transient-class *transient->persistent-class-map*)
+      (error "No persistent class found for ~A -- did you forget a DEFWRAPPING-PERSISTENT-CLASS?"
+             transient-class)))
+
+(defun mop-copy-slots (source target &key skip)
+  "Copy all bound slots from SOURCE to TARGET where TARGET has matching slots.
+Slots named in the SKIP list are excluded (compared by SYMBOL-NAME to handle
+cross-package slot definitions).
+Uses MOP introspection so new slot definitions are picked up automatically."
+  (dolist (slot (sb-mop:class-slots (class-of source)))
+    (let ((name (sb-mop:slot-definition-name slot)))
+      (unless (some (lambda (s) (string= (symbol-name name) (symbol-name s))) skip)
+        (when (and (slot-boundp source name)
+                   (slot-exists-p target name))
+          (setf (slot-value target name) (slot-value source name)))))))
+
+(defun slot-value->initargs (object &optional skip)
+  "Build a plist of initarg keyword-value pairs from the bound slots of OBJECT.
+Slots named in the SKIP list are excluded (compared by SYMBOL-NAME).
+Uses MOP introspection so new slots are picked up automatically."
+  (let ((initargs nil))
+    (dolist (slot (sb-mop:class-slots (class-of object)))
+      (let* ((name (sb-mop:slot-definition-name slot))
+             (initarg (car (sb-mop:slot-definition-initargs slot))))
+        (when (and initarg
+                   (not (some (lambda (s) (string= (symbol-name name) (symbol-name s))) skip))
+                   (slot-boundp object name))
+          (push initarg initargs)
+          (push (slot-value object name) initargs))))
+    (nreverse initargs)))
+
 ;; ─── World materialization ──────────────────────────────────────────────────
 
-(defun clone-properties (source target)
-  "Copy all properties from SOURCE to TARGET."
-  (maphash (lambda (k v) (object-set-property target k v))
-           (object-properties source)))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  ;; Transition from the legacy DEFUN to the new DEFGENERIC.
+  ;; Without this, reloading the file would signal a name-conflict error.
+  (ignore-errors (fmakunbound 'materialize-object)))
 
-(defun materialize-object (obj persistent-world)
-  "Create a persistent copy of OBJ and register it in PERSISTENT-WORLD."
-  (let ((p (etypecase obj
-               (mud-npc
-                (let ((n (make-instance 'persistent-npc
-                           :name (object-name obj)
-                           :description (object-description obj)
-                           :hp (npc-hp obj)
-                           :max-hp (npc-max-hp obj)
-                           :attack-min (npc-attack-min obj)
-                           :attack-max (npc-attack-max obj)
-                           :defeated (npc-defeated-p obj)
-                           :defeat-message (npc-defeat-message obj)
-                           :victory-flag (npc-victory-flag obj))))
-                  (clone-properties obj n)
-                  n))
-               (mud-wordle-puzzle
-                (let ((w (make-instance 'persistent-wordle
-                           :name (object-name obj)
-                           :description (object-description obj)
-                           :target-word (wordle-target-word obj)
-                           :max-guesses (wordle-max-guesses obj)
-                           :word-list (wordle-word-list obj)
-                           :word-date (wordle-word-date obj))))
-                  (clone-properties obj w)
-                  w))
-               (mud-guestbook
-                (let ((gb (make-instance 'persistent-guestbook
-                            :name (object-name obj)
-                            :description (object-description obj)
-                            :filepath (guestbook-filepath obj))))
-                  (clone-properties obj gb)
-                  (setf (guestbook-entries gb)
-                        (copy-list (guestbook-entries obj)))
-                  gb))
-               (mud-room
-                (let ((r (make-instance 'persistent-room
-                           :name (object-name obj)
-                           :description (object-description obj))))
-                  (clone-properties obj r)
-                  r))
-               (mud-connection
-                (let* ((room-a (world-object-by-id persistent-world
-                                                   (object-id (connection-room-a obj))))
-                       (room-b (world-object-by-id persistent-world
-                                                   (object-id (connection-room-b obj))))
-                       (c (make-instance 'persistent-connection
-                            :name (object-name obj)
-                            :description (object-description obj)
-                            :room-a room-a
-                            :room-b room-b
-                            :direction-a (connection-direction-a obj)
-                            :direction-b (connection-direction-b obj)
-                            :blocked (connection-blocked-p obj)
-                            :blocked-message (connection-blocked-message obj))))
-                  (clone-properties obj c)
-                  c))
-               (mud-object
-                (let ((o (make-instance 'persistent-object
-                           :name (object-name obj)
-                           :description (object-description obj))))
-                  (clone-properties obj o)
-                  o)))))
-    ;; Use same ID as the transient original so persistent counterparts
-    ;; can be found via WORLD-OBJECT-BY-ID / WORLD-OBJECTS during restoration.
-    (setf (object-id p) (object-id obj))
-    (world-add-object! persistent-world p)))
+(defgeneric materialize-object (obj persistent-world)
+  (:documentation
+   "Create a persistent copy of OBJ and register it in PERSISTENT-WORLD.
+Dispatching on the class of OBJ allows adding new object types without
+modifying this generic function — just define a new DEFMETHOD.
+
+The primary method uses MOP introspection to automatically copy all
+slots, so adding new slots to existing classes needs no changes here."))
+
+(defmethod materialize-object (obj (pw persistent-world))
+  "Generic materialization: create a persistent instance via MAKE-INSTANCE
+with slot values passed as initargs, then copy properties via
+OBJECT-SET-PROPERTY for BKNR tracking.
+
+The 'location' slot is always skipped because it holds transient-object
+references -- it is rebuilt by MATERIALIZE-RELATIONSHIPS in Phase 3."
+  (let* ((class (class-of obj))
+         (pclass (transient->persistent-class class))
+         (initargs (slot-value->initargs obj (list 'id 'location 'properties))))
+    (let ((p (apply #'make-instance pclass initargs)))
+      ;; Copy properties via object-set-property for BKNR transaction tracking
+      (maphash (lambda (k v) (object-set-property p k v))
+               (object-properties obj))
+      ;; Override BKNR-assigned ID with the transient object's ID
+      (setf (object-id p) (object-id obj))
+      (world-add-object! pw p))))
+
+(defmethod materialize-object ((obj mud-room) (pw persistent-world))
+  "Materialize a room from its transient counterpart.
+Passes all slot values as initargs except 'connections', 'contents',
+'properties', and 'location' -- those are rebuilt in Phase 3."
+  (let* ((pclass (transient->persistent-class (class-of obj)))
+         (initargs (slot-value->initargs obj
+                    '(connections contents id properties location))))
+    (let ((p (apply #'make-instance pclass initargs)))
+      (maphash (lambda (k v) (object-set-property p k v))
+               (object-properties obj))
+      (setf (object-id p) (object-id obj))
+      (world-add-object! pw p))))
+
+(defmethod materialize-object ((obj mud-connection) (pw persistent-world))
+  "Materialize a connection, resolving room references to persistent counterparts.
+
+Copies all simple-value slots as initargs, then resolves ROOM-A and ROOM-B
+to persistent rooms (found by ID in the persistent world)."
+  (let* ((pclass (transient->persistent-class (class-of obj)))
+         (initargs (slot-value->initargs obj
+                    '(id room-a room-b properties))))
+    (let ((p (apply #'make-instance pclass initargs)))
+      ;; Resolve room references to persistent counterparts
+      (setf (connection-room-a p)
+            (world-object-by-id pw (object-id (connection-room-a obj))))
+      (setf (connection-room-b p)
+            (world-object-by-id pw (object-id (connection-room-b obj))))
+      (maphash (lambda (k v) (object-set-property p k v))
+               (object-properties obj))
+      (setf (object-id p) (object-id obj))
+      (world-add-object! pw p))))
 
 (defun materialize-relationships (transient-world persistent-world)
   "Restore cross-references between persistent objects: locations, exits,
-room contents, and the starting room.  Persistent counterparts are found
-by matching IDs in PERSISTENT-WORLD's object index."
+room contents, and the starting room.
+
+First clears slot values that may have been copied from the transient
+world (connections lists, contents hash-tables), then rebuilds them by
+matching IDs between the transient and persistent worlds."
+  ;; Phase 3 preamble — clear slots that the generic MOP copy may have
+  ;; populated with transient-object references that are now invalid.
+  (dolist (obj (world-all-objects transient-world))
+    (let ((p (world-object-by-id persistent-world (object-id obj))))
+      (when (typep p 'mud-room)
+        (setf (room-connections p) nil)
+        (setf (container-contents p) (make-hash-table)))))
+  ;; Main relationship rebuild loop
   (dolist (obj (world-all-objects transient-world))
         (unless (typep obj 'mud-character)
           (let ((p (world-object-by-id persistent-world (object-id obj))))
@@ -219,6 +280,9 @@ INITIALIZE-TRANSIENT-INSTANCE), eliminating the need for a separate
 cross-reference pass for connections.
 
 Returns the new PERSISTENT-WORLD."
+  ;; Build the transient→persistent class map so MATEIALIZE-OBJECT
+  ;; can find the right persistent class for any game object.
+  (build-persistent-class-map)
   (let ((pw (make-instance 'persistent-world)))
     (bknr.datastore:with-transaction ("materialize-world")
       ;; Phase 1 — rooms first (connections reference them)
