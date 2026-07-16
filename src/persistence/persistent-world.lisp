@@ -137,22 +137,6 @@ parent (the transient game class) and records the mapping."
       (error "No persistent class found for ~A -- did you forget a DEFWRAPPING-PERSISTENT-CLASS?"
              transient-class)))
 
-(defun mop-copy-slots (source target &key skip)
-  "Copy all bound slots from SOURCE to TARGET where TARGET has matching slots.
-Slots named in the SKIP list are excluded (compared by SYMBOL-NAME to handle
-cross-package slot definitions).  Also skips any slot whose value is a
-non-store-object MUD-OBJECT (transient refs that BKNR cannot encode).
-Uses MOP introspection so new slot definitions are picked up automatically."
-  (dolist (slot (sb-mop:class-slots (class-of source)))
-    (let ((name (sb-mop:slot-definition-name slot)))
-      (unless (some (lambda (s) (string= (symbol-name name) (symbol-name s))) skip)
-        (when (and (slot-boundp source name)
-                   (slot-exists-p target name))
-          (let ((value (slot-value source name)))
-            (unless (and (typep value 'mud-object)
-                         (not (typep value 'bknr.datastore:store-object)))
-              (setf (slot-value target name) value))))))))
-
 ;; ─── World materialization ──────────────────────────────────────────────────
 
 (defgeneric materialize-object (obj world)
