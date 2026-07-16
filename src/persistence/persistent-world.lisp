@@ -70,21 +70,15 @@ change in the outer transaction's buffer."
   (setf (object-properties obj) (object-properties obj)))
 
 (defmethod create-object! ((world persistent-world) object)
-  "Register OBJECT in WORLD by making a persistent copy via MAKE-INSTANCE.
+  "Register OBJECT in WORLD by converting it to a persistent object in-place.
 
-The transient OBJECT is a throwaway -- we create a fresh persistent instance
-so BKNR's normal MAKE-INSTANCE path handles registration, indexing, and
-transaction logging.  Slot values are then copied via MOP-COPY-SLOTS.
+The transient OBJECT is converted in-place via MATERIALIZE-OBJECT, which
+uses CHANGE-CLASS to preserve slot values and object identity.
 A snapshot is taken to ensure the new object survives immediate restarts."
   (let (p)
     (bknr.datastore:with-transaction ("create-object")
-      (let ((pclass (transient->persistent-class (class-of object))))
-        (setf p (make-instance pclass))
-        (mop-copy-slots object p :skip '(id properties))
-        (maphash (lambda (k v) (object-set-property p k v))
-                 (object-properties object))
-        (world-add-object! world p)))
-    (sync-world)
+      (setf p (materialize-object object world))
+      (world-add-object! world p))
     p))
 
 ;; ─── Store lifecycle ────────────────────────────────────────────────────────
