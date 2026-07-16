@@ -17,21 +17,20 @@
              :accessor object-location
              :initform nil
              :documentation "Location/container of this object")
+   (aliases :initarg :aliases
+            :accessor object-aliases
+            :initform nil
+            :documentation "List of alternative name strings for matching")
    (properties :initarg :properties
                :accessor object-properties
                :initform (make-hash-table :test #'equal)
                :documentation "Extensible property storage"))
   (:documentation "Base class for all MUD objects"))
 
-(defun new-object (&key (name "object") (location nil))
-  "Create a new MUD object."
-  (make-instance 'mud-object
-                 :name name
-                 :location location))
-
-(defun object-get-property (obj property-name)
-  "Get a property value from an object."
-  (gethash property-name (object-properties obj)))
+(defgeneric object-describe (obj)
+  (:documentation
+   "Get a description of an object with type-based ANSI coloring.
+Specialized methods on subclasses provide appropriate coloring."))
 
 (defgeneric object-set-property (obj property-name value)
   (:documentation
@@ -41,6 +40,27 @@ The default method modifies the hash-table in-place.
 
 Specialized methods on persistent objects should also ensure the slot
 is written so BKNR's transaction logging captures the change."))
+
+(defun new-object (&key (name "object") (location nil))
+  "Create a new MUD object."
+  (make-instance 'mud-object
+                 :name name
+                 :location location))
+
+(defun object-name-matches (obj name)
+  "Return non-NIL if NAME matches the object's primary name (exact or whole-word,
+case-insensitive) or any alias (exact, case-insensitive). Returns NIL for empty NAME."
+  (and (plusp (length name))
+       (or (string-equal name (object-name obj))
+           (let ((name-down (string-downcase name))
+                 (words (str:words (object-name obj))))
+             (some (lambda (word) (string-equal name-down word)) words))
+           (some (lambda (alias) (string-equal name alias))
+                 (object-aliases obj)))))
+
+(defun object-get-property (obj property-name)
+  "Get a property value from an object."
+  (gethash property-name (object-properties obj)))
 
 (defmethod object-set-property (obj property-name value)
   "Default: modify the properties hash-table in-place."
@@ -59,29 +79,9 @@ is written so BKNR's transaction logging captures the change."))
       (container-add-object new-location obj))
     t))
 
-(defun object-describe (obj)
-  "Get a description of an object with type-based ANSI coloring.
-- Characters (players): bright green
-- NPCs: bright red
-- Items: cyan
-- Guestbooks: cyan
-- Wordle puzzles: magenta
-- Rooms: bold white
-- Generic: default (no color)"
-  (let ((name (object-name obj)))
-    (cond
-      ((typep obj 'mud-npc)
-       (bright-red (format nil "~A (ID: ~D)" name (object-id obj))))
-      ((typep obj 'mud-character)
-       (bright-green (format nil "~A (ID: ~D)" name (object-id obj))))
-      ((typep obj 'mud-wordle-puzzle)
-       (magenta (format nil "~A (ID: ~D)" name (object-id obj))))
-      ((typep obj 'mud-guestbook)
-       (cyan (format nil "~A (ID: ~D)" name (object-id obj))))
-      ((typep obj 'mud-room)
-       (bold-white (format nil "~A (ID: ~D)" name (object-id obj))))
-      (t
-       (format nil "~A (ID: ~D)" name (object-id obj))))))
+(defmethod object-describe ((obj mud-object))
+  "Default: no color."
+  (format nil "~A (ID: ~D)" (object-name obj) (object-id obj)))
 
 ;; Print object in REPL with useful information
 (defmethod print-object ((obj mud-object) stream)

@@ -21,6 +21,14 @@
    (direction-b :initarg :direction-b
                 :accessor connection-direction-b
                 :documentation "Direction name from ROOM-B to ROOM-A (e.g. \"south\")")
+   (synonyms-a :initarg :synonyms-a
+               :accessor connection-synonyms-a
+               :initform nil
+               :documentation "List of alternative direction names from ROOM-A to ROOM-B (e.g. (\"n\"))")
+   (synonyms-b :initarg :synonyms-b
+               :accessor connection-synonyms-b
+               :initform nil
+               :documentation "List of alternative direction names from ROOM-B to ROOM-A (e.g. (\"s\"))")
    (blocked :initarg :blocked
             :accessor connection-blocked-p
             :initform nil
@@ -52,11 +60,14 @@ name at each end.  Characters cannot traverse a blocked connection."))
                         &key (name (format nil "passage between ~A and ~A"
                                            (object-name room-a)
                                            (object-name room-b)))
-                          blocked blocked-message)
+                          blocked blocked-message
+                          synonyms-a synonyms-b)
   "Create and return a new MUD-CONNECTION between ROOM-A and ROOM-B.
 
 DIRECTION-A is the direction name from ROOM-A to ROOM-B (e.g. \"north\").
 DIRECTION-B is the direction name from ROOM-B to ROOM-A (e.g. \"south\").
+SYNONYMS-A and SYNONYMS-B are lists of alternative names for each direction
+(e.g. '(\"n\") for \"north\").
 When BLOCKED is true the passage starts blocked.
 BLOCKED-MESSAGE is shown to players when they try to pass.
 
@@ -68,6 +79,8 @@ call CONNECT-ROOMS (in world.lisp) for that."
                  :room-b room-b
                  :direction-a (string-downcase direction-a)
                  :direction-b (string-downcase direction-b)
+                 :synonyms-a (mapcar #'string-downcase synonyms-a)
+                 :synonyms-b (mapcar #'string-downcase synonyms-b)
                  :blocked blocked
                  :blocked-message blocked-message))
 
@@ -87,16 +100,25 @@ call CONNECT-ROOMS (in world.lisp) for that."
 
 ;; ─── Blocking management ───────────────────────────────────────────────────
 
+(defun connection-direction-matches (connection room direction)
+  "Return non-NIL if DIRECTION matches the primary direction name or any
+synonym for the connection end that leads out of ROOM."
+  (or (string-equal direction (connection-direction-to connection room))
+      (let ((synonyms (if (eq room (connection-room-a connection))
+                          (connection-synonyms-a connection)
+                          (connection-synonyms-b connection))))
+        (some (lambda (syn) (string-equal direction syn)) synonyms))))
+
 (defun connection-find (room direction)
   "Find a connection from ROOM in the given DIRECTION, or nil.
 
 Searches the room's connections list for a connection that has
-this room and direction.  Returns the connection if found."
+this room and direction (including direction synonyms).
+Returns the connection if found."
   (find-if (lambda (c)
              (and (or (eq room (connection-room-a c))
                       (eq room (connection-room-b c)))
-                  (string-equal direction
-                                (connection-direction-to c room))))
+                  (connection-direction-matches c room direction)))
            (room-connections room)))
 
 (defun connection-exit-blocked-message (room direction)

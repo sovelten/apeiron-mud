@@ -106,10 +106,19 @@ telnet localhost 8888
 | `go` | `go <direction>` | Move (north/south/east/west) |
 | `exits` | `exits` | List available exits |
 | `inventory` | `inventory` | View carried items |
+| `examine` | `examine <name>` | Examine an object or NPC |
+| `attack` | `attack <name>` | Attack an NPC |
 | `say` | `say <message>` | Speak to other players in room |
+| `shout` | `shout <message>` | Broadcast to all players |
+| `tell` | `tell <name> <message>` | Private message to a player or object |
+| `read` | `read <name>` | Read a readable object (guestbook, sign, etc.) |
+| `write` | `write <name>` | Write a message on a writable object |
+| `answer` | `answer <text>` | Answer a challenge/puzzle |
+| `status` | `status` | Show your HP and stats |
 | `help` | `help` | List all commands |
+| `toggle-colors` | `toggle-colors` | Toggle ANSI color output |
+| `eval` | `eval <sexpr>` | Run arbitrary lisp code (admin only!) |
 | `quit` | `quit` | Disconnect |
-| `eval` | `eval <sexpr>` | Run arbritrary lisp code!!! (very dangerous) |
 
 ### Example Session 
 
@@ -176,7 +185,7 @@ In the SBCL REPL:
 - **Room system** - Navigable rooms with directional exits (north, south, east, west)
 - **Player chat** - "say" command for in-room communication
 - **Inventory system** - Foundation for item management
-- **Command system** - 7 built-in commands, easy to add more
+- **Command system** - 17 built-in commands, easy to add more
 
 ### ðŸŽ¯ Planned Features
 
@@ -194,19 +203,21 @@ In the SBCL REPL:
 Commands are defined in `src/command-handler.lisp` using the `define-command` macro:
 
 ```lisp
-(define-command "wave" (player args)
+(define-command "wave" (world player args)
+  (declare (ignore world args))
   (player-send-message player "You wave your hand."))
 ```
 
 The macro takes:
 - **Name**: Command string (will be lowercased)
-- **Parameters**: `player` (the player object) and `args` (raw argument string)
+- **Parameters**: `world` (the mud-world instance), `player` (the player object), and `args` (raw argument string)
 - **Body**: Command implementation
 
 ### Example: More Complex Command
 
 ```lisp
-(define-command "examine" (player args)
+(define-command "examine" (world player args)
+  (declare (ignore world))
   (let ((obj-name (string-trim '(#\Space #\Tab) args)))
     (if (zerop (length obj-name))
         (player-send-message player "Examine what?")
@@ -228,9 +239,7 @@ Extend the `mud-object` class:
 
 (defun create-weapon (&key (name "sword") (damage 5) (weight 2))
   (make-instance 'mud-weapon
-                 :id (mud.utils:make-id)
                  :name name
-                 :type 'weapon
                  :damage damage
                  :weight weight))
 ```
@@ -253,23 +262,18 @@ Objects have a flexible property storage system:
 
 ```lisp
 ;; Create rooms
-(defun build-world ()
-  (let ((tavern (mud:new-room :name "The Tavern"))
-        (forest (mud:new-room :name "A Dense Forest")))
-    
-    ;; Register rooms
-    (mud:create-room! tavern)
-    (mud:create-room! forest)
-    
+(defun build-world (world)
+  (let ((tavern (new-room :name "The Tavern"
+                          :description "A cozy tavern filled with travelers."))
+        (forest (new-room :name "A Dense Forest"
+                          :description "A dense forest with tall trees.")))
+
+    ;; Register rooms in the world
+    (world-add-object! world tavern)
+    (world-add-object! world forest)
+
     ;; Connect rooms
-    (mud:room-add-exit tavern "north" forest)
-    (mud:room-add-exit forest "south" tavern)
-    
-    ;; Set descriptions
-    (object-set-property tavern "description" 
-      "A cozy tavern filled with travelers.")
-    (object-set-property forest "description"
-      "A dense forest with tall trees.")))
+    (connect-rooms! world tavern "north" forest "south")))
 ```
 
 ### Broadcasting Messages
@@ -287,8 +291,8 @@ Send messages to all players:
 ### Testing Commands
 
 ```lisp
-(ql:quickload :mud/tests)
-(mud.tests:run-tests)
+(ql:quickload :apeiron-test)
+(apeiron-test:run-tests)
 ```
 
 Or load run-tests.lisp:
@@ -315,19 +319,19 @@ Edit `src/constants.lisp`:
 
 ```lisp
 ;; Check status
-(mud:status)
+(mud:get-server-status)
 
 ;; Get running players
-(mud:characters)
+(apeiron.core:characters (apeiron.persistence:get-persistent-world))
 
 ;; Get all rooms
-(mud:rooms)
+(apeiron.core:world-all-rooms (apeiron.persistence:get-persistent-world))
 ```
 
 ### Stopping the Server
 
 ```lisp
-(mud:stop)
+(mud:stop-mud-server)
 ```
 
 This:
@@ -386,7 +390,7 @@ The return value shows the new room and its world-level ID (yours will differ â€
 #### 3. Create a secret diary (guestbook)
 
 ```
-> eval (world-add-object! (world) (new-guestbook :name "a worn leather diary"))
+> eval (world-add-object! (world) (new-guestbook :name "a worn leather diary" :aliases '("diary")))
 
 #<MUD-GUESTBOOK a worn leather diary (ID: 13)>
 ```

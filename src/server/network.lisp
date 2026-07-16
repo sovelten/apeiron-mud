@@ -21,7 +21,7 @@
          (character (new-character char-name session)))
     (log-message "New connection: ~A" char-name)
     (world-add-character! world character)
-    (mud-write session (room-describe (object-location character)))
+    (mud-write session (object-describe (object-location character)))
     (mud-write session "Welcome to the MUD!")
     (handler-case
         (loop while *server-running*

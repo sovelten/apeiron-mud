@@ -175,6 +175,10 @@ Players interact with the puzzle by telling it words.  Each player's
 guesses are tracked independently.  When a new day arrives the puzzle
 automatically rotates to that day's word and resets all progress."))
 
+(defmethod object-describe ((obj mud-wordle-puzzle))
+  "Magenta for Wordle puzzles."
+  (magenta (format nil "~A (ID: ~D)" (object-name obj) (object-id obj))))
+
 ;; ─── Constructor ────────────────────────────────────────────────────────────
 
 (defun new-wordle-puzzle (&key
@@ -439,7 +443,7 @@ where RESULT-CODE is one of:
 
 ;; ─── Speech interaction ────────────────────────────────────────────────────
 
-(defmethod handle-speech ((puzzle mud-wordle-puzzle) speaker message)
+(defmethod handle-tell ((puzzle mud-wordle-puzzle) speaker message)
   "Respond when a player tells the puzzle a 5-letter word, help, or board."
   (wordle-ensure-fresh-word! puzzle)
   (let* ((cleaned (string-trim '(#\Space #\Tab #\Newline) message))

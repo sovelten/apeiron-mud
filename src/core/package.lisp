@@ -101,6 +101,8 @@
    #:object-description
    #:object-describe
    #:object-location
+   #:object-aliases
+   #:object-name-matches
    #:object-properties
    #:object-get-property
    #:object-set-property
@@ -118,7 +120,6 @@
    #:npc-defeat-message
    #:npc-victory-flag
    #:npc-roll-attack
-   #:npc-describe
    #:find-npc-in-room
    #:combat-attack-npc
    #:player-hp
@@ -135,7 +136,6 @@
    #:room-exit-target
    #:room-exit-blocked-p
    #:room-exit-list
-   #:room-describe
 
    ;; Connection system
    #:mud-connection
@@ -216,12 +216,15 @@
    #:container-remove-object
    #:container-all-objects
    #:container-object-by-id
+   #:container-objects-matching
    #:player-send-message
 
    ;; World
    #:mud-world
    #:new-world
    #:connect-rooms!
+   #:connect-north-south!
+   #:connect-west-east!
    #:world-id-counter
    #:world-config
    #:world-players
@@ -283,4 +286,6 @@
 
    ;; Extensibility
    #:handle-event
-   #:handle-speech))
+   #:handle-tell
+   #:handle-read
+   #:handle-write))

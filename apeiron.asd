@@ -21,7 +21,8 @@
   :license "MIT"
   :depends-on ("bordeaux-threads"
                "cl-csv"
-               "deeds")
+               "deeds"
+               "str")
   :components ((:module "src/core"
                 :components
                 ((:file "package")

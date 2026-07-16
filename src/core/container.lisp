@@ -12,6 +12,7 @@
 (defgeneric container-remove-object (container object))
 (defgeneric container-object-by-id (container id))
 (defgeneric container-all-objects (container))
+(defgeneric container-objects-matching (container name))
 
 (defmethod container-add-object ((container container-mixin) object)
   "Add OBJECT to CONTAINER's contents and set its location to CONTAINER.
@@ -31,3 +32,9 @@ persistent object's LOCATION slot."
 
 (defmethod container-all-objects ((container container-mixin))
   (loop :for v :being :the :hash-value :of (container-contents container) :collect v))
+
+(defmethod container-objects-matching ((container container-mixin) name)
+  "Return a list of objects in CONTAINER whose name or alias matches NAME."
+  (loop for obj in (container-all-objects container)
+        when (object-name-matches obj name)
+        collect obj))

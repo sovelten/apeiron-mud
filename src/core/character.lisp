@@ -25,3 +25,7 @@ Honors the session's color preference by binding *COLORIZE* around the write."
   (let ((session (character-session player)))
     (let ((*colorize* (session-use-colors session)))
       (mud-write session message :newline newline))))
+
+(defmethod object-describe ((obj mud-character))
+  "Bright green for player characters."
+  (bright-green (format nil "~A (ID: ~D)" (object-name obj) (object-id obj))))

@@ -17,7 +17,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
   (declare (ignore world args))
   (let ((room (object-location player)))
     (if room
-        (player-send-message player (room-describe room))
+        (player-send-message player (object-describe room))
         (player-send-message player "You are in a void!"))))
 
 (define-command "go" (world player args)
@@ -34,8 +34,24 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
                     (progn
                       (object-move player target-room)
                       (player-send-message player (format nil "~A ~A~%" (bright-cyan "You go") (yellow direction)))
-                      (player-send-message player (room-describe target-room)))
+                      (player-send-message player (object-describe target-room)))
                     (player-send-message player "You can't go that way."))))))))
+
+(define-command "n" (world player args)
+  (declare (ignore args))
+  (process-command world player "go north"))
+
+(define-command "s" (world player args)
+  (declare (ignore args))
+  (process-command world player "go south"))
+
+(define-command "e" (world player args)
+  (declare (ignore args))
+  (process-command world player "go east"))
+
+(define-command "w" (world player args)
+  (declare (ignore args))
+  (process-command world player "go west"))
 
 (define-command "attack" (world player args)
   (let ((room (object-location player)))
@@ -53,20 +69,11 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
          (target-name (string-downcase args)))
     (if (zerop (length args))
         (player-send-message player "Examine what? Usage: examine <name>")
-        (let ((target
-               (or (find-npc-in-room room args)
-                   (find-if (lambda (obj)
-                              (and (not (eq obj player))
-                                   (search target-name (string-downcase (object-name obj)))))
-                            (container-all-objects room)))))
+        (let ((target (first (container-objects-matching room args))))
           (if target
               (player-send-message
                player
-               (if (typep target 'mud-npc)
-                   (npc-describe target)
-                   (format nil "~A~%~A"
-                           (bold-white (object-name target))
-                           (object-description target))))
+               (object-describe target))
               (player-send-message player "You don't see that here."))))))
 
 (define-command "answer" (world player args)
@@ -203,39 +210,35 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
 
 (define-command "read" (world player args)
   (declare (ignore world))
-  (let* ((room (object-location player))
-         (guestbook (or (find-if (lambda (obj) (typep obj 'mud-guestbook)) (container-all-objects room))
-                        (find-if (lambda (obj) (typep obj 'mud-guestbook)) (container-all-objects player)))))
-    (cond
-      ((and (not (zerop (length args)))
-            (not (string-equal args "guestbook"))
-            (not (search "guestbook" (string-downcase args))))
-       (player-send-message player "Read what? Try: read guestbook"))
-      ((null guestbook)
-       (player-send-message player "There is nothing here to read."))
-      (t
-       (player-send-message player (guestbook-format-entries guestbook))))))
+  (if (zerop (length args))
+      (player-send-message player "Read what? Usage: read <name>")
+      (let* ((room (object-location player))
+             (target (or (first (container-objects-matching room args))
+                         (first (container-objects-matching player args)))))
+        (cond
+          ((null target)
+           (player-send-message player "You don't see that here."))
+          ((handle-read target player))
+          (t
+           (player-send-message player (format nil "There's nothing to read on the ~A." (object-name target))))))))
 
 (define-command "write" (world player args)
   (declare (ignore world))
-  (let* ((room (object-location player))
-         (guestbook (or (find-if (lambda (obj) (typep obj 'mud-guestbook)) (container-all-objects room))
-                        (find-if (lambda (obj) (typep obj 'mud-guestbook)) (container-all-objects player)))))
-    (if (null guestbook)
-        (player-send-message player "There is no guestbook here to write in.")
-        (let* ((session (character-session player))
-               (message (ask-input session "What message do you want to write?")))
-          (if (zerop (length message))
-              (player-send-message player "Write what? Please try again.")
-              (progn
-                (guestbook-add-entry guestbook (object-name player) message)
-                (player-send-message player "You write your message in the guestbook.")
-                (loop for obj in (container-all-objects room) do
-                  (when (and (typep obj 'mud-character)
-                             (not (eq obj player)))
-                    (player-send-message obj (format nil "~A writes a message in ~A."
-                                                     (object-name player)
-                                                     (object-name guestbook)))))))))))
+  (if (zerop (length args))
+      (player-send-message player "Write on what? Usage: write <name>")
+      (let* ((room (object-location player))
+             (target (or (first (container-objects-matching room args))
+                         (first (container-objects-matching player args)))))
+        (cond
+          ((null target)
+           (player-send-message player "You don't see that here."))
+          (t
+           (let* ((session (character-session player))
+                  (message (ask-input session "What do you want to write?")))
+             (if (zerop (length message))
+                 (player-send-message player "Write what? Please try again.")
+                 (unless (handle-write target player message)
+                   (player-send-message player (format nil "There's nothing to write on the ~A." (object-name target)))))))))))
 
 (define-command "help" (world player args)
   (declare (ignore world args))
@@ -268,13 +271,29 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
   (session-disconnect (character-session player)))
 
 ;; ─── Speech handling ──────────────────────────────────────────────────────
-;; Objects can implement HANDLE-SPEECH to respond when spoken/told to.
+;; Objects can implement HANDLE-TELL to respond when spoken/told to.
 
-(defgeneric handle-speech (object speaker message)
+(defgeneric handle-tell (object speaker message)
   (:documentation "Called when SPEAKER directs MESSAGE at OBJECT.
   Returns non-NIL if the speech was handled, NIL otherwise.")
   (:method (object speaker message)
     (declare (ignore object speaker message))
+    nil))
+
+(defgeneric handle-read (object reader)
+  (:documentation "Called when READER tries to read OBJECT.
+  Should display the readable content to the reader and return non-NIL.
+  Returns NIL if the object has nothing readable.")
+  (:method (object reader)
+    (declare (ignore object reader))
+    nil))
+
+(defgeneric handle-write (object writer message)
+  (:documentation "Called when WRITER tries to write MESSAGE on OBJECT.
+  Should record the message and return non-NIL.
+  Returns NIL if the object is not writable.")
+  (:method (object writer message)
+    (declare (ignore object writer message))
     nil))
 
 (define-command "tell" (world player args)
@@ -291,10 +310,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
         (if (zerop (length message))
             (player-send-message player "Tell who what? Usage: tell <name> <message>")
             (let* ((room (object-location player))
-                   (target (find-if (lambda (obj)
-                                      (and (not (eq obj player))
-                                           (search target-name (string-downcase (object-name obj)))))
-                                    (container-all-objects room))))
+                   (target (first (container-objects-matching room target-name))))
               (cond
                 ((null target)
                  (player-send-message player (format nil "There's no ~A here to tell that to." args)))
@@ -305,7 +321,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
                 (t
                  ;; Tell an object — give it a chance to handle the speech
                  (player-send-message player (format nil "~A ~A ~A" (bold-white "You tell") (cyan (format nil "~A:" (object-name target))) message))
-                 (unless (handle-speech target player message)
+                 (unless (handle-tell target player message)
                    ;; Object didn't respond
                    (player-send-message player (format nil "~A doesn't seem to understand." (object-name target)))))))))))
 

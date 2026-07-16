@@ -12,6 +12,7 @@
                  (:file "core/test-room" :depends-on ("test-package"))
                  (:file "core/test-guestbook" :depends-on ("test-package"))
                  (:file "core/test-character" :depends-on ("test-package"))
+                 (:file "core/test-container" :depends-on ("test-package"))
                  (:file "core/test-events" :depends-on ("test-package"))
                  (:file "core/test-world" :depends-on ("test-package"))
                  (:file "core/test-commands" :depends-on ("test-package"))
