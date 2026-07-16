@@ -152,3 +152,68 @@
                ;; Player2 gets the broadcast
                (is (search "Alice shouts: Hello everyone!" (car messages2))))
           (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+
+(test command-processing-examine
+  "Test the examine command"
+  (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
+    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+                                                                           :stream (make-string-output-stream)
+                                                                           :use-colors nil)))
+          (captured '()))
+      (apeiron.core:world-add-character! world player)
+      (let* ((room (apeiron.core:object-location player))
+             (sword (make-instance 'apeiron.core:mud-object
+                                   :name "Rusty Sword"
+                                   :id 100
+                                   :description "A rusty old blade."
+                                   :aliases '("sword" "rusty")))
+             (npc (make-instance 'apeiron.core:mud-npc
+                                 :name "Goblin"
+                                 :id 101
+                                 :description "A smelly goblin."
+                                 :hp 10
+                                 :max-hp 10))
+             (original-send-message (fdefinition 'apeiron.core:player-send-message)))
+        (apeiron.core:container-add-object room sword)
+        (apeiron.core:container-add-object room npc)
+        (unwind-protect
+             (progn
+               (setf (fdefinition 'apeiron.core:player-send-message)
+                     (lambda (p msg &key newline)
+                       (declare (ignore p newline))
+                       (push msg captured)))
+               
+               ;; Test 1: No arguments
+               (setf captured '())
+               (apeiron.core:process-command world player "examine")
+               (is (search "Examine what?" (first captured)))
+               
+               ;; Test 2: Examine a generic object
+               (setf captured '())
+               (apeiron.core:process-command world player "examine sword")
+               (is (= 1 (length captured)))
+               (is (search "Rusty Sword" (first captured)))
+               
+               ;; Test 3: Examine an NPC (should include HP)
+               (setf captured '())
+               (apeiron.core:process-command world player "examine goblin")
+               (is (= 1 (length captured)))
+               (is (search "Goblin" (first captured)))
+               (is (search "HP" (first captured)))
+               
+               ;; Test 4: Examine something not present
+               (setf captured '())
+               (apeiron.core:process-command world player "examine dragon")
+               (is (search "don't see that" (first captured)))
+               
+               ;; Test 5: Examine another player in the room
+               (setf captured '())
+               (let ((bob (apeiron.core:new-character "Bob" (make-instance 'apeiron.core:stream-session
+                                                                             :stream (make-string-output-stream)
+                                                                             :use-colors nil))))
+                 (apeiron.core:world-add-character! world bob)
+                 (apeiron.core:object-move bob room)
+                 (apeiron.core:process-command world player "examine bob")
+                 (is (= 1 (length captured)))
+                 (is (search "Bob" (first captured)))))
+          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))

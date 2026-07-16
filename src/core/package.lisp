@@ -101,6 +101,8 @@
    #:object-description
    #:object-describe
    #:object-location
+   #:object-aliases
+   #:object-name-matches
    #:object-properties
    #:object-get-property
    #:object-set-property
@@ -214,6 +216,7 @@
    #:container-remove-object
    #:container-all-objects
    #:container-object-by-id
+   #:container-objects-matching
    #:player-send-message
 
    ;; World
@@ -283,4 +286,4 @@
 
    ;; Extensibility
    #:handle-event
-   #:handle-speech))
+   #:handle-tell))

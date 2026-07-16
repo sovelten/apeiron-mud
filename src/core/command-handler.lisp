@@ -69,15 +69,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
          (target-name (string-downcase args)))
     (if (zerop (length args))
         (player-send-message player "Examine what? Usage: examine <name>")
-        (let ((target
-               (or (find-npc-in-room room args)
-                   (find-if (lambda (obj)
-                              (and (not (eq obj player))
-                                   (or (search target-name (string-downcase (object-name obj)))
-                                       (some (lambda (alias)
-                                               (string-equal target-name alias))
-                                             (object-aliases obj)))))
-                            (container-all-objects room)))))
+        (let ((target (first (container-objects-matching room args))))
           (if target
               (player-send-message
                player
@@ -283,9 +275,9 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
   (session-disconnect (character-session player)))
 
 ;; ─── Speech handling ──────────────────────────────────────────────────────
-;; Objects can implement HANDLE-SPEECH to respond when spoken/told to.
+;; Objects can implement HANDLE-TELL to respond when spoken/told to.
 
-(defgeneric handle-speech (object speaker message)
+(defgeneric handle-tell (object speaker message)
   (:documentation "Called when SPEAKER directs MESSAGE at OBJECT.
   Returns non-NIL if the speech was handled, NIL otherwise.")
   (:method (object speaker message)
@@ -323,7 +315,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
                 (t
                  ;; Tell an object — give it a chance to handle the speech
                  (player-send-message player (format nil "~A ~A ~A" (bold-white "You tell") (cyan (format nil "~A:" (object-name target))) message))
-                 (unless (handle-speech target player message)
+                 (unless (handle-tell target player message)
                    ;; Object didn't respond
                    (player-send-message player (format nil "~A doesn't seem to understand." (object-name target)))))))))))
 

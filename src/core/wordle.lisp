@@ -443,7 +443,7 @@ where RESULT-CODE is one of:
 
 ;; ─── Speech interaction ────────────────────────────────────────────────────
 
-(defmethod handle-speech ((puzzle mud-wordle-puzzle) speaker message)
+(defmethod handle-tell ((puzzle mud-wordle-puzzle) speaker message)
   "Respond when a player tells the puzzle a 5-letter word, help, or board."
   (wordle-ensure-fresh-word! puzzle)
   (let* ((cleaned (string-trim '(#\Space #\Tab #\Newline) message))

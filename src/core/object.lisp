@@ -27,6 +27,20 @@
                :documentation "Extensible property storage"))
   (:documentation "Base class for all MUD objects"))
 
+(defgeneric object-describe (obj)
+  (:documentation
+   "Get a description of an object with type-based ANSI coloring.
+Specialized methods on subclasses provide appropriate coloring."))
+
+(defgeneric object-set-property (obj property-name value)
+  (:documentation
+   "Set a property value on an object.
+
+The default method modifies the hash-table in-place.
+
+Specialized methods on persistent objects should also ensure the slot
+is written so BKNR's transaction logging captures the change."))
+
 (defun new-object (&key (name "object") (location nil))
   "Create a new MUD object."
   (make-instance 'mud-object
@@ -42,15 +56,6 @@
 (defun object-get-property (obj property-name)
   "Get a property value from an object."
   (gethash property-name (object-properties obj)))
-
-(defgeneric object-set-property (obj property-name value)
-  (:documentation
-   "Set a property value on an object.
-
-The default method modifies the hash-table in-place.
-
-Specialized methods on persistent objects should also ensure the slot
-is written so BKNR's transaction logging captures the change."))
 
 (defmethod object-set-property (obj property-name value)
   "Default: modify the properties hash-table in-place."
@@ -68,11 +73,6 @@ is written so BKNR's transaction logging captures the change."))
     (when (typep new-location 'mud-room)
       (container-add-object new-location obj))
     t))
-
-(defgeneric object-describe (obj)
-  (:documentation
-   "Get a description of an object with type-based ANSI coloring.
-Specialized methods on subclasses provide appropriate coloring."))
 
 (defmethod object-describe ((obj mud-object))
   "Default: no color."

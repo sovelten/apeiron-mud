@@ -48,7 +48,6 @@
     (make-instance 'mud-npc
                    :name name
                    :description description
-
                    :hp (or hp max-hp)
                    :max-hp max-hp
                    :attack-min attack-min

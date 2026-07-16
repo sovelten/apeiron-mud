@@ -267,10 +267,10 @@
     (is-true (wordle-player-guesses-list puzzle "Bob"))
     (is (equal "crane" (wordle-target-word puzzle)))))
 
-;; ─── Handle-speech
+;; ─── Handle-tell
 
-(test wordle-handle-speech-five-letter-word
-  "Handle-speech processes a 5-letter word as a guess"
+(test wordle-handle-tell-five-letter-word
+  "handle-tell processes a 5-letter word as a guess"
   (let* ((session (make-instance 'stream-session
                                  :stream (make-string-output-stream)
                                  :use-colors nil))
@@ -286,30 +286,30 @@
         (setf (fdefinition 'player-send-message) #'mock-send)
         (unwind-protect
              (progn
-               (is-true (handle-speech puzzle player "crane"))
+               (is-true (handle-tell puzzle player "crane"))
                (is (search "You solved it" (car captured-messages))))
           (setf (fdefinition 'player-send-message) old))))))
 
-(test wordle-handle-speech-non-word-ignored
-  "Handle-speech returns nil for non-5-letter messages"
+(test wordle-handle-tell-non-word-ignored
+  "handle-tell returns nil for non-5-letter messages"
   (let* ((session (make-instance 'stream-session
                                  :stream (make-string-output-stream)))
          (player (new-character "TestPlayer" session))
          (puzzle (make-test-puzzle :target-word "crane")))
-    (is-false (handle-speech puzzle player "hello there"))
-    (is-false (handle-speech puzzle player "hi"))
-    (is-false (handle-speech puzzle player "a b c d e"))
-    (is-false (handle-speech puzzle player ""))))
+    (is-false (handle-tell puzzle player "hello there"))
+    (is-false (handle-tell puzzle player "hi"))
+    (is-false (handle-tell puzzle player "a b c d e"))
+    (is-false (handle-tell puzzle player ""))))
 
-(test wordle-handle-speech-non-alpha-ignored
-  "Handle-speech returns nil for non-alpha 5-char strings"
+(test wordle-handle-tell-non-alpha-ignored
+  "handle-tell returns nil for non-alpha 5-char strings"
   (let* ((session (make-instance 'stream-session
                                  :stream (make-string-output-stream)))
          (player (new-character "TestPlayer" session))
          (puzzle (make-test-puzzle :target-word "crane")))
-    (is-false (handle-speech puzzle player "12345"))
-    (is-false (handle-speech puzzle player "cr@ne"))
-    (is-false (handle-speech puzzle player "cra?e"))))
+    (is-false (handle-tell puzzle player "12345"))
+    (is-false (handle-tell puzzle player "cr@ne"))
+    (is-false (handle-tell puzzle player "cra?e"))))
 
 ;; ─── Edge cases
 
@@ -355,8 +355,8 @@
       (is (search "a test wordle board" repr))
       (is (search "CRANE" repr)))))
 
-(test wordle-handle-speech-help
-  "Handle-speech responds to 'help' with instructions"
+(test wordle-handle-tell-help
+  "handle-tell responds to 'help' with instructions"
   (let* ((session (make-instance 'stream-session
                                  :stream (make-string-output-stream)
                                  :use-colors nil))
@@ -370,13 +370,13 @@
         (setf (fdefinition 'player-send-message) #'mock-send)
         (unwind-protect
              (progn
-               (is-true (handle-speech puzzle player "help"))
+               (is-true (handle-tell puzzle player "help"))
                (is (search "How to play" (car captured-messages)))
                (is (search "Guess the 5-letter word" (car captured-messages))))
           (setf (fdefinition 'player-send-message) old))))))
 
-(test wordle-handle-speech-show
-  "Handle-speech responds to 'show' with the puzzle state"
+(test wordle-handle-tell-show
+  "handle-tell responds to 'show' with the puzzle state"
   (let* ((session (make-instance 'stream-session
                                  :stream (make-string-output-stream)
                                  :use-colors nil))
@@ -390,12 +390,12 @@
         (setf (fdefinition 'player-send-message) #'mock-send)
         (unwind-protect
              (progn
-               (is-true (handle-speech puzzle player "show"))
+               (is-true (handle-tell puzzle player "show"))
                (is (search "a test wordle board" (car captured-messages)))
                (is (search "Speak a 5-letter word" (car captured-messages))))
           (setf (fdefinition 'player-send-message) old))))))
 
-(test wordle-handle-speech-five-letter-not-command
+(test wordle-handle-tell-five-letter-not-command
   "A 5-letter word like 'board' or 'state' is treated as a guess, not a command"
   (let* ((session (make-instance 'stream-session
                                  :stream (make-string-output-stream)
@@ -410,14 +410,14 @@
         (setf (fdefinition 'player-send-message) #'mock-send)
         (unwind-protect
              (progn
-               (is-true (handle-speech puzzle player "show"))
+               (is-true (handle-tell puzzle player "show"))
                (is (search "Speak a 5-letter word" (car captured-messages)))
                (setf captured-messages '())
-               (is-true (handle-speech puzzle player "board"))
+               (is-true (handle-tell puzzle player "board"))
                (is (search "=== a test wordle board" (car captured-messages)))
                (is (search "b o a r d" (car captured-messages)))
                (setf captured-messages '())
-               (is-true (handle-speech puzzle player "state"))
+               (is-true (handle-tell puzzle player "state"))
                (is (search "s t a t e" (car captured-messages))))
           (setf (fdefinition 'player-send-message) old))))))
 
