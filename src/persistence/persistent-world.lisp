@@ -185,14 +185,10 @@ Returns TRANSIENT-WORLD (now a persistent-world)."
     (dolist (obj (world-all-objects transient-world))
       (unless (typep obj 'mud-character)
         (materialize-object obj transient-world)))
-    ;; Convert the world itself
-    (change-class transient-world 'persistent-world)
-    (initialize-instance transient-world)
-    (setf (world-id-counter transient-world) (world-id-counter transient-world))
-    ;; Register the world in BKNR's indices too
-    (let ((pclass (find-class 'persistent-world)))
-      (dolist (holder (bknr.indices::indexed-class-indices pclass))
-        (bknr.indices:index-add (bknr.indices::index-holder-index holder) transient-world))))
+    ;; Convert the world itself via the same generic mechanism
+    (materialize-object transient-world transient-world)
+    ;; Ensure the id-counter is tracked in the transaction log
+    (setf (world-id-counter transient-world) (world-id-counter transient-world)))
   transient-world)
 
 ;; ─── World restore / initialize ─────────────────────────────────────────────
