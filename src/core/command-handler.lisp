@@ -210,39 +210,35 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
 
 (define-command "read" (world player args)
   (declare (ignore world))
-  (let* ((room (object-location player))
-         (guestbook (or (find-if (lambda (obj) (typep obj 'mud-guestbook)) (container-all-objects room))
-                        (find-if (lambda (obj) (typep obj 'mud-guestbook)) (container-all-objects player)))))
-    (cond
-      ((and (not (zerop (length args)))
-            (not (string-equal args "guestbook"))
-            (not (search "guestbook" (string-downcase args))))
-       (player-send-message player "Read what? Try: read guestbook"))
-      ((null guestbook)
-       (player-send-message player "There is nothing here to read."))
-      (t
-       (player-send-message player (guestbook-format-entries guestbook))))))
+  (if (zerop (length args))
+      (player-send-message player "Read what? Usage: read <name>")
+      (let* ((room (object-location player))
+             (target (or (first (container-objects-matching room args))
+                         (first (container-objects-matching player args)))))
+        (cond
+          ((null target)
+           (player-send-message player "You don't see that here."))
+          ((handle-read target player))
+          (t
+           (player-send-message player (format nil "There's nothing to read on the ~A." (object-name target))))))))
 
 (define-command "write" (world player args)
   (declare (ignore world))
-  (let* ((room (object-location player))
-         (guestbook (or (find-if (lambda (obj) (typep obj 'mud-guestbook)) (container-all-objects room))
-                        (find-if (lambda (obj) (typep obj 'mud-guestbook)) (container-all-objects player)))))
-    (if (null guestbook)
-        (player-send-message player "There is no guestbook here to write in.")
-        (let* ((session (character-session player))
-               (message (ask-input session "What message do you want to write?")))
-          (if (zerop (length message))
-              (player-send-message player "Write what? Please try again.")
-              (progn
-                (guestbook-add-entry guestbook (object-name player) message)
-                (player-send-message player "You write your message in the guestbook.")
-                (loop for obj in (container-all-objects room) do
-                  (when (and (typep obj 'mud-character)
-                             (not (eq obj player)))
-                    (player-send-message obj (format nil "~A writes a message in ~A."
-                                                     (object-name player)
-                                                     (object-name guestbook)))))))))))
+  (if (zerop (length args))
+      (player-send-message player "Write on what? Usage: write <name>")
+      (let* ((room (object-location player))
+             (target (or (first (container-objects-matching room args))
+                         (first (container-objects-matching player args)))))
+        (cond
+          ((null target)
+           (player-send-message player "You don't see that here."))
+          (t
+           (let* ((session (character-session player))
+                  (message (ask-input session "What do you want to write?")))
+             (if (zerop (length message))
+                 (player-send-message player "Write what? Please try again.")
+                 (unless (handle-write target player message)
+                   (player-send-message player (format nil "There's nothing to write on the ~A." (object-name target)))))))))))
 
 (define-command "help" (world player args)
   (declare (ignore world args))
@@ -282,6 +278,22 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
   Returns non-NIL if the speech was handled, NIL otherwise.")
   (:method (object speaker message)
     (declare (ignore object speaker message))
+    nil))
+
+(defgeneric handle-read (object reader)
+  (:documentation "Called when READER tries to read OBJECT.
+  Should display the readable content to the reader and return non-NIL.
+  Returns NIL if the object has nothing readable.")
+  (:method (object reader)
+    (declare (ignore object reader))
+    nil))
+
+(defgeneric handle-write (object writer message)
+  (:documentation "Called when WRITER tries to write MESSAGE on OBJECT.
+  Should record the message and return non-NIL.
+  Returns NIL if the object is not writable.")
+  (:method (object writer message)
+    (declare (ignore object writer message))
     nil))
 
 (define-command "tell" (world player args)

@@ -286,4 +286,6 @@
 
    ;; Extensibility
    #:handle-event
-   #:handle-tell))
+   #:handle-tell
+   #:handle-read
+   #:handle-write))

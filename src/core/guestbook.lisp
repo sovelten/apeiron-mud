@@ -14,6 +14,25 @@
   "Cyan for guestbooks."
   (cyan (format nil "~A (ID: ~D)" (object-name obj) (object-id obj))))
 
+(defmethod handle-read ((obj mud-guestbook) reader)
+  "Display the guestbook entries to the reader."
+  (player-send-message reader (guestbook-format-entries obj))
+  t)
+
+(defmethod handle-write ((obj mud-guestbook) writer message)
+  "Record a message in the guestbook and broadcast to the room."
+  (guestbook-add-entry obj (object-name writer) message)
+  (player-send-message writer "You write your message in the guestbook.")
+  (let ((room (object-location writer)))
+    (when room
+      (loop for other in (container-all-objects room) do
+        (when (and (typep other 'mud-character)
+                   (not (eq other writer)))
+          (player-send-message other (format nil "~A writes a message in ~A."
+                                             (object-name writer)
+                                             (object-name obj)))))))
+  t)
+
 (defun guestbook-load-from-csv (filepath)
   "Read a CSV file and return a list of entry plists."
   (when (probe-file filepath)

@@ -295,3 +295,33 @@
                (is (null msgs-bob)))
 
           (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+
+(test guestbook-read-write-via-commands
+  "Test writing to and reading from a guestbook via process-command"
+  (let* ((world (apeiron.core:new-world))
+         (room (apeiron.core:new-room :name "Library"))
+         (guestbook (apeiron.core:new-guestbook :name "guestbook" :filepath nil))
+         (output (make-string-output-stream))
+         (input (make-string-input-stream "Hello MUD!"))
+         (io (make-two-way-stream input output)))
+    (apeiron.core:world-add-object! world room)
+    (apeiron.core:world-add-object! world guestbook)
+    (apeiron.core:world-set-starting-room! world room)
+    (let ((player (apeiron.core:new-character "Alice" (make-instance 'apeiron.core:stream-session
+                                                                       :stream io
+                                                                       :use-colors nil))))
+      (apeiron.core:world-add-object! world player)
+      (apeiron.core:world-add-character! world player)
+      (apeiron.core:container-add-object room guestbook)
+      ;; Write a message via process-command
+      (apeiron.core:process-command world player "write guestbook")
+      ;; Verify entry was recorded
+      (let ((entries (apeiron.core:guestbook-entries guestbook)))
+        (is (= 1 (length entries)))
+        (is (equal "Alice" (getf (first entries) :author)))
+        (is (equal "Hello MUD!" (getf (first entries) :message))))
+      ;; Read back via process-command
+      (apeiron.core:process-command world player "read guestbook")
+      (let ((text (get-output-stream-string output)))
+        (is (search "Hello MUD!" text))
+        (is (search "Alice" text))))))
