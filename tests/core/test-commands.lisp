@@ -217,3 +217,81 @@
                  (is (= 1 (length captured)))
                  (is (search "Bob" (first captured)))))
           (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+
+(test command-processing-tell
+  "Test the tell command — private messages between players and objects."
+  (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
+    (let ((alice (apeiron.core:new-character "Alice" (make-instance 'apeiron.core:stream-session
+                                                                     :stream (make-string-output-stream)
+                                                                     :use-colors nil)))
+          (bob (apeiron.core:new-character "Bob" (make-instance 'apeiron.core:stream-session
+                                                                 :stream (make-string-output-stream)
+                                                                 :use-colors nil)))
+          (msgs-alice '())
+          (msgs-bob '()))
+      (apeiron.core:world-add-character! world alice)
+      (apeiron.core:world-add-character! world bob)
+      (let* ((room (apeiron.core:object-location alice))
+             (goblin (make-instance 'apeiron.core:mud-npc
+                                    :name "Goblin"
+                                    :id 200
+                                    :description "A smelly goblin."
+                                    :hp 10
+                                    :max-hp 10))
+             (original-send-message (fdefinition 'apeiron.core:player-send-message)))
+        (apeiron.core:object-move bob room)
+        (apeiron.core:container-add-object room goblin)
+        (unwind-protect
+             (progn
+               (setf (fdefinition 'apeiron.core:player-send-message)
+                     (lambda (p msg &key newline)
+                       (declare (ignore newline))
+                       (cond
+                         ((eq p alice) (push msg msgs-alice))
+                         ((eq p bob) (push msg msgs-bob))
+                         (t (push msg msgs-alice)))))
+
+               ;; Test 1: No arguments — usage message
+               (setf msgs-alice '() msgs-bob '())
+               (apeiron.core:process-command world alice "tell")
+               (is (search "Tell who what?" (first msgs-alice)))
+               (is (null msgs-bob))
+
+               ;; Test 2: Name only, no message — usage message
+               (setf msgs-alice '() msgs-bob '())
+               (apeiron.core:process-command world alice "tell bob")
+               (is (search "Tell who what?" (first msgs-alice)))
+               (is (null msgs-bob))
+
+               ;; Test 3: Target not in room
+               (setf msgs-alice '() msgs-bob '())
+               (apeiron.core:process-command world alice "tell dragon hello")
+               (is (search "here to tell that to" (first msgs-alice)))
+               (is (null msgs-bob))
+
+               ;; Test 4: Tell another player
+               (setf msgs-alice '() msgs-bob '())
+               (apeiron.core:process-command world alice "tell bob Hello there!")
+               ;; Alice sees "You tell Bob: Hello there!"
+               (is (search "You tell" (first msgs-alice)))
+               (is (search "Bob" (first msgs-alice)))
+               (is (search "Hello there!" (first msgs-alice)))
+               ;; Bob sees "Alice tells you privately: Hello there!"
+               (is (search "Alice tells you" (first msgs-bob)))
+               (is (search "privately" (first msgs-bob)))
+               (is (search "Hello there!" (first msgs-bob)))
+
+               ;; Test 5: Tell an NPC that doesn't handle speech
+               (setf msgs-alice '() msgs-bob '())
+               (apeiron.core:process-command world alice "tell goblin Give me your gold!")
+               ;; push prepends, so last message sent is first in list
+               ;; "Goblin doesn't seem to understand." is sent first, then "You tell Goblin: ..."
+               (is (= 2 (length msgs-alice)))
+               (is (search "doesn't seem to understand" (first msgs-alice)))
+               (is (search "You tell" (second msgs-alice)))
+               (is (search "Goblin" (second msgs-alice)))
+               (is (search "Give me your gold!" (second msgs-alice)))
+               ;; Bob sees nothing
+               (is (null msgs-bob)))
+
+          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
