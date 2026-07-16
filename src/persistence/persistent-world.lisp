@@ -74,7 +74,7 @@ change in the outer transaction's buffer."
 The transient OBJECT is converted in-place via MATERIALIZE-OBJECT, which
 uses CHANGE-CLASS to preserve slot values and object identity."
   (bknr.datastore:with-transaction ("create-object")
-    (materialize-object object world)
+    (materialize-object object)
     (world-add-object! world object))
   object)
 
@@ -136,7 +136,7 @@ parent (the transient game class) and records the mapping."
 
 ;; ─── World materialization ──────────────────────────────────────────────────
 
-(defgeneric materialize-object (obj world)
+(defgeneric materialize-object (obj)
   (:documentation
    "Convert OBJ into its persistent counterpart and register it with BKNR.
 
@@ -147,7 +147,7 @@ and optionally specialize MATERIALIZE-OBJECT if extra steps are needed.
 Uses CHANGE-CLASS (preserving object identity and all cross-references)
 followed by INITIALIZE-INSTANCE to trigger BKNR registration."))
 
-(defmethod materialize-object (obj world)
+(defmethod materialize-object (obj)
   "Generic materialization: change class in-place and register with BKNR.
 
 CHANGE-CLASS preserves all slot values and object identity -- every
@@ -184,9 +184,9 @@ Returns TRANSIENT-WORLD (now a persistent-world)."
     ;; Convert all non-character game objects in-place
     (dolist (obj (world-all-objects transient-world))
       (unless (typep obj 'mud-character)
-        (materialize-object obj transient-world)))
+        (materialize-object obj)))
     ;; Convert the world itself via the same generic mechanism
-    (materialize-object transient-world transient-world)
+    (materialize-object transient-world)
     ;; Ensure the id-counter is tracked in the transaction log
     (setf (world-id-counter transient-world) (world-id-counter transient-world)))
   transient-world)
