@@ -48,10 +48,15 @@ is written so BKNR's transaction logging captures the change."))
                  :location location))
 
 (defun object-name-matches (obj name)
-  "Return non-NIL if NAME matches the object's primary name or any alias (case-insensitive)."
-  (or (string-equal name (object-name obj))
-      (some (lambda (alias) (string-equal name alias))
-            (object-aliases obj))))
+  "Return non-NIL if NAME matches the object's primary name (exact or whole-word,
+case-insensitive) or any alias (exact, case-insensitive). Returns NIL for empty NAME."
+  (and (plusp (length name))
+       (or (string-equal name (object-name obj))
+           (let ((name-down (string-downcase name))
+                 (words (str:words (object-name obj))))
+             (some (lambda (word) (string-equal name-down word)) words))
+           (some (lambda (alias) (string-equal name alias))
+                 (object-aliases obj)))))
 
 (defun object-get-property (obj property-name)
   "Get a property value from an object."
