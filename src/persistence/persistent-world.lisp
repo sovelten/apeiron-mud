@@ -71,15 +71,12 @@ change in the outer transaction's buffer."
 
 (defmethod create-object! ((world persistent-world) object)
   "Register OBJECT in WORLD by converting it to a persistent object in-place.
-
 The transient OBJECT is converted in-place via MATERIALIZE-OBJECT, which
-uses CHANGE-CLASS to preserve slot values and object identity.
-A snapshot is taken to ensure the new object survives immediate restarts."
-  (let (p)
-    (bknr.datastore:with-transaction ("create-object")
-      (setf p (materialize-object object world))
-      (world-add-object! world p))
-    p))
+uses CHANGE-CLASS to preserve slot values and object identity."
+  (bknr.datastore:with-transaction ("create-object")
+    (materialize-object object world)
+    (world-add-object! world object))
+  object)
 
 ;; ─── Store lifecycle ────────────────────────────────────────────────────────
 
