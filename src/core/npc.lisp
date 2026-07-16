@@ -56,12 +56,15 @@
         (npc-hp npc) 0))
 
 (defun find-npc-in-room (room name)
-  "Find a living NPC in a room by partial name match."
+  "Find a living NPC in a room by partial name match or alias."
   (find-if (lambda (obj)
              (and (typep obj 'mud-npc)
                   (not (npc-defeated-p obj))
-                  (search (string-downcase name)
-                          (string-downcase (object-name obj)))))
+                  (or (search (string-downcase name)
+                              (string-downcase (object-name obj)))
+                      (some (lambda (alias)
+                              (string-equal name alias))
+                            (object-aliases obj)))))
            (container-all-objects room)))
 
 (defun npc-describe (npc)

@@ -17,6 +17,10 @@
              :accessor object-location
              :initform nil
              :documentation "Location/container of this object")
+   (aliases :initarg :aliases
+            :accessor object-aliases
+            :initform nil
+            :documentation "List of alternative name strings for matching")
    (properties :initarg :properties
                :accessor object-properties
                :initform (make-hash-table :test #'equal)
@@ -28,6 +32,12 @@
   (make-instance 'mud-object
                  :name name
                  :location location))
+
+(defun object-name-matches (obj name)
+  "Return non-NIL if NAME matches the object's primary name or any alias (case-insensitive)."
+  (or (string-equal name (object-name obj))
+      (some (lambda (alias) (string-equal name alias))
+            (object-aliases obj))))
 
 (defun object-get-property (obj property-name)
   "Get a property value from an object."

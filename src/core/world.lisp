@@ -47,11 +47,13 @@ indices, and return the object."
   object)
 
 (defgeneric connect-rooms! (world room-a direction-a room-b direction-b
-                            &key name blocked blocked-message)
+                            &key name blocked blocked-message synonyms-a synonyms-b)
   (:documentation "Create a bidirectional Connection between ROOM-A and ROOM-B in WORLD.
 
 DIRECTION-A is the direction name from ROOM-A to ROOM-B (e.g. \"north\").
 DIRECTION-B is the direction name from ROOM-B to ROOM-A (e.g. \"south\").
+SYNONYMS-A and SYNONYMS-B are lists of alternative names for each direction
+(e.g. '(\"n\") for \"north\").
 When BLOCKED is true the passage starts blocked and cannot be traversed.
 BLOCKED-MESSAGE is shown to players when they try to pass.
 
@@ -64,14 +66,33 @@ Returns the registered MUD-CONNECTION instance."))
                            &key (name (format nil "passage between ~A and ~A"
                                               (object-name room-a)
                                               (object-name room-b)))
-                             blocked blocked-message)
+                             blocked blocked-message
+                             synonyms-a synonyms-b)
   (let* ((conn (make-connection room-a direction-a room-b direction-b
                                 :name name :blocked blocked
-                                :blocked-message blocked-message))
+                                :blocked-message blocked-message
+                                :synonyms-a synonyms-a
+                                :synonyms-b synonyms-b))
          (registered (create-object! world conn)))
     (push registered (room-connections room-a))
     (push registered (room-connections room-b))
     registered))
+
+(defun connect-north-south! (world north-room south-room &rest args)
+  "Connect NORTH-ROOM (left arg) south to SOUTH-ROOM (right arg).
+From SOUTH-ROOM you go north to NORTH-ROOM.
+Synonyms: \"s\" from north-room, \"n\" from south-room."
+  (apply #'connect-rooms! world north-room "south" south-room "north"
+         :synonyms-a '("s") :synonyms-b '("n")
+         args))
+
+(defun connect-west-east! (world west-room east-room &rest args)
+  "Connect WEST-ROOM (left arg) east to EAST-ROOM (right arg).
+From EAST-ROOM you go west to WEST-ROOM.
+Synonyms: \"e\" from west-room, \"w\" from east-room."
+  (apply #'connect-rooms! world west-room "east" east-room "west"
+         :synonyms-a '("e") :synonyms-b '("w")
+         args))
 
 (defun world-set-starting-room! (world room)
   (setf (gethash :starting-room-id (world-config world)) (object-id room)))

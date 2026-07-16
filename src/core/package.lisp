@@ -222,6 +222,8 @@
    #:mud-world
    #:new-world
    #:connect-rooms!
+   #:connect-north-south!
+   #:connect-west-east!
    #:world-id-counter
    #:world-config
    #:world-players

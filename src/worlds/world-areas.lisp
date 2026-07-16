@@ -93,18 +93,18 @@
                 :defeat-message "Boss G crumples. 'This isn't over... I'll be back... with a better evil plan!' The cavern rumbles as secret exits open."
                 :victory-flag "beat-boss-g")))
     ;; Maze layout
-    (connect-rooms! world entrance "north" crossroads "south")
-    (connect-rooms! world crossroads "north" grunt-patrol "south")
-    (connect-rooms! world crossroads "east" riddle-gallery "west")
-    (connect-rooms! world crossroads "west" mirror-maze "east")
-    (connect-rooms! world crossroads "south" cat-alley "north")
-    (connect-rooms! world grunt-patrol "north" elite-patrol "south")
-    (connect-rooms! world riddle-gallery "east" password-gate "west")
-    (connect-rooms! world mirror-maze "south" crossroads "north")
-    (connect-rooms! world mirror-maze "west" hidden-lab "east")
-    (connect-rooms! world elite-patrol "north" password-gate "south")
-    (connect-rooms! world password-gate "north" boss-chamber "south")
-    (connect-rooms! world boss-chamber "north" treasure "south")
+    (connect-north-south! world entrance crossroads)
+    (connect-north-south! world crossroads grunt-patrol)
+    (connect-west-east! world crossroads riddle-gallery)
+    (connect-west-east! world mirror-maze crossroads)
+    (connect-north-south! world crossroads cat-alley)
+    (connect-north-south! world grunt-patrol elite-patrol)
+    (connect-west-east! world riddle-gallery password-gate)
+    (connect-north-south! world mirror-maze crossroads)
+    (connect-west-east! world hidden-lab mirror-maze)
+    (connect-north-south! world elite-patrol password-gate)
+    (connect-north-south! world password-gate boss-chamber)
+    (connect-north-south! world boss-chamber treasure)
 
     ;; Challenges
     (connection-set-challenge (connection-find riddle-gallery "east")
@@ -164,9 +164,9 @@
     (setf (object-description desert)
           (concatenate 'string (object-description desert) door-flavor))
     (connect-rooms! world desert "door" mall "desert")
-    (connect-rooms! world mall "north" food-court "south")
-    (connect-rooms! world mall "east" arcade "west")
-    (connect-rooms! world mall "west" fashion "east")
+    (connect-north-south! world mall food-court)
+    (connect-west-east! world mall arcade)
+    (connect-west-east! world fashion mall)
     (connect-rooms! world arcade "maintenance" (build-team-rocket-cavern world) "mall")
     (dolist (room (list mall food-court arcade fashion))
       (register-room world room))
@@ -189,10 +189,10 @@
       ;; Place the guestbook in The Gathering
       (container-add-object gathering guestbook)
       ;; Connect The Gathering (hub) to the four biomes
-      (connect-rooms! world gathering "north" forest "south")
-      (connect-rooms! world gathering "east" desert "west")
-      (connect-rooms! world gathering "west" swamp "east")
-      (connect-rooms! world gathering "south" volcano "north")
+      (connect-north-south! world gathering forest)
+      (connect-west-east! world gathering desert)
+      (connect-west-east! world swamp gathering)
+      (connect-north-south! world gathering volcano)
       ;; Desert door → shopping mall → Team Rocket cavern maze
       (build-shopping-mall world desert)
       ;; Register all objects in the world

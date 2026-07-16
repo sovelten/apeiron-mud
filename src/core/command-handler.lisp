@@ -37,6 +37,22 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
                       (player-send-message player (room-describe target-room)))
                     (player-send-message player "You can't go that way."))))))))
 
+(define-command "n" (world player args)
+  (declare (ignore args))
+  (process-command world player "go north"))
+
+(define-command "s" (world player args)
+  (declare (ignore args))
+  (process-command world player "go south"))
+
+(define-command "e" (world player args)
+  (declare (ignore args))
+  (process-command world player "go east"))
+
+(define-command "w" (world player args)
+  (declare (ignore args))
+  (process-command world player "go west"))
+
 (define-command "attack" (world player args)
   (let ((room (object-location player)))
     (if (zerop (length args))
@@ -57,7 +73,10 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
                (or (find-npc-in-room room args)
                    (find-if (lambda (obj)
                               (and (not (eq obj player))
-                                   (search target-name (string-downcase (object-name obj)))))
+                                   (or (search target-name (string-downcase (object-name obj)))
+                                       (some (lambda (alias)
+                                               (string-equal target-name alias))
+                                             (object-aliases obj)))))
                             (container-all-objects room)))))
           (if target
               (player-send-message
@@ -293,7 +312,10 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
             (let* ((room (object-location player))
                    (target (find-if (lambda (obj)
                                       (and (not (eq obj player))
-                                           (search target-name (string-downcase (object-name obj)))))
+                                           (or (search target-name (string-downcase (object-name obj)))
+                                               (some (lambda (alias)
+                                                       (string-equal target-name alias))
+                                                     (object-aliases obj)))))
                                     (container-all-objects room))))
               (cond
                 ((null target)

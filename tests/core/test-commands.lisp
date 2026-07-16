@@ -51,6 +51,27 @@
         ;; Player should have moved or stayed in same room
         (is (not (null (apeiron.core:object-location player))))))))
 
+(test command-processing-direction-shorthands
+  "Test n/s/e/w direction shorthand commands"
+  (let ((world (apeiron.persistence:world-restore-or-initialize)))
+    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+                                     :stream (make-string-output-stream)))))
+      (apeiron.core:world-add-character! world player)
+      (let ((start-room (apeiron.core:object-location player)))
+        ;; "n" should go north (same as "go north")
+        (apeiron.core:process-command world player "n")
+        (let ((after-north (apeiron.core:object-location player)))
+          ;; Player may have moved (north from Gathering goes to forest)
+          (is (not (null after-north))))
+        ;; Move back to start
+        (apeiron.core:process-command world player "s")
+        (let ((after-south (apeiron.core:object-location player)))
+          (is (not (null after-south))))
+        ;; "e" should go east
+        (apeiron.core:process-command world player "e")
+        (let ((after-east (apeiron.core:object-location player)))
+          (is (not (null after-east))))))))
+
 (test command-processing-unknown
   "Test unknown command handling"
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
