@@ -31,6 +31,16 @@
                  :documentation "Player property key set when this NPC is defeated"))
   (:documentation "A non-player character that can be fought in the MUD"))
 
+(defmethod object-describe ((obj mud-npc))
+  "Describe an NPC for examine/inventory output."
+  (if (npc-defeated-p obj)
+      (format nil "~A (defeated)"
+              (bright-red (format nil "~A (ID: ~D)" (object-name obj) (object-id obj))))
+      (format nil "~A ~A — ~A"
+              (bright-red (format nil "~A (ID: ~D)" (object-name obj) (object-id obj)))
+              (yellow (format nil "[HP: ~D/~D]" (npc-hp obj) (npc-max-hp obj)))
+              (object-description obj))))
+
 (defun new-npc (&key name description hp max-hp attack-min attack-max
                       defeat-message victory-flag)
   "Create a new NPC."
@@ -66,12 +76,3 @@
                               (string-equal name alias))
                             (object-aliases obj)))))
            (container-all-objects room)))
-
-(defun npc-describe (npc)
-  "Describe an NPC for examine/inventory output."
-  (if (npc-defeated-p npc)
-      (format nil "~A (defeated)" (object-name npc))
-      (format nil "~A ~A — ~A"
-              (bold-red (object-name npc))
-              (yellow (format nil "[HP: ~D/~D]" (npc-hp npc) (npc-max-hp npc)))
-              (object-description npc))))

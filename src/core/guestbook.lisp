@@ -10,6 +10,10 @@
              :documentation "File where the guestbook entries will be stored"))
   (:documentation "A guestbook in which characters can read and write messages."))
 
+(defmethod object-describe ((obj mud-guestbook))
+  "Cyan for guestbooks."
+  (cyan (format nil "~A (ID: ~D)" (object-name obj) (object-id obj))))
+
 (defun guestbook-load-from-csv (filepath)
   "Read a CSV file and return a list of entry plists."
   (when (probe-file filepath)

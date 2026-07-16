@@ -9,6 +9,32 @@
                 :documentation "List of Connection objects attached to this room"))
   (:documentation "A location/room in the MUD"))
 
+(defmethod object-describe ((obj mud-room))
+  "Get a full description of a room including contents and exits."
+  (let ((contents (container-all-objects obj))
+        (exits (room-exit-list obj)))
+    (format nil "~%~A~%~A~%~A~%~{~A~%~}~%~A~{~A~^, ~}~%"
+            ;; Room name — bold bright white
+            (bold-white (format nil "=== ~A ===" (object-name obj)))
+            ;; Room description — keep default (no color)
+            (object-description obj)
+            ;; "You see:" header
+            (bold-white "You see:")
+            ;; Contents — color-coded by type
+            (mapcar (lambda (obj)
+                      (format nil "  - ~A" (object-describe obj)))
+                    contents)
+            ;; "Exits:" header
+            (bold-white "Exits: ")
+            ;; Exit directions — yellow, with (blocked) suffix if applicable
+            (mapcar (lambda (exit-pair)
+                      (let ((dir (first exit-pair))
+                            (conn (second exit-pair)))
+                        (if (and conn (connection-blocked-p conn))
+                            (format nil "~A ~A" (yellow dir) (bold-red "(blocked)"))
+                            (yellow dir))))
+                    exits))))
+
 (defun new-room (&key (name "A Room") (description ""))
   "Create a new room."
   (make-instance 'mud-room
@@ -64,29 +90,3 @@ Three independent checks:
          (or (object-get-property room (format nil "gate-~A-message" dir))
              (format nil "Something blocks the ~A exit. You are not ready to pass."
                      direction)))))))
-
-(defun room-describe (room)
-  "Get a full description of a room including contents and exits."
-  (let ((contents (container-all-objects room))
-        (exits (room-exit-list room)))
-    (format nil "~%~A~%~A~%~A~%~{~A~%~}~%~A~{~A~^, ~}~%"
-            ;; Room name — bold bright white
-            (bold-white (format nil "=== ~A ===" (object-name room)))
-            ;; Room description — keep default (no color)
-            (object-description room)
-            ;; "You see:" header
-            (bold-white "You see:")
-            ;; Contents — color-coded by type
-            (mapcar (lambda (obj)
-                      (format nil "  - ~A" (object-describe obj)))
-                    contents)
-            ;; "Exits:" header
-            (bold-white "Exits: ")
-            ;; Exit directions — yellow, with (blocked) suffix if applicable
-            (mapcar (lambda (exit-pair)
-                      (let ((dir (first exit-pair))
-                            (conn (second exit-pair)))
-                        (if (and conn (connection-blocked-p conn))
-                            (format nil "~A ~A" (yellow dir) (bold-red "(blocked)"))
-                            (yellow dir))))
-                    exits))))

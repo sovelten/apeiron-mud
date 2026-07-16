@@ -118,7 +118,6 @@
    #:npc-defeat-message
    #:npc-victory-flag
    #:npc-roll-attack
-   #:npc-describe
    #:find-npc-in-room
    #:combat-attack-npc
    #:player-hp
@@ -135,7 +134,6 @@
    #:room-exit-target
    #:room-exit-blocked-p
    #:room-exit-list
-   #:room-describe
 
    ;; Connection system
    #:mud-connection

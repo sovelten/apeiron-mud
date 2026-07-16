@@ -69,29 +69,14 @@ is written so BKNR's transaction logging captures the change."))
       (container-add-object new-location obj))
     t))
 
-(defun object-describe (obj)
-  "Get a description of an object with type-based ANSI coloring.
-- Characters (players): bright green
-- NPCs: bright red
-- Items: cyan
-- Guestbooks: cyan
-- Wordle puzzles: magenta
-- Rooms: bold white
-- Generic: default (no color)"
-  (let ((name (object-name obj)))
-    (cond
-      ((typep obj 'mud-npc)
-       (bright-red (format nil "~A (ID: ~D)" name (object-id obj))))
-      ((typep obj 'mud-character)
-       (bright-green (format nil "~A (ID: ~D)" name (object-id obj))))
-      ((typep obj 'mud-wordle-puzzle)
-       (magenta (format nil "~A (ID: ~D)" name (object-id obj))))
-      ((typep obj 'mud-guestbook)
-       (cyan (format nil "~A (ID: ~D)" name (object-id obj))))
-      ((typep obj 'mud-room)
-       (bold-white (format nil "~A (ID: ~D)" name (object-id obj))))
-      (t
-       (format nil "~A (ID: ~D)" name (object-id obj))))))
+(defgeneric object-describe (obj)
+  (:documentation
+   "Get a description of an object with type-based ANSI coloring.
+Specialized methods on subclasses provide appropriate coloring."))
+
+(defmethod object-describe ((obj mud-object))
+  "Default: no color."
+  (format nil "~A (ID: ~D)" (object-name obj) (object-id obj)))
 
 ;; Print object in REPL with useful information
 (defmethod print-object ((obj mud-object) stream)

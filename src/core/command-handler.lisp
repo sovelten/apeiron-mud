@@ -17,7 +17,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
   (declare (ignore world args))
   (let ((room (object-location player)))
     (if room
-        (player-send-message player (room-describe room))
+        (player-send-message player (object-describe room))
         (player-send-message player "You are in a void!"))))
 
 (define-command "go" (world player args)
@@ -34,7 +34,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
                     (progn
                       (object-move player target-room)
                       (player-send-message player (format nil "~A ~A~%" (bright-cyan "You go") (yellow direction)))
-                      (player-send-message player (room-describe target-room)))
+                      (player-send-message player (object-describe target-room)))
                     (player-send-message player "You can't go that way."))))))))
 
 (define-command "n" (world player args)
@@ -81,11 +81,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
           (if target
               (player-send-message
                player
-               (if (typep target 'mud-npc)
-                   (npc-describe target)
-                   (format nil "~A~%~A"
-                           (bold-white (object-name target))
-                           (object-description target))))
+               (object-describe target))
               (player-send-message player "You don't see that here."))))))
 
 (define-command "answer" (world player args)
