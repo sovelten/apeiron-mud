@@ -70,10 +70,22 @@ change in the outer transaction's buffer."
   (setf (object-properties obj) (object-properties obj)))
 
 (defmethod create-object! ((world persistent-world) object)
-  "Register OBJECT in WORLD by materializing a persistent copy."
-  (bknr.datastore:with-transaction ("create-object")
-    (let ((pobj (materialize-object object world)))
-      (world-add-object! world pobj))))
+  "Register OBJECT in WORLD by making a persistent copy via MAKE-INSTANCE.
+
+The transient OBJECT is a throwaway -- we create a fresh persistent instance
+so BKNR's normal MAKE-INSTANCE path handles registration, indexing, and
+transaction logging.  Slot values are then copied via MOP-COPY-SLOTS.
+A snapshot is taken to ensure the new object survives immediate restarts."
+  (let (p)
+    (bknr.datastore:with-transaction ("create-object")
+      (let ((pclass (transient->persistent-class (class-of object))))
+        (setf p (make-instance pclass))
+        (mop-copy-slots object p :skip '(id properties))
+        (maphash (lambda (k v) (object-set-property p k v))
+                 (object-properties object))
+        (world-add-object! world p)))
+    (sync-world)
+    p))
 
 ;; ─── Store lifecycle ────────────────────────────────────────────────────────
 
@@ -134,172 +146,79 @@ parent (the transient game class) and records the mapping."
 (defun mop-copy-slots (source target &key skip)
   "Copy all bound slots from SOURCE to TARGET where TARGET has matching slots.
 Slots named in the SKIP list are excluded (compared by SYMBOL-NAME to handle
-cross-package slot definitions).
+cross-package slot definitions).  Also skips any slot whose value is a
+non-store-object MUD-OBJECT (transient refs that BKNR cannot encode).
 Uses MOP introspection so new slot definitions are picked up automatically."
   (dolist (slot (sb-mop:class-slots (class-of source)))
     (let ((name (sb-mop:slot-definition-name slot)))
       (unless (some (lambda (s) (string= (symbol-name name) (symbol-name s))) skip)
         (when (and (slot-boundp source name)
                    (slot-exists-p target name))
-          (setf (slot-value target name) (slot-value source name)))))))
-
-(defun slot-value->initargs (object &optional skip)
-  "Build a plist of initarg keyword-value pairs from the bound slots of OBJECT.
-Slots named in the SKIP list are excluded (compared by SYMBOL-NAME).
-Uses MOP introspection so new slots are picked up automatically."
-  (let ((initargs nil))
-    (dolist (slot (sb-mop:class-slots (class-of object)))
-      (let* ((name (sb-mop:slot-definition-name slot))
-             (initarg (car (sb-mop:slot-definition-initargs slot))))
-        (when (and initarg
-                   (not (some (lambda (s) (string= (symbol-name name) (symbol-name s))) skip))
-                   (slot-boundp object name))
-          (push initarg initargs)
-          (push (slot-value object name) initargs))))
-    (nreverse initargs)))
+          (let ((value (slot-value source name)))
+            (unless (and (typep value 'mud-object)
+                         (not (typep value 'bknr.datastore:store-object)))
+              (setf (slot-value target name) value))))))))
 
 ;; ─── World materialization ──────────────────────────────────────────────────
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  ;; Transition from the legacy DEFUN to the new DEFGENERIC.
-  ;; Without this, reloading the file would signal a name-conflict error.
-  (ignore-errors (fmakunbound 'materialize-object)))
-
-(defgeneric materialize-object (obj persistent-world)
+(defgeneric materialize-object (obj world)
   (:documentation
-   "Create a persistent copy of OBJ and register it in PERSISTENT-WORLD.
+   "Convert OBJ into its persistent counterpart and register it with BKNR.
+
 Dispatching on the class of OBJ allows adding new object types without
-modifying this generic function — just define a new DEFMETHOD.
+modifying this generic function -- just add a DEFWRAPPING-PERSISTENT-CLASS
+and optionally specialize MATERIALIZE-OBJECT if extra steps are needed.
 
-The primary method uses MOP introspection to automatically copy all
-slots, so adding new slots to existing classes needs no changes here."))
+Uses CHANGE-CLASS (preserving object identity and all cross-references)
+followed by INITIALIZE-INSTANCE to trigger BKNR registration."))
 
-(defmethod materialize-object (obj (pw persistent-world))
-  "Generic materialization: create a persistent instance via MAKE-INSTANCE
-with slot values passed as initargs, then copy properties via
-OBJECT-SET-PROPERTY for BKNR tracking.
+(defmethod materialize-object (obj world)
+  "Generic materialization: change class in-place and register with BKNR.
 
-The 'location' slot is always skipped because it holds transient-object
-references -- it is rebuilt by MATERIALIZE-RELATIONSHIPS in Phase 3."
-  (let* ((class (class-of obj))
-         (pclass (transient->persistent-class class))
-         (initargs (slot-value->initargs obj (list 'id 'location 'properties))))
-    (let ((p (apply #'make-instance pclass initargs)))
-      ;; Copy properties via object-set-property for BKNR transaction tracking
-      (maphash (lambda (k v) (object-set-property p k v))
-               (object-properties obj))
-      ;; Override BKNR-assigned ID with the transient object's ID
-      (setf (object-id p) (object-id obj))
-      (world-add-object! pw p))))
-
-(defmethod materialize-object ((obj mud-room) (pw persistent-world))
-  "Materialize a room from its transient counterpart.
-Passes all slot values as initargs except 'connections', 'contents',
-'properties', and 'location' -- those are rebuilt in Phase 3."
-  (let* ((pclass (transient->persistent-class (class-of obj)))
-         (initargs (slot-value->initargs obj
-                    '(connections contents id properties location))))
-    (let ((p (apply #'make-instance pclass initargs)))
-      (maphash (lambda (k v) (object-set-property p k v))
-               (object-properties obj))
-      (setf (object-id p) (object-id obj))
-      (world-add-object! pw p))))
-
-(defmethod materialize-object ((obj mud-connection) (pw persistent-world))
-  "Materialize a connection, resolving room references to persistent counterparts.
-
-Copies all simple-value slots as initargs, then resolves ROOM-A and ROOM-B
-to persistent rooms (found by ID in the persistent world)."
-  (let* ((pclass (transient->persistent-class (class-of obj)))
-         (initargs (slot-value->initargs obj
-                    '(id room-a room-b properties))))
-    (let ((p (apply #'make-instance pclass initargs)))
-      ;; Resolve room references to persistent counterparts
-      (setf (connection-room-a p)
-            (world-object-by-id pw (object-id (connection-room-a obj))))
-      (setf (connection-room-b p)
-            (world-object-by-id pw (object-id (connection-room-b obj))))
-      (maphash (lambda (k v) (object-set-property p k v))
-               (object-properties obj))
-      (setf (object-id p) (object-id obj))
-      (world-add-object! pw p))))
-
-(defun materialize-relationships (transient-world persistent-world)
-  "Restore cross-references between persistent objects: locations, exits,
-room contents, and the starting room.
-
-First clears slot values that may have been copied from the transient
-world (connections lists, contents hash-tables), then rebuilds them by
-matching IDs between the transient and persistent worlds."
-  ;; Phase 3 preamble — clear slots that the generic MOP copy may have
-  ;; populated with transient-object references that are now invalid.
-  (dolist (obj (world-all-objects transient-world))
-    (let ((p (world-object-by-id persistent-world (object-id obj))))
-      (when (typep p 'mud-room)
-        (setf (room-connections p) nil)
-        (setf (container-contents p) (make-hash-table)))))
-  ;; Main relationship rebuild loop
-  (dolist (obj (world-all-objects transient-world))
-        (unless (typep obj 'mud-character)
-          (let ((p (world-object-by-id persistent-world (object-id obj))))
-            (when p
-              ;; Location
-              (let ((old-loc (object-location obj)))
-                (when old-loc
-                  (let ((new-loc (world-object-by-id persistent-world (object-id old-loc))))
-                    (when new-loc
-                      (setf (object-location p) new-loc)))))
-              ;; Connection room links
-              (when (typep obj 'mud-connection)
-                (push p (room-connections (connection-room-a p)))
-                (push p (room-connections (connection-room-b p))))
-              ;; Room-specific relationships
-              (when (typep obj 'mud-room)
-                ;; Contents
-                (loop for child in (container-all-objects obj)
-                      do (let ((new-child (world-object-by-id persistent-world (object-id child))))
-                           (when new-child
-                             (container-add-object p new-child))))))))
-      ;; Starting room
-      (let ((old-start (starting-room transient-world)))
-        (when old-start
-          (let ((new-start (world-object-by-id persistent-world (object-id old-start))))
-            (when new-start
-              (world-set-starting-room! persistent-world new-start)))))))
+CHANGE-CLASS preserves all slot values and object identity -- every
+cross-reference (location, room-a, connections, contents, etc.) stays
+valid because the same objects are still in memory.  INITIALIZE-INSTANCE
+triggers BKNR's store-object registration (ID allocation, transaction
+logging)."
+  (let ((pclass (transient->persistent-class (class-of obj))))
+    (change-class obj pclass)
+    (initialize-instance obj)
+    ;; INITIALIZE-INSTANCE sets up the store-object ID and transaction log
+    ;; entry, but BKNR's INDEXED-CLASS MAKE-INSTANCE :AROUND method (which
+    ;; adds the object to unique-index and class-skip-index) does not run
+    ;; for CHANGE-CLASS objects.  Register manually so the object appears
+    ;; in STORE-OBJECTS-WITH-CLASS and STORE-OBJECT-WITH-ID queries.
+    (dolist (holder (bknr.indices::indexed-class-indices pclass))
+      (bknr.indices:index-add (bknr.indices::index-holder-index holder) obj))
+    obj))
 
 (defun materialize-world (transient-world)
-  "Convert a transient MUD world into a persistent one.
+  "Convert TRANSIENT-WORLD into a persistent world in-place.
 
-All rooms, objects, NPCs, and guestbooks in TRANSIENT-WORLD are re-created
-as BKNR-persistent instances within a single transaction.  Relationships
-(locations, room contents, starting room) are faithfully copied.
+Every game object (rooms, connections, NPCs, guestbooks, puzzles) and the
+world itself are converted to their persistent counterparts via
+CHANGE-CLASS + INITIALIZE-INSTANCE.  Because object identity is preserved,
+all cross-references remain valid without any fixup pass.
 
-Rooms are materialized first so that Connection objects can resolve
-their ROOM-A / ROOM-B references immediately at creation time (via
-INITIALIZE-TRANSIENT-INSTANCE), eliminating the need for a separate
-cross-reference pass for connections.
+Characters (players) are excluded -- they are transient by nature and
+never stored in the datastore.
 
-Returns the new PERSISTENT-WORLD."
-  ;; Build the transient→persistent class map so MATEIALIZE-OBJECT
-  ;; can find the right persistent class for any game object.
+Returns TRANSIENT-WORLD (now a persistent-world)."
   (build-persistent-class-map)
-  (let ((pw (make-instance 'persistent-world)))
-    (bknr.datastore:with-transaction ("materialize-world")
-      ;; Phase 1 — rooms first (connections reference them)
-      (dolist (obj (world-all-objects transient-world))
-        (when (typep obj 'mud-room)
-          (materialize-object obj pw)))
-      ;; Phase 2 — everything else (connections find rooms from Phase 1)
-      (dolist (obj (world-all-objects transient-world))
-        (when (and (not (typep obj 'mud-character))
-                   (not (typep obj 'mud-room)))
-          (materialize-object obj pw)))
-      ;; Phase 3 — restore cross-references (locations, contents, starting room)
-      (materialize-relationships transient-world pw)
-      ;; Sync the ID counter so new objects after materialization don't
-      ;; collide with IDs already assigned during materialization.
-      (setf (world-id-counter pw) (world-id-counter transient-world)))
-    pw))
+  (bknr.datastore:with-transaction ("materialize-world")
+    ;; Convert all non-character game objects in-place
+    (dolist (obj (world-all-objects transient-world))
+      (unless (typep obj 'mud-character)
+        (materialize-object obj transient-world)))
+    ;; Convert the world itself
+    (change-class transient-world 'persistent-world)
+    (initialize-instance transient-world)
+    (setf (world-id-counter transient-world) (world-id-counter transient-world))
+    ;; Register the world in BKNR's indices too
+    (let ((pclass (find-class 'persistent-world)))
+      (dolist (holder (bknr.indices::indexed-class-indices pclass))
+        (bknr.indices:index-add (bknr.indices::index-holder-index holder) transient-world))))
+  transient-world)
 
 ;; ─── World restore / initialize ─────────────────────────────────────────────
 
