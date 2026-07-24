@@ -349,3 +349,131 @@ an MSSP subneg REQUEST with the correct MSSP response bytes."
             (ignore-errors (sb-posix:close fd)))
           (when session
             (ignore-errors (session-disconnect session))))))))
+
+(test mssp-drain-processes-telnet-before-login
+  "%drain-telnet-negotiation should process MSSP and other telnet commands
+before the login flow, leaving data characters in the line buffer."
+  (multiple-value-bind (srv-in-read srv-in-write) (sb-posix:pipe)
+    (multiple-value-bind (srv-out-read srv-out-write) (sb-posix:pipe)
+      (let* ((srv-in-stream
+               (sb-sys:make-fd-stream srv-in-read
+                                      :input t :output nil
+                                      :element-type '(unsigned-byte 8)
+                                      :buffering :none
+                                      :name "drain-srv-in"))
+             (srv-out-fd (sb-posix:dup srv-out-write))
+             (srv-out-stream
+               (sb-sys:make-fd-stream srv-out-fd
+                                      :input nil :output t
+                                      :element-type '(unsigned-byte 8)
+                                      :buffering :none
+                                      :name "drain-srv-out"))
+             ;; Client side: writes to srv-in, reads from srv-out
+             (cli-write-stream
+               (sb-sys:make-fd-stream srv-in-write
+                                      :input nil :output t
+                                      :element-type '(unsigned-byte 8)
+                                      :buffering :none
+                                      :name "drain-cli-write"))
+             (cli-read-stream
+               (sb-sys:make-fd-stream srv-out-read
+                                      :input t :output nil
+                                      :element-type '(unsigned-byte 8)
+                                      :buffering :none
+                                      :name "drain-cli-read"))
+             (handler-called nil)
+             (info-fn-called nil)
+             (info-fn (lambda ()
+                        (setf info-fn-called t)
+                        (list (cons "NAME" "TestMUD")
+                              (cons "PLAYERS" "42"))))
+             (protocol (make-instance 'telnet:telnet-protocol))
+             (srv-conn (make-instance 'telnet::telnet-connection
+                                      :usocket nil
+                                      :raw-stream srv-in-stream
+                                      :out-stream srv-out-stream
+                                      :protocol protocol))
+             session)
+        (unwind-protect
+             (progn
+               ;; Simulate make-telnet-connection: send initial negotiation
+               (let ((init-cmds (telnet:telnet-init-negotiation protocol)))
+                 (dolist (cmd init-cmds)
+                   (write-sequence cmd srv-out-stream))
+                 (force-output srv-out-stream))
+               (sleep 0.05)
+
+               ;; Simulate grapevine checker response:
+               ;; option responses + DO MSSP + SB MSSP REQUEST + "mssp-request\r\n"
+               (write-bytes cli-write-stream
+                            (concatenate '(vector (unsigned-byte 8))
+                                         ;; Option responses
+                                         #(255 251 3 255 254 31 255 252 1 255 252 24
+                                           ;; DO MSSP (70)
+                                           255 253 70
+                                           ;; SB MSSP MSSP-VAR "REQUEST" IAC SE
+                                           255 250 70 1)
+                                         (map '(vector (unsigned-byte 8))
+                                              #'char-code "REQUEST")
+                                         #(255 240)
+                                         ;; Login line
+                                         (map '(vector (unsigned-byte 8))
+                                              #'char-code "mssp-request")
+                                         #(13 10)))
+               (force-output cli-write-stream)
+               (sleep 0.1)
+
+               ;; Set up session — calls %setup-telnet-mssp
+               (setf session
+                     (apeiron.server::%make-telnet-session
+                      srv-conn
+                      :mssp-info-fn info-fn))
+               (is (not (null session)) "Session should be created")
+
+               ;; Wrap handler to verify it fires
+               (let ((orig
+                       (gethash telnet:+telnet-opt-mssp+
+                                (telnet::telnet-option-handlers protocol))))
+                 (telnet:telnet-register-option-handler
+                  protocol telnet:+telnet-opt-mssp+
+                  (lambda (proto opt data)
+                    (setf handler-called t)
+                    (funcall orig proto opt data))))
+
+               ;; KEY: drain before any login reads
+               (apeiron.server::%drain-telnet-negotiation srv-conn)
+
+               ;; Verify handler and info-fn were called
+               (is-true handler-called
+                        "MSSP handler called during drain")
+               (is-true info-fn-called
+                        "info-fn called during drain")
+
+               ;; Verify MSSP response sent to client
+               (let ((resp-buf (make-array 32 :element-type '(unsigned-byte 8)
+                                            :fill-pointer 0)))
+                 (sleep 0.1)
+                 (loop while (listen cli-read-stream)
+                       do (vector-push-extend
+                           (read-byte cli-read-stream) resp-buf))
+                 (is (>= (length resp-buf) 10)
+                     "MSSP response received")
+                 (is (= (aref resp-buf 0) 255) "Starts with IAC")
+                 (is (search "TestMUD"
+                             (map 'string #'code-char resp-buf))
+                     "Contains 'TestMUD'"))
+
+               ;; Verify login text preserved in line buffer
+               (multiple-value-bind (line status)
+                   (telnet:telnet-read-line srv-conn :timeout 2)
+                 (is (null status) "Line read succeeds")
+                 (is (string= line "mssp-request")
+                     "Line reads: ~s" line)))
+          (dolist (s (list srv-in-stream srv-out-stream cli-write-stream
+                           cli-read-stream))
+            (ignore-errors (close s :abort t)))
+          (dolist (fd (list srv-in-read srv-in-write srv-out-read srv-out-write
+                             srv-out-fd))
+            (ignore-errors (sb-posix:close fd)))
+          (when session
+            (ignore-errors (session-disconnect session))))))))

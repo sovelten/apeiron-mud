@@ -166,32 +166,34 @@ than lazily during the first read call.
 Must be called after %SETUP-TELNET-MSSP so that the MSSP handler is
 already registered."
   (let ((chars (make-array 64 :element-type 'character
-                              :adjustable t :fill-pointer 0)))
+                              :adjustable t :fill-pointer 0))
+        (peek (slot-value conn 'telnet::peek-buffer))
+        (raw (telnet::telnet-conn-raw-stream conn)))
     (loop
+      ;; Check if there's data: peek-buffer has bytes or raw stream is listenable
+      (unless (or (> (fill-pointer peek) 0)
+                  (ignore-errors (listen raw)))
+        (return))
       (multiple-value-bind (char status)
-          (telnet:telnet-read-char conn :timeout 0.001)
+          (telnet:telnet-read-char conn :timeout 2.0)
         (cond
           ((and char (null status))
            ;; Data character — save it to re-insert later
            (vector-push-extend char chars))
-          ((null status)
-           ;; Timeout — no more data pending
+          ((eq status :eof)
            (return))
-          (t
-           ;; EOF or error — stop
-           (return)))))
+          ((eq status :connection-lost)
+           (return))
+          ;; :timeout here means the IAC command was consumed and processed
+          ;; (or no data, but we already checked data availability above).
+          ;; In either case, loop back and check for more data.
+          (t nil))))
     ;; Re-insert saved characters into the line buffer in original order,
-    ;; so the next telnet-read-line call sees them.
+    ;; so the next telnet-read-line call sees them in the correct sequence.
     (when (> (fill-pointer chars) 0)
       (let ((line (slot-value conn 'telnet::line-buffer)))
-        ;; Prepend in reverse order to maintain original sequence.
-        ;; vector-push-extend adds at the end, so we insert last char first,
-        ;; then rotate it to the front, then insert the second-to-last, etc.
-        (loop for i from (1- (fill-pointer chars)) downto 0
-              do (let ((c (aref chars i)))
-                   (vector-push-extend c line)
-                   ;; Swap the newly appended char with the front
-                   (rotatef (aref line 0) (aref line (1- (fill-pointer line))))))
+        (loop for i from 0 below (fill-pointer chars)
+              do (vector-push-extend (aref chars i) line))
         (log-message "[MSSP] Drain: re-inserted ~D chars into line buffer"
                      (fill-pointer chars))))))
 
