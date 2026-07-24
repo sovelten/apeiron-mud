@@ -120,14 +120,11 @@ This function:
   (let ((state (telnet::ensure-option-state protocol :local +telnet-opt-mssp+)))
     (setf (telnet::telnet-option-state-wanted state) t
           (telnet::telnet-option-state-pending state) t))
-  (log-message "[MSSP] MSSP option marked as wanted on protocol ~A" (sb-kernel:get-lisp-obj-address protocol))
   ;; Store the response function so the :around method on DO MSSP can
   ;; send the MSSP data immediately upon receiving DO MSSP.
   (setf (telnet:telnet-mssp-response-fn protocol)
         (lambda ()
           (let ((vars (funcall mssp-info-fn)))
-            (log-message "[MSSP] mssp-response-fn called, returning ~D vars"
-                         (length vars))
             vars))))
 
 (defun %drain-telnet-negotiation (conn)
@@ -176,9 +173,7 @@ receiving the initial server negotiation)."
     (when (> (fill-pointer chars) 0)
       (let ((line (slot-value conn 'telnet::line-buffer)))
         (loop for i from 0 below (fill-pointer chars)
-              do (vector-push-extend (aref chars i) line))
-        (log-message "[MSSP] Drain: re-inserted ~D chars into line buffer"
-                     (fill-pointer chars))))
+              do (vector-push-extend (aref chars i) line))))
     ;; Return T if we processed any data, nil if no data was available
     (> (fill-pointer chars) 0)))
 
@@ -245,9 +240,7 @@ Returns NIL if the connection is rejected as non-telnet traffic
                     (log-error
                      "START_TLS upgrade failed: ~A"
                      (telnet:telnet-error-message e))))))))
-      (log-message "[MSSP] new-telnet-session: mssp-info-fn is ~:[nil~;provided~]"
-                 mssp-info-fn)
-    (%make-telnet-session conn :mssp-info-fn mssp-info-fn)))
+      (%make-telnet-session conn :mssp-info-fn mssp-info-fn)))
 
 (defun new-telnet-tls-session (usocket &key certificate key password mssp-info-fn)
   "Create a new telnet-session with immediate TLS encryption from an

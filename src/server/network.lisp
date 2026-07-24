@@ -25,8 +25,9 @@ for the given WORLD: NAME, PLAYERS, and UPTIME."
                       (cons "PLAYERS" (princ-to-string (world-total-players world)))
                       (cons "UPTIME" (princ-to-string (floor (- (get-universal-time)
                                                                 *server-start-time*)))))))
-      (log-message "[MSSP] mssp-info-fn called: returning ~D vars (NAME=~S PLAYERS=~S)"
-                   (length vars) *mud-name* (world-total-players world))
+      (log-message "[MSSP] mssp-info-fn called: returning ~D vars (NAME=~S PLAYERS=~S UPTIME=~S)"
+                   (length vars) *mud-name* (world-total-players world)
+                   (floor (- (get-universal-time) *server-start-time*)))
       vars)))
 
 (defun handle-client (world session)
