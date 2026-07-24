@@ -818,6 +818,33 @@ negotiated."
         (telnet-connection-lost () nil)
         (telnet-error () nil)))))
 
+(defun telnet-send-mssp-response (conn vars)
+  "Send an MSSP (MUD Server Status Protocol) response to the client.
+
+VARS is a list of (variable-name-string . value-string) conses, where
+each variable name and value is an ASCII string (no telnet control bytes).
+
+Builds: IAC SB MSSP (MSSP-VAR <name> MSSP-VAL <value>)* IAC SE
+and writes it to the connection via TELNET-WRITE-RAW.
+
+Returns T on success, NIL if the connection was lost."
+  (unless (telnet-connection-alive-p conn)
+    (return-from telnet-send-mssp-response nil))
+  (handler-case
+      (let ((parts (make-array 64 :element-type '(unsigned-byte 8)
+                                  :adjustable t :fill-pointer 0)))
+        (dolist (pair vars)
+          (vector-push-extend +mssp-var+ parts)
+          (loop for c across (car pair)
+                do (vector-push-extend (char-code c) parts))
+          (vector-push-extend +mssp-val+ parts)
+          (loop for c across (cdr pair)
+                do (vector-push-extend (char-code c) parts)))
+        (telnet-write-raw conn (make-subneg-command +telnet-opt-mssp+ parts))
+        t)
+    (telnet-connection-lost () nil)
+    (telnet-error () nil)))
+
 ;;; ----------------------------------------------------------------
 ;;; Public: Close the connection
 ;;; ----------------------------------------------------------------
