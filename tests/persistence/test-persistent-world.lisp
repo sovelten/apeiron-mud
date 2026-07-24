@@ -184,3 +184,40 @@ disappeared from the room."
                               (apeiron.core:container-all-objects reloaded-tavern))))
       (is (not (null gb-after))
           "Guestbook should still be in The Gathering after BKNR restore"))))
+
+(test unbound-persistent-slots-initialized-after-restore
+  "When BKNR restores from a snapshot that predates the addition of a
+persistent slot, that slot remains UNBOUND after restore (the snapshot
+has no value for it and initforms are not applied during restore).
+INITIALIZE-TRANSIENT-INSTANCE must reinitialize such slots from their
+initforms so they do not cause SLOT-UNBOUND errors on access."
+  ;; The user scenario: after restart, connection-find for any direction
+  ;; must NOT signal SLOT-UNBOUND.  The default world's connections
+  ;; are created without :synonyms-a/:synonyms-b, so the slot is bound
+  ;; but nil — this is fine.  The bug only manifests when the slot is
+  ;; genuinely UNBOUND (e.g. when a slot was added post-snapshot).
+  (let* ((world (apeiron.persistence:world-restore-or-initialize :force-new t))
+         (g (starting-room world)))
+    ;; Verify connection-find returns a connection for primary directions
+    (is (not (null (connection-find g "east"))) "Find east")
+    (is (not (null (connection-find g "west"))) "Find west")
+    (is (not (null (connection-find g "north"))) "Find north")
+    (is (not (null (connection-find g "south"))) "Find south"))
+  ;; After a full snapshot/restore cycle
+  (apeiron.persistence:sync-world)
+  (bknr.datastore:close-store)
+  (let* ((world2 (apeiron.persistence:world-restore-or-initialize))
+         (g2 (starting-room world2)))
+    (is (not (null (connection-find g2 "east"))) "Find east after restore")
+    (is (not (null (connection-find g2 "west"))) "Find west after restore")
+    (is (not (null (connection-find g2 "north"))) "Find north after restore")
+    (is (not (null (connection-find g2 "south"))) "Find south after restore"))
+  ;; Simulate a slot added post-snapshot via slot-makunbound, then
+  ;; verify that initialize-transient-instance re-initializes it.
+  (let* ((world3 (apeiron.persistence:world-restore-or-initialize))
+         (g3 (starting-room world3))
+         (conn (first (room-connections g3))))
+    (slot-makunbound conn 'apeiron.core::synonyms-a)
+    (is-false (slot-boundp conn 'apeiron.core::synonyms-a) "unbound after makunbound")
+    (bknr.datastore:initialize-transient-instance conn)
+    (is-true (slot-boundp conn 'apeiron.core::synonyms-a) "re-bound after init")))

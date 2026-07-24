@@ -36,6 +36,18 @@
       (setf (guestbook-entries gb)
             (guestbook-load-from-csv (pathname fp))))))
 
+(defmethod bknr.datastore:initialize-transient-instance :after ((obj persistent-object))
+  "After restoring from a snapshot, initialize any unbound slots using
+their initfunctions.  Slots added to a persistent class after the last
+snapshot was taken have no stored value and remain unbound after the
+standard restore process — this method ensures they get their initform
+values so they don't cause SLOT-UNBOUND errors on access."
+  (dolist (slotd (sb-mop:class-slots (class-of obj)))
+    (let ((name (sb-mop:slot-definition-name slotd))
+          (initfn (sb-mop:slot-definition-initfunction slotd)))
+      (when (and initfn (not (slot-boundp obj name)))
+        (setf (slot-value obj name) (funcall initfn))))))
+
 (defun refresh-guestbooks ()
   "Reload all guestbook entries from their CSV files.
 Run this after restarting the server if guestbook entries look stale.
