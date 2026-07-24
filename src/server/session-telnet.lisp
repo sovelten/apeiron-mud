@@ -127,7 +127,7 @@ This function:
      ;; An MSSP request is: MSSP-VAR \"REQUEST\"
      (when (and (>= (length data) 8)
                 (= (aref data 0) +mssp-var+))
-       (let ((request (map 'string #'code-char (subseq data 1))))
+       (let ((request (map 'string #'code-char (subseq data 1 8))))
          (when (string= request "REQUEST")
            (let ((vars (funcall mssp-info-fn)))
              (when vars
