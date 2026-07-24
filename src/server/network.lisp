@@ -99,40 +99,39 @@ is offered on each connection, allowing clients to upgrade to TLS."
                   (when client-socket
                     (if (not *server-running*)
                         (usocket:socket-close client-socket)
-                        (let ((mssp-fn (%make-mssp-info-fn world)))
-                          (handler-case
-                              (let ((session
-                                      (if (and *server-tls-prefer-start-tls*
-                                               *server-ssl-certificate*
-                                               *server-ssl-key*)
-                                          (new-telnet-session
-                                           client-socket
-                                           :start-tls t
-                                           :certificate *server-ssl-certificate*
-                                           :key *server-ssl-key*
-                                           :password *server-ssl-password*
-                                           :mssp-info-fn mssp-fn)
-                                          (new-telnet-session
-                                           client-socket
-                                           :mssp-info-fn mssp-fn))))
-                                ;; Session may be NIL if rejected as non-telnet
-                                (when session
-                                  (let ((thread
-                                          (bordeaux-threads:make-thread
-                                           (lambda ()
-                                             (handle-client world session))
-                                           :name
-                                           (format nil "session-~A"
-                                                   (session-id session)))))
-                                    (log-message
-                                     "Thread for session ~A created"
-                                     (session-id session))
-                                    (setf (gethash (session-id session)
-                                                   *player-threads*)
-                                          thread))))
-                            (error (e)
-                              (usocket:socket-close client-socket)
-                              (log-error "Failed to create session: ~A" e)))))))
+                        (handler-case
+                            (let ((session
+                                    (if (and *server-tls-prefer-start-tls*
+                                             *server-ssl-certificate*
+                                             *server-ssl-key*)
+                                        (new-telnet-session
+                                         client-socket
+                                         :start-tls t
+                                         :certificate *server-ssl-certificate*
+                                         :key *server-ssl-key*
+                                         :password *server-ssl-password*
+                                         :mssp-info-fn (%make-mssp-info-fn world))
+                                        (new-telnet-session
+                                         client-socket
+                                         :mssp-info-fn (%make-mssp-info-fn world)))))
+                              ;; Session may be NIL if rejected as non-telnet
+                              (when session
+                                (let ((thread
+                                        (bordeaux-threads:make-thread
+                                         (lambda ()
+                                           (handle-client world session))
+                                         :name
+                                         (format nil "session-~A"
+                                                 (session-id session)))))
+                                  (log-message
+                                   "Thread for session ~A created"
+                                   (session-id session))
+                                  (setf (gethash (session-id session)
+                                                 *player-threads*)
+                                        thread))))
+                          (error (e)
+                            (usocket:socket-close client-socket)
+                            (log-error "Failed to create session: ~A" e))))))
               (usocket:timeout-error ()
                 nil)
               (error (e)
