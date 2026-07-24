@@ -119,17 +119,26 @@ This function:
   (let ((state (telnet::ensure-option-state protocol :local +telnet-opt-mssp+)))
     (setf (telnet::telnet-option-state-wanted state) t
           (telnet::telnet-option-state-pending state) t))
+  (log-message "[MSSP] MSSP option marked as wanted on protocol ~A" (sb-kernel:get-lisp-obj-address protocol))
   ;; Register the subnegotiation handler
   (telnet-register-option-handler
    protocol +telnet-opt-mssp+
    (lambda (protocol option data)
-     (declare (ignore protocol option))
+     (declare (ignore option))
+     (log-message "[MSSP] Handler called! data length=~D option=~D"
+                  (length data) option)
+     (when (>= (length data) 1)
+       (log-message "[MSSP] data[0]=~D (+mssp-var+=~D)"
+                    (aref data 0) +mssp-var+))
      ;; An MSSP request is: MSSP-VAR \"REQUEST\"
      (when (and (>= (length data) 8)
                 (= (aref data 0) +mssp-var+))
        (let ((request (map 'string #'code-char (subseq data 1 8))))
+         (log-message "[MSSP] request string=~S" request)
          (when (string= request "REQUEST")
+           (log-message "[MSSP] MATCH! Calling mssp-info-fn")
            (let ((vars (funcall mssp-info-fn)))
+             (log-message "[MSSP] mssp-info-fn returned ~D vars" (length vars))
              (when vars
                (let ((parts (make-array 64 :element-type '(unsigned-byte 8)
                                            :adjustable t :fill-pointer 0)))
@@ -140,7 +149,9 @@ This function:
                    (vector-push-extend +mssp-val+ parts)
                    (loop for c across (cdr pair)
                          do (vector-push-extend (char-code c) parts)))
-                 (list (telnet::make-subneg-command +telnet-opt-mssp+ parts)))))))))))
+                 (let ((response (telnet::make-subneg-command +telnet-opt-mssp+ parts)))
+                   (log-message "[MSSP] Sending response (~D bytes)" (length response))
+                   (list response)))))))))))
 
 (defun %make-telnet-session (conn &key mssp-info-fn)
   "Create a telnet-session from an already-validated telnet-connection.
@@ -199,6 +210,8 @@ Returns NIL if the connection is rejected as non-telnet traffic
                     (log-error
                      "START_TLS upgrade failed: ~A"
                      (telnet:telnet-error-message e))))))))
+    (log-message "[MSSP] new-telnet-session: mssp-info-fn is ~:[nil~;provided~]"
+                 mssp-info-fn)
     (%make-telnet-session conn :mssp-info-fn mssp-info-fn)))
 
 (defun new-telnet-tls-session (usocket &key certificate key password mssp-info-fn)
@@ -225,6 +238,8 @@ Returns NIL if the connection is rejected as non-telnet traffic
       (log-message "Rejected non-telnet TLS connection on secure port")
       (usocket:socket-close usocket)
       (return-from new-telnet-tls-session nil))
+    (log-message "[MSSP] new-telnet-session: mssp-info-fn is ~:[nil~;provided~]"
+                 mssp-info-fn)
     (%make-telnet-session conn :mssp-info-fn mssp-info-fn)))
 
 (defun new-telnet-session-with-start-tls (usocket &key certificate key password

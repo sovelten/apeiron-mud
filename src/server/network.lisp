@@ -21,10 +21,13 @@
   "Return a function of no arguments that produces an MSSP variable alist
 for the given WORLD: NAME, PLAYERS, and UPTIME."
   (lambda ()
-    (list (cons "NAME" *mud-name*)
-          (cons "PLAYERS" (princ-to-string (world-total-players world)))
-          (cons "UPTIME" (princ-to-string (floor (- (get-universal-time)
-                                                    *server-start-time*)))))))
+    (let ((vars (list (cons "NAME" *mud-name*)
+                      (cons "PLAYERS" (princ-to-string (world-total-players world)))
+                      (cons "UPTIME" (princ-to-string (floor (- (get-universal-time)
+                                                                *server-start-time*)))))))
+      (log-message "[MSSP] mssp-info-fn called: returning ~D vars (NAME=~S PLAYERS=~S)"
+                   (length vars) *mud-name* (world-total-players world))
+      vars)))
 
 (defun handle-client (world session)
   "Main loop for handling a client connection."
