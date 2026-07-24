@@ -164,32 +164,34 @@ the server writes the login prompt and begins reading input — rather
 than lazily during the first read call.
 
 Must be called after %SETUP-TELNET-MSSP so that the MSSP handler is
-already registered."
-  (let ((chars (make-array 64 :element-type 'character
+already registered.
+
+Waits up to DRAIN-TIMEOUT seconds for initial data to arrive (the
+grapevine MSSP checker typically responds within a few hundred ms of
+receiving the initial server negotiation)."
+  (let* ((chars (make-array 64 :element-type 'character
                               :adjustable t :fill-pointer 0))
-        (peek (slot-value conn 'telnet::peek-buffer))
-        (raw (telnet::telnet-conn-raw-stream conn)))
+         (drain-timeout 1.5)
+         (deadline (+ (get-internal-real-time)
+                      (* drain-timeout internal-time-units-per-second))))
     (loop
-      ;; Check if there's data: peek-buffer has bytes or raw stream is listenable
-      (unless (or (> (fill-pointer peek) 0)
-                  (ignore-errors (listen raw)))
-        (return))
-      (multiple-value-bind (char status)
-          (telnet:telnet-read-char conn :timeout 2.0)
-        (cond
-          ((and char (null status))
-           ;; Data character — save it to re-insert later
-           (vector-push-extend char chars))
-          ((eq status :eof)
-           (return))
-          ((eq status :connection-lost)
-           (return))
-          ;; :timeout here means the IAC command was consumed and processed
-          ;; (or no data, but we already checked data availability above).
-          ;; In either case, loop back and check for more data.
-          (t nil))))
-    ;; Re-insert saved characters into the line buffer in original order,
-    ;; so the next telnet-read-line call sees them in the correct sequence.
+      (let ((remaining (- deadline (get-internal-real-time))))
+        (when (<= remaining 0) (return))
+        (multiple-value-bind (char status)
+            (telnet:telnet-read-char conn
+                                     :timeout (max 0.01
+                                                   (/ remaining
+                                                      internal-time-units-per-second)))
+          (cond
+            ((and char (null status))
+             (vector-push-extend char chars))
+            ((eq status :eof)
+             (return))
+            ((eq status :connection-lost)
+             (return))
+            ;; :timeout — loop back and check deadline
+            (t nil)))))
+    ;; Re-insert saved characters into the line buffer in original order
     (when (> (fill-pointer chars) 0)
       (let ((line (slot-value conn 'telnet::line-buffer)))
         (loop for i from 0 below (fill-pointer chars)
