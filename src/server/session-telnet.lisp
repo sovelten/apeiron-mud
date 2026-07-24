@@ -175,8 +175,9 @@ receiving the initial server negotiation)."
          (drain-timeout 1.5)
          (deadline (+ (get-internal-real-time)
                       (* drain-timeout internal-time-units-per-second))))
-    (log-message "[MSSP] Drain: start (peek-buffer=~D)"
-                 (fill-pointer peek))
+    (log-message "[MSSP] Drain: start (peek-buffer=~D bytes: ~{~2,'0X ~})"
+                 (fill-pointer peek)
+                 (loop for i below (fill-pointer peek) collect (aref peek i)))
     (loop
       (let ((remaining (- deadline (get-internal-real-time))))
         (when (<= remaining 0) (return))
