@@ -153,6 +153,48 @@ This function:
                    (log-message "[MSSP] Sending response (~D bytes)" (length response))
                    (list response)))))))))))
 
+(defun %drain-telnet-negotiation (conn)
+  "Process all pending telnet negotiation commands (IAC WILL/WONT/DO/DONT
+and subnegotiations) from the connection, before the login flow starts.
+
+Data characters are buffered and re-inserted into the line buffer so
+they can be read normally during the login flow.  This ensures that
+protocol-level exchanges like MSSP are handled immediately — before
+the server writes the login prompt and begins reading input — rather
+than lazily during the first read call.
+
+Must be called after %SETUP-TELNET-MSSP so that the MSSP handler is
+already registered."
+  (let ((chars (make-array 64 :element-type 'character
+                              :adjustable t :fill-pointer 0)))
+    (loop
+      (multiple-value-bind (char status)
+          (telnet:telnet-read-char conn :timeout 0.001)
+        (cond
+          ((and char (null status))
+           ;; Data character — save it to re-insert later
+           (vector-push-extend char chars))
+          ((null status)
+           ;; Timeout — no more data pending
+           (return))
+          (t
+           ;; EOF or error — stop
+           (return)))))
+    ;; Re-insert saved characters into the line buffer in original order,
+    ;; so the next telnet-read-line call sees them.
+    (when (> (fill-pointer chars) 0)
+      (let ((line (slot-value conn 'telnet::line-buffer)))
+        ;; Prepend in reverse order to maintain original sequence.
+        ;; vector-push-extend adds at the end, so we insert last char first,
+        ;; then rotate it to the front, then insert the second-to-last, etc.
+        (loop for i from (1- (fill-pointer chars)) downto 0
+              do (let ((c (aref chars i)))
+                   (vector-push-extend c line)
+                   ;; Swap the newly appended char with the front
+                   (rotatef (aref line 0) (aref line (1- (fill-pointer line))))))
+        (log-message "[MSSP] Drain: re-inserted ~D chars into line buffer"
+                     (fill-pointer chars))))))
+
 (defun %make-telnet-session (conn &key mssp-info-fn)
   "Create a telnet-session from an already-validated telnet-connection.
 When MSSP-INFO-FN is provided, enables MSSP support on the session."
@@ -210,9 +252,15 @@ Returns NIL if the connection is rejected as non-telnet traffic
                     (log-error
                      "START_TLS upgrade failed: ~A"
                      (telnet:telnet-error-message e))))))))
-    (log-message "[MSSP] new-telnet-session: mssp-info-fn is ~:[nil~;provided~]"
+      (log-message "[MSSP] new-telnet-session: mssp-info-fn is ~:[nil~;provided~]"
                  mssp-info-fn)
-    (%make-telnet-session conn :mssp-info-fn mssp-info-fn)))
+    (let ((session (%make-telnet-session conn :mssp-info-fn mssp-info-fn)))
+      ;; Drain and process any pending telnet negotiation (including MSSP)
+      ;; BEFORE the session enters the login flow.  This ensures the MSSP
+      ;; response is sent immediately, not lazily during the first read call
+      ;; in ask-input which happens after "What is your name?" is already sent.
+      (%drain-telnet-negotiation conn)
+      session)))
 
 (defun new-telnet-tls-session (usocket &key certificate key password mssp-info-fn)
   "Create a new telnet-session with immediate TLS encryption from an
@@ -240,7 +288,9 @@ Returns NIL if the connection is rejected as non-telnet traffic
       (return-from new-telnet-tls-session nil))
     (log-message "[MSSP] new-telnet-session: mssp-info-fn is ~:[nil~;provided~]"
                  mssp-info-fn)
-    (%make-telnet-session conn :mssp-info-fn mssp-info-fn)))
+    (let ((session (%make-telnet-session conn :mssp-info-fn mssp-info-fn)))
+      (%drain-telnet-negotiation conn)
+      session)))
 
 (defun new-telnet-session-with-start-tls (usocket &key certificate key password
                                                         mssp-info-fn)
