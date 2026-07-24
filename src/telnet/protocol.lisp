@@ -133,7 +133,14 @@
    (window-height
     :initform 24 :type (integer 0 65535)
     :accessor telnet-window-height
-    :documentation "Client window height in characters (from NAWS)."))
+    :documentation "Client window height in characters (from NAWS).")
+   (mssp-response-fn
+    :initform nil
+    :accessor telnet-mssp-response-fn
+    :documentation "When non-NIL, a function of no arguments returning a list of
+(variable-name-string . value-string) conses for MSSP variables.
+Called when the server receives IAC DO MSSP (option 70) so it can
+immediately send the MSSP response: IAC SB MSSP (MSSP-VAR ...)* IAC SE."))
   (:documentation "RFC 854 telnet protocol engine.
 
 Manages option negotiation state and provides methods to process incoming
@@ -387,10 +394,52 @@ The commands are a list of byte-vectors ready to be written to the socket."
                (make-command-2 do +telnet-opt-naws+)
                (make-command-2 do +telnet-opt-terminal-type+))))
     (let ((start-tls-state
-           (gethash +telnet-opt-start-tls+ (telnet-local-options protocol))))
+           (gethash +telnet-opt-start-tls+ (telnet-local-options protocol)))
+          (mssp-state
+           (gethash +telnet-opt-mssp+ (telnet-local-options protocol))))
       (when (and start-tls-state (telnet-option-state-wanted start-tls-state))
-        (push (make-command-2 will +telnet-opt-start-tls+) commands)))
+        (push (make-command-2 will +telnet-opt-start-tls+) commands))
+      (when (and mssp-state (telnet-option-state-wanted mssp-state))
+        (push (make-command-2 will +telnet-opt-mssp+) commands)))
     (nreverse commands)))
+
+;;; ----------------------------------------------------------------
+;;; MSSP (MUD Server Status Protocol) — Option 70
+;;; ----------------------------------------------------------------
+;;;
+;;; MSSP handshake (server-initiated):
+;;;   server → IAC WILL MSSP (part of initial negotiation)
+;;;   client → IAC DO MSSP
+;;;   server → IAC SB MSSP (MSSP-VAR "NAME" MSSP-VAL "MUD" ...) IAC SE
+;;;
+;;; The MSSP response is sent immediately upon receiving DO MSSP,
+;;; without waiting for a separate subnegotiation REQUEST from the client.
+
+(defmethod telnet-process-command :around ((p telnet-protocol)
+                                            (command (eql telnet::do))
+                                            (option (eql 70)))
+  "Handle DO MSSP (option 70): respond with WILL MSSP plus the MSSP data.
+
+If MSSP-RESPONSE-FN is set on the protocol, calls it to get the server
+state variables and sends them as an MSSP subnegotiation:
+  IAC SB MSSP (MSSP-VAR name MSSP-VAL value)* IAC SE"
+  (let ((base (call-next-method)))
+    (when base
+      (let ((mssp-fn (telnet-mssp-response-fn p)))
+        (when mssp-fn
+          (let ((vars (funcall mssp-fn)))
+            (when vars
+              (let ((parts (make-array 64 :element-type '(unsigned-byte 8)
+                                          :adjustable t :fill-pointer 0)))
+                (dolist (pair vars)
+                  (vector-push-extend +mssp-var+ parts)
+                  (loop for c across (car pair)
+                        do (vector-push-extend (char-code c) parts))
+                  (vector-push-extend +mssp-val+ parts)
+                  (loop for c across (cdr pair)
+                        do (vector-push-extend (char-code c) parts)))
+                (nconc base
+                       (list (make-subneg-command +telnet-opt-mssp+ parts)))))))))))
 
 ;;; ----------------------------------------------------------------
 ;;; IAC Escaping

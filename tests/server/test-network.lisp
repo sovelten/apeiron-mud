@@ -100,7 +100,8 @@ session-id, mirroring the *player-threads* pattern in network.lisp."
 ;; ===============================================================
 
 (test mssp-setup-registers-option
-  "%setup-telnet-mssp should mark the MSSP option as wanted."
+  "%setup-telnet-mssp should mark the MSSP option as wanted
+and set the mssp-response-fn on the protocol."
   (let* ((protocol (make-instance 'telnet:telnet-protocol))
          (called-with nil)
          (info-fn (lambda ()
@@ -113,62 +114,53 @@ session-id, mirroring the *player-threads* pattern in network.lisp."
       (is (not (null state)) "MSSP option state should exist")
       (is (telnet::telnet-option-state-wanted state)
           "MSSP should be wanted"))
-    ;; Verify the handler is registered by sending a request
-    (let ((handler (gethash telnet:+telnet-opt-mssp+
-                            (telnet::telnet-option-handlers protocol))))
-      (is (not (null handler)) "MSSP handler should be registered"))))
+    ;; Verify the response function is set
+    (is (not (null (telnet:telnet-mssp-response-fn protocol)))
+        "MSSP response function should be registered on protocol")))
 
-(test mssp-setup-handler-calls-info-fn-on-request
-  "%setup-telnet-mssp's handler should call the info-fn when the
-subneg data is MSSP-VAR 'REQUEST'."
+(test mssp-do-mssp-triggers-response
+  "%setup-telnet-mssp should cause DO MSSP to produce WILL MSSP
+and the MSSP response data."
   (let* ((protocol (make-instance 'telnet:telnet-protocol))
          (info-fn-called nil)
          (info-fn (lambda ()
                     (setf info-fn-called t)
-                    (list (cons "NAME" "TestMUD")))))
+                    (list (cons "NAME" "TestMUD")
+                          (cons "PLAYERS" "42")))))
     (apeiron.server::%setup-telnet-mssp protocol info-fn)
-    ;; Get the registered handler and call it with a REQUEST
-    (let ((handler (gethash telnet:+telnet-opt-mssp+
-                            (telnet::telnet-option-handlers protocol))))
-      (is (not (null handler)) "Handler should exist")
-      ;; Craft REQUEST data: MSSP-VAR(1) + "REQUEST" as bytes
-      (let* ((request-text "REQUEST")
-             (data (make-array (1+ (length request-text))
-                               :element-type '(unsigned-byte 8))))
-        (setf (aref data 0) telnet:+mssp-var+)
-        (loop for i from 0 below (length request-text)
-              do (setf (aref data (1+ i))
-                       (char-code (aref request-text i))))
-        ;; Call the handler
-        (let ((response (funcall handler protocol telnet:+telnet-opt-mssp+ data)))
-          ;; info-fn should have been called
-          (is-true info-fn-called "info-fn should have been called on REQUEST")
-          ;; Should return a response (list of byte vectors)
-          (is (not (null response)) "Handler should return a response")
-          (is (listp response) "Response should be a list")
-          (is (> (length (first response)) 0) "Response should contain bytes"))))))
-
-(test mssp-setup-handler-ignores-non-request
-  "%setup-telnet-mssp's handler should NOT call info-fn for non-REQUEST data."
-  (let* ((protocol (make-instance 'telnet:telnet-protocol))
-         (info-fn-called nil)
-         (info-fn (lambda ()
-                    (setf info-fn-called t)
-                    nil)))
-    (apeiron.server::%setup-telnet-mssp protocol info-fn)
-    (let ((handler (gethash telnet:+telnet-opt-mssp+
-                            (telnet::telnet-option-handlers protocol))))
-      ;; Send bad data: MSSP-VAR + "NOTREQUEST"
-      (let* ((bad-text "NOTREQUEST")
-             (data (make-array (1+ (length bad-text))
-                               :element-type '(unsigned-byte 8))))
-        (setf (aref data 0) telnet:+mssp-var+)
-        (loop for i from 0 below (length bad-text)
-              do (setf (aref data (1+ i))
-                       (char-code (aref bad-text i))))
-        (let ((response (funcall handler protocol telnet:+telnet-opt-mssp+ data)))
-          (is-false info-fn-called "info-fn should NOT have been called")
-          (is (null response) "Handler should return nil for non-REQUEST"))))))
+    ;; Process DO MSSP (option 70) - this is what the client sends
+    (let ((responses (telnet:telnet-process-command
+                      protocol telnet::do telnet:+telnet-opt-mssp+)))
+      ;; info-fn should have been called
+      (is-true info-fn-called
+               "info-fn should have been called on DO MSSP")
+      ;; Should return a list of byte vectors (WILL MSSP + MSSP subneg)
+      (is (not (null responses)) "DO MSSP should produce responses")
+      (is (listp responses) "Responses should be a list")
+      (is (>= (length responses) 2)
+          "Should have at least 2 responses (WILL + subneg)")
+      ;; First response: IAC WILL MSSP
+      (let ((will-resp (first responses)))
+        (is (= (aref will-resp 0) 255) "WILL response starts with IAC")
+        (is (= (aref will-resp 1) 251) "WILL response has WILL")
+        (is (= (aref will-resp 2) 70)  "WILL response is for MSSP"))
+      ;; Second response: IAC SB MSSP (vars) IAC SE
+      (let ((subneg-resp (second responses)))
+        (is (= (aref subneg-resp 0) 255) "Subneg starts with IAC")
+        (is (= (aref subneg-resp 1) 250) "Subneg has SB")
+        (is (= (aref subneg-resp 2) 70)  "Subneg is for MSSP")
+        (is (search "TestMUD"
+                    (map 'string #'code-char subneg-resp))
+            "Subneg contains 'TestMUD'")
+        (is (search "42"
+                    (map 'string #'code-char subneg-resp))
+            "Subneg contains '42'"))
+      ;; Verify option state
+      (let ((state (telnet:telnet-local-option protocol
+                                               telnet:+telnet-opt-mssp+)))
+        (is (not (null state)) "MSSP option state should exist")
+        (is (telnet::telnet-option-state-enabled state)
+            "MSSP should be enabled after negotiation")))))
 
 (test mssp-session-constructor-passes-info-fn
   "new-telnet-session should accept :mssp-info-fn and store it on the session."
@@ -253,7 +245,7 @@ subneg data is MSSP-VAR 'REQUEST'."
 
 (test mssp-full-integration
   "Full integration: session with mssp-info-fn should respond to
-an MSSP subneg REQUEST with the correct MSSP response bytes."
+DO MSSP with WILL MSSP and the MSSP response data."
   (multiple-value-bind (srv-in-read srv-in-write) (sb-posix:pipe)
     (multiple-value-bind (srv-out-read srv-out-write) (sb-posix:pipe)
       (let* ((srv-in-stream
@@ -303,32 +295,34 @@ an MSSP subneg REQUEST with the correct MSSP response bytes."
                (is (not (null session)) "Session should be created")
                (is (not (null (apeiron.server:session-mssp-info-fn session)))
                    "Session should have mssp-info-fn")
-               ;; Client sends MSSP REQUEST: IAC SB MSSP MSSP-VAR \"REQUEST\" IAC SE
-               (write-bytes cli-write-stream
-                            (concatenate '(vector (unsigned-byte 8))
-                                         #(255 250 70 1)
-                                         (map '(vector (unsigned-byte 8))
-                                              #'char-code "REQUEST")
-                                         #(255 240)))
+               ;; Client sends DO MSSP: IAC DO MSSP (option 70)
+               (write-bytes cli-write-stream #(255 253 70))
                (force-output cli-write-stream)
                (sleep 0.1)
-               ;; Server reads — this triggers subneg processing + MSSP handler
+               ;; Server reads — this triggers DO MSSP processing
+               ;; which calls the :around method that sends the MSSP response
                (telnet:telnet-read-char srv-conn :timeout 2)
                ;; info-fn should have been called
                (is-true info-fn-called
-                        "info-fn should have been called on REQUEST")
-               ;; Read server's MSSP response from client's read pipe
-               (let ((resp-buf (make-array 32 :element-type '(unsigned-byte 8)
+                        "info-fn should have been called on DO MSSP")
+               ;; Read server's response from client's read pipe
+               (let ((resp-buf (make-array 64 :element-type '(unsigned-byte 8)
                                             :fill-pointer 0)))
                  (sleep 0.1)
                  (loop while (listen cli-read-stream)
                        do (vector-push-extend
                            (read-byte cli-read-stream) resp-buf))
-                 (is (>= (length resp-buf) 10)
+                 ;; Should have: IAC WILL MSSP + IAC SB MSSP ... IAC SE
+                 (is (>= (length resp-buf) 11)
                      "Should have received MSSP response")
-                 (is (= (aref resp-buf 0) 255) "Response starts with IAC")
-                 (is (= (aref resp-buf 1) 250) "Response has SB")
-                 (is (= (aref resp-buf 2) 70)  "Response is for MSSP (70)")
+                 ;; First 3 bytes: IAC WILL MSSP
+                 (is (= (aref resp-buf 0) 255) "Byte 0: IAC")
+                 (is (= (aref resp-buf 1) 251) "Byte 1: WILL")
+                 (is (= (aref resp-buf 2) 70)  "Byte 2: MSSP (70)")
+                 ;; Bytes 3+: IAC SB MSSP ... IAC SE
+                 (is (= (aref resp-buf 3) 255) "Byte 3: IAC (subneg start)")
+                 (is (= (aref resp-buf 4) 250) "Byte 4: SB")
+                 (is (= (aref resp-buf 5) 70)  "Byte 5: MSSP (70)")
                  (is (search "TestMUD"
                              (map 'string #'code-char resp-buf))
                      "Response should contain 'TestMUD'")
@@ -381,7 +375,6 @@ before the login flow, leaving data characters in the line buffer."
                                       :element-type '(unsigned-byte 8)
                                       :buffering :none
                                       :name "drain-cli-read"))
-             (handler-called nil)
              (info-fn-called nil)
              (info-fn (lambda ()
                         (setf info-fn-called t)
@@ -404,18 +397,11 @@ before the login flow, leaving data characters in the line buffer."
                (sleep 0.05)
 
                ;; Simulate grapevine checker response:
-               ;; option responses + DO MSSP + SB MSSP REQUEST + "mssp-request\r\n"
+               ;; DO MSSP (70) + "mssp-request\r\n"
                (write-bytes cli-write-stream
                             (concatenate '(vector (unsigned-byte 8))
-                                         ;; Option responses
-                                         #(255 251 3 255 254 31 255 252 1 255 252 24
-                                           ;; DO MSSP (70)
-                                           255 253 70
-                                           ;; SB MSSP MSSP-VAR "REQUEST" IAC SE
-                                           255 250 70 1)
-                                         (map '(vector (unsigned-byte 8))
-                                              #'char-code "REQUEST")
-                                         #(255 240)
+                                         ;; DO MSSP (70)
+                                         #(255 253 70)
                                          ;; Login line
                                          (map '(vector (unsigned-byte 8))
                                               #'char-code "mssp-request")
@@ -423,45 +409,40 @@ before the login flow, leaving data characters in the line buffer."
                (force-output cli-write-stream)
                (sleep 0.1)
 
-               ;; Set up session — calls %setup-telnet-mssp
+               ;; Set up session — calls %setup-telnet-mssp on the protocol
                (setf session
                      (apeiron.server::%make-telnet-session
                       srv-conn
                       :mssp-info-fn info-fn))
                (is (not (null session)) "Session should be created")
 
-               ;; Wrap handler to verify it fires
-               (let ((orig
-                       (gethash telnet:+telnet-opt-mssp+
-                                (telnet::telnet-option-handlers protocol))))
-                 (telnet:telnet-register-option-handler
-                  protocol telnet:+telnet-opt-mssp+
-                  (lambda (proto opt data)
-                    (setf handler-called t)
-                    (funcall orig proto opt data))))
-
                ;; KEY: drain before any login reads
                (apeiron.server::%drain-telnet-negotiation srv-conn)
 
-               ;; Verify handler and info-fn were called
-               (is-true handler-called
-                        "MSSP handler called during drain")
+               ;; Verify info-fn was called via DO MSSP → :around method
                (is-true info-fn-called
-                        "info-fn called during drain")
+                        "info-fn called during drain (via DO MSSP)")
 
-               ;; Verify MSSP response sent to client
-               (let ((resp-buf (make-array 32 :element-type '(unsigned-byte 8)
+               ;; Verify MSSP response was sent to client:
+               ;; IAC WILL MSSP + IAC SB MSSP ... IAC SE
+               (let ((resp-buf (make-array 128 :element-type '(unsigned-byte 8)
                                             :fill-pointer 0)))
                  (sleep 0.1)
                  (loop while (listen cli-read-stream)
                        do (vector-push-extend
                            (read-byte cli-read-stream) resp-buf))
-                 (is (>= (length resp-buf) 10)
+                 (is (>= (length resp-buf) 11)
                      "MSSP response received")
-                 (is (= (aref resp-buf 0) 255) "Starts with IAC")
-                 (is (search "TestMUD"
-                             (map 'string #'code-char resp-buf))
-                     "Contains 'TestMUD'"))
+                 ;; Search for the WILL MSSP marker (FF FB 46) in the buffer
+                 (let ((will-pos (search #(255 251 70) resp-buf)))
+                   (is-true will-pos "Response contains WILL MSSP (FF FB 46)")
+                   (when will-pos
+                     (is (search "TestMUD"
+                                 (map 'string #'code-char resp-buf))
+                         "Contains 'TestMUD'"))
+                   (is (search "42"
+                               (map 'string #'code-char resp-buf))
+                       "Contains '42'")))
 
                ;; Verify login text preserved in line buffer
                (multiple-value-bind (line status)

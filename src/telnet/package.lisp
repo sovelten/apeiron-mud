@@ -72,6 +72,7 @@
    #:telnet-local-option
    #:telnet-remote-option
    #:telnet-register-option-handler
+   #:telnet-mssp-response-fn
 
    ;; Connection internals (for TLS upgrade)
    #:telnet-conn-tls-upgrade-fn

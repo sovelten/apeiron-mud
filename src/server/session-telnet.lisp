@@ -110,48 +110,25 @@ MSSP-INFO-FN is a function of no arguments.  It should return a list of
 (variable-name-string . value-string) conses describing the server state.
 
 This function:
-1. Marks the MSSP telnet option (70) as wanted locally, so the server
-   responds WILL to any DO MSSP the client sends.
-2. Registers a subnegotiation handler that responds to MSSP-VAR
-   \"REQUEST\" by calling MSSP-INFO-FN and sending the result back
-   as an MSSP response: IAC SB MSSP (MSSP-VAR N MSSP-VAL V)* IAC SE."
+1. Marks the MSSP telnet option (70) as wanted locally, so
+   TELNET-INIT-NEGOTIATION includes IAC WILL MSSP in the initial
+   server negotiation.
+2. Stores MSSP-INFO-FN as the MSSP-RESPONSE-FN on the protocol, so
+   when the client responds IAC DO MSSP, the response is sent
+   immediately: IAC SB MSSP (MSSP-VAR N MSSP-VAL V)* IAC SE."
   ;; Mark the MSSP option as wanted locally
   (let ((state (telnet::ensure-option-state protocol :local +telnet-opt-mssp+)))
     (setf (telnet::telnet-option-state-wanted state) t
           (telnet::telnet-option-state-pending state) t))
   (log-message "[MSSP] MSSP option marked as wanted on protocol ~A" (sb-kernel:get-lisp-obj-address protocol))
-  ;; Register the subnegotiation handler
-  (telnet-register-option-handler
-   protocol +telnet-opt-mssp+
-   (lambda (protocol option data)
-     (declare (ignore option))
-     (log-message "[MSSP] Handler called! data length=~D option=~D"
-                  (length data) option)
-     (when (>= (length data) 1)
-       (log-message "[MSSP] data[0]=~D (+mssp-var+=~D)"
-                    (aref data 0) +mssp-var+))
-     ;; An MSSP request is: MSSP-VAR \"REQUEST\"
-     (when (and (>= (length data) 8)
-                (= (aref data 0) +mssp-var+))
-       (let ((request (map 'string #'code-char (subseq data 1 8))))
-         (log-message "[MSSP] request string=~S" request)
-         (when (string= request "REQUEST")
-           (log-message "[MSSP] MATCH! Calling mssp-info-fn")
-           (let ((vars (funcall mssp-info-fn)))
-             (log-message "[MSSP] mssp-info-fn returned ~D vars" (length vars))
-             (when vars
-               (let ((parts (make-array 64 :element-type '(unsigned-byte 8)
-                                           :adjustable t :fill-pointer 0)))
-                 (dolist (pair vars)
-                   (vector-push-extend +mssp-var+ parts)
-                   (loop for c across (car pair)
-                         do (vector-push-extend (char-code c) parts))
-                   (vector-push-extend +mssp-val+ parts)
-                   (loop for c across (cdr pair)
-                         do (vector-push-extend (char-code c) parts)))
-                 (let ((response (telnet::make-subneg-command +telnet-opt-mssp+ parts)))
-                   (log-message "[MSSP] Sending response (~D bytes)" (length response))
-                   (list response)))))))))))
+  ;; Store the response function so the :around method on DO MSSP can
+  ;; send the MSSP data immediately upon receiving DO MSSP.
+  (setf (telnet:telnet-mssp-response-fn protocol)
+        (lambda ()
+          (let ((vars (funcall mssp-info-fn)))
+            (log-message "[MSSP] mssp-response-fn called, returning ~D vars"
+                         (length vars))
+            vars))))
 
 (defun %drain-telnet-negotiation (conn)
   "Process all pending telnet negotiation commands (IAC WILL/WONT/DO/DONT
@@ -237,6 +214,12 @@ Returns NIL if the connection is rejected as non-telnet traffic
                        (telnet-register-start-tls
                         (make-instance 'telnet-protocol))
                        (make-instance 'telnet-protocol)))
+         ;; Setup MSSP on protocol BEFORE make-telnet-connection so that
+         ;; telnet-init-negotiation includes IAC WILL MSSP in the initial
+         ;; server negotiation.  The grapevine MSSP checker expects the
+         ;; server to proactively offer MSSP, not wait for DO MSSP.
+         (_ (when mssp-info-fn
+              (%setup-telnet-mssp protocol mssp-info-fn)))
          (conn (telnet:make-telnet-connection usocket :protocol protocol)))
     ;; Validate that the client is actually speaking telnet, not HTTP/TLS/etc.
     (unless (telnet-validate-connection conn :timeout 1.5)
