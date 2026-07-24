@@ -171,9 +171,12 @@ grapevine MSSP checker typically responds within a few hundred ms of
 receiving the initial server negotiation)."
   (let* ((chars (make-array 64 :element-type 'character
                               :adjustable t :fill-pointer 0))
+         (peek (slot-value conn 'telnet::peek-buffer))
          (drain-timeout 1.5)
          (deadline (+ (get-internal-real-time)
                       (* drain-timeout internal-time-units-per-second))))
+    (log-message "[MSSP] Drain: start (peek-buffer=~D)"
+                 (fill-pointer peek))
     (loop
       (let ((remaining (- deadline (get-internal-real-time))))
         (when (<= remaining 0) (return))
@@ -197,7 +200,9 @@ receiving the initial server negotiation)."
         (loop for i from 0 below (fill-pointer chars)
               do (vector-push-extend (aref chars i) line))
         (log-message "[MSSP] Drain: re-inserted ~D chars into line buffer"
-                     (fill-pointer chars))))))
+                     (fill-pointer chars))))
+    ;; Return T if we processed any data, nil if no data was available
+    (> (fill-pointer chars) 0)))
 
 (defun %make-telnet-session (conn &key mssp-info-fn)
   "Create a telnet-session from an already-validated telnet-connection.
@@ -258,13 +263,7 @@ Returns NIL if the connection is rejected as non-telnet traffic
                      (telnet:telnet-error-message e))))))))
       (log-message "[MSSP] new-telnet-session: mssp-info-fn is ~:[nil~;provided~]"
                  mssp-info-fn)
-    (let ((session (%make-telnet-session conn :mssp-info-fn mssp-info-fn)))
-      ;; Drain and process any pending telnet negotiation (including MSSP)
-      ;; BEFORE the session enters the login flow.  This ensures the MSSP
-      ;; response is sent immediately, not lazily during the first read call
-      ;; in ask-input which happens after "What is your name?" is already sent.
-      (%drain-telnet-negotiation conn)
-      session)))
+    (%make-telnet-session conn :mssp-info-fn mssp-info-fn)))
 
 (defun new-telnet-tls-session (usocket &key certificate key password mssp-info-fn)
   "Create a new telnet-session with immediate TLS encryption from an
@@ -293,7 +292,6 @@ Returns NIL if the connection is rejected as non-telnet traffic
     (log-message "[MSSP] new-telnet-session: mssp-info-fn is ~:[nil~;provided~]"
                  mssp-info-fn)
     (let ((session (%make-telnet-session conn :mssp-info-fn mssp-info-fn)))
-      (%drain-telnet-negotiation conn)
       session)))
 
 (defun new-telnet-session-with-start-tls (usocket &key certificate key password

@@ -31,8 +31,17 @@ for the given WORLD: NAME, PLAYERS, and UPTIME."
 
 (defun handle-client (world session)
   "Main loop for handling a client connection."
-  (let* ((guest-name (format nil "Guest~D" (random 10000)))
-         (char-name (ask-input session "What is your name?" guest-name))
+  (let* ((telnet-conn (and (typep session 'telnet-session)
+                           (session-telnet-connection session)))
+         (guest-name (format nil "Guest~D" (random 10000)))
+         (char-name
+           (progn
+             ;; Drain pending telnet negotiation (MSSP, etc.) BEFORE the
+             ;; login prompt, so the MSSP response is sent immediately
+             ;; after the client's data arrives.
+             (when telnet-conn
+               (%drain-telnet-negotiation telnet-conn))
+             (ask-input session "What is your name?" guest-name)))
          (character (new-character char-name session)))
     (log-message "New connection: ~A" char-name)
     (world-add-character! world character)
