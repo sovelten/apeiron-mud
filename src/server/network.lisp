@@ -14,6 +14,18 @@
 (defvar *tls-acceptance-thread* nil
   "The thread handling incoming TLS connections.")
 
+(defvar *server-start-time* nil
+  "Universal time when the server was started, used for uptime calculations.")
+
+(defun %make-mssp-info-fn (world)
+  "Return a function of no arguments that produces an MSSP variable alist
+for the given WORLD: NAME, PLAYERS, and UPTIME."
+  (lambda ()
+    (list (cons "NAME" *mud-name*)
+          (cons "PLAYERS" (princ-to-string (world-total-players world)))
+          (cons "UPTIME" (princ-to-string (floor (- (get-universal-time)
+                                                    *server-start-time*)))))))
+
 (defun handle-client (world session)
   "Main loop for handling a client connection."
   (let* ((guest-name (format nil "Guest~D" (random 10000)))
@@ -87,40 +99,43 @@ is offered on each connection, allowing clients to upgrade to TLS."
                   (when client-socket
                     (if (not *server-running*)
                         (usocket:socket-close client-socket)
-                        (handler-case
-                            (let ((session
-                                    (if (and *server-tls-prefer-start-tls*
-                                             *server-ssl-certificate*
-                                             *server-ssl-key*)
-                                        (new-telnet-session
-                                         client-socket
-                                         :start-tls t
-                                         :certificate *server-ssl-certificate*
-                                         :key *server-ssl-key*
-                                         :password *server-ssl-password*)
-                                        (new-telnet-session client-socket))))
-                              ;; Session may be NIL if the connection was rejected
-                              ;; as non-telnet traffic (HTTP, TLS ClientHello, etc.).
-                              ;; The session constructor already closed the socket.
-                              (when session
-                                ;; Start session thread
-                                (let ((thread (bordeaux-threads:make-thread
-                                               (lambda () (handle-client world session))
-                                               :name (format nil "session-~A"
-                                                             (session-id session)))))
-                                  (log-message
-                                   "Thread for session ~A created" (session-id session))
-                                  (setf (gethash (session-id session) *player-threads*)
-                                        thread))))
-                          (error (e)
-                            ;; Session creation failed — close the socket so it doesn't leak
-                            (usocket:socket-close client-socket)
-                            (log-error "Failed to create session: ~A" e))))))
+                        (let ((mssp-fn (%make-mssp-info-fn world)))
+                          (handler-case
+                              (let ((session
+                                      (if (and *server-tls-prefer-start-tls*
+                                               *server-ssl-certificate*
+                                               *server-ssl-key*)
+                                          (new-telnet-session
+                                           client-socket
+                                           :start-tls t
+                                           :certificate *server-ssl-certificate*
+                                           :key *server-ssl-key*
+                                           :password *server-ssl-password*
+                                           :mssp-info-fn mssp-fn)
+                                          (new-telnet-session
+                                           client-socket
+                                           :mssp-info-fn mssp-fn))))
+                                ;; Session may be NIL if rejected as non-telnet
+                                (when session
+                                  (let ((thread
+                                          (bordeaux-threads:make-thread
+                                           (lambda ()
+                                             (handle-client world session))
+                                           :name
+                                           (format nil "session-~A"
+                                                   (session-id session)))))
+                                    (log-message
+                                     "Thread for session ~A created"
+                                     (session-id session))
+                                    (setf (gethash (session-id session)
+                                                   *player-threads*)
+                                          thread))))
+                            (error (e)
+                              (usocket:socket-close client-socket)
+                              (log-error "Failed to create session: ~A" e)))))))
               (usocket:timeout-error ()
-                ;; Just a timeout, continue accepting
                 nil)
               (error (e)
-                ;; If the server is stopping, ignore socket errors from closed listening socket
                 (when *server-running*
                   (log-error "Error accepting connection: ~A" e)))))
     (error (e)
@@ -137,7 +152,7 @@ is offered on each connection, allowing clients to upgrade to TLS."
                   (when client-socket
                     (if (not *server-running*)
                         (usocket:socket-close client-socket)
-                        (progn
+                        (let ((mssp-fn (%make-mssp-info-fn world)))
                           (log-message "New TLS connection accepted")
                           (let ((session
                                   (handler-case
@@ -145,7 +160,8 @@ is offered on each connection, allowing clients to upgrade to TLS."
                                        client-socket
                                        :certificate *server-ssl-certificate*
                                        :key *server-ssl-key*
-                                       :password *server-ssl-password*)
+                                       :password *server-ssl-password*
+                                       :mssp-info-fn mssp-fn)
                                     (telnet:telnet-tls-error (e)
                                       (log-error
                                        "TLS handshake failed: ~A"
@@ -153,19 +169,18 @@ is offered on each connection, allowing clients to upgrade to TLS."
                                       (usocket:socket-close client-socket)
                                       nil)
                                     (error (e)
-                                      ;; Any other error — close socket so it doesn't leak
                                       (log-error
                                        "Failed to create TLS session: ~A" e)
                                       (usocket:socket-close client-socket)
                                       nil))))
-                            ;; Session may be NIL if the connection was rejected
-                            ;; as non-telnet traffic (HTTP-over-TLS, etc.).
                             (when session
                               (let ((thread
                                       (bordeaux-threads:make-thread
-                                       (lambda () (handle-client world session))
-                                       :name (format nil "session-tls-~A"
-                                                     (session-id session)))))
+                                       (lambda ()
+                                         (handle-client world session))
+                                       :name
+                                       (format nil "session-tls-~A"
+                                               (session-id session)))))
                                 (log-message
                                  "Thread for TLS session ~A created"
                                  (session-id session))
@@ -211,7 +226,8 @@ connection to TLS in-band."
           ;; Start plain-text listener
           (setf *server-socket*
                 (usocket:socket-listen host port :reuse-address t :backlog 5))
-          (setf *server-running* t)
+          (setf *server-running* t
+                *server-start-time* (get-universal-time))
           (log-message "MUD Server started on ~A:~D" host port)
 
           ;; Start TLS listener (if certificate configured)
@@ -245,7 +261,8 @@ connection to TLS in-band."
   "Stop the MUD server, including any TLS listener."
   (bordeaux-threads:with-lock-held (*server-lock*)
     (when *server-running*
-      (setf *server-running* nil)
+      (setf *server-running* nil
+            *server-start-time* nil)
 
       ;; Fire dummy connections to unblock socket-accept on both sockets
       (flet ((unblock (socket)

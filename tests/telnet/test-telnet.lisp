@@ -58,6 +58,231 @@ to WRITE-STREAM."
              (is (null status))))
       (close-test-connection conn write-stream))))
 
+;; ===============================================================
+;; MSSP (MUD Server Status Protocol) Tests — Option 70
+;; ===============================================================
+
+(test telnet-mssp-option-constant
+  "+telnet-opt-mssp+ should be 70."
+  (is (= telnet:+telnet-opt-mssp+ 70)
+      "MSSP option code should be 70"))
+
+(test telnet-mssp-var-val-constants
+  "+mssp-var+ should be 1 and +mssp-val+ should be 2."
+  (is (= telnet:+mssp-var+ 1) "MSSP-VAR marker should be 1")
+  (is (= telnet:+mssp-val+ 2) "MSSP-VAL marker should be 2"))
+
+(test telnet-mssp-send-response-bytes
+  "telnet-send-mssp-response should emit IAC SB MSSP (MSSP-VAR NAME MSSP-VAL value)* IAC SE."
+  (multiple-value-bind (pipe-in-read pipe-in-write) (sb-posix:pipe)
+    (multiple-value-bind (pipe-out-read pipe-out-write) (sb-posix:pipe)
+      (let* ((in-stream (sb-sys:make-fd-stream pipe-in-read
+                                               :input t :output nil
+                                               :element-type '(unsigned-byte 8)
+                                               :buffering :none
+                                               :name "mssp-input"))
+             (out-fd (sb-posix:dup pipe-out-write))
+             (out-stream (sb-sys:make-fd-stream out-fd
+                                                :input nil :output t
+                                                :element-type '(unsigned-byte 8)
+                                                :buffering :none
+                                                :name "mssp-output"))
+             (out-read-stream
+               (sb-sys:make-fd-stream pipe-out-read
+                                      :input t :output nil
+                                      :element-type '(unsigned-byte 8)
+                                      :buffering :none
+                                      :name "mssp-out-read"))
+             (protocol (make-instance 'telnet::telnet-protocol))
+             (conn (make-instance 'telnet::telnet-connection
+                                  :usocket nil
+                                  :raw-stream in-stream
+                                  :out-stream out-stream
+                                  :protocol protocol)))
+        (unwind-protect
+             (let ((read-buf (make-array 64 :element-type '(unsigned-byte 8)
+                                          :fill-pointer 0)))
+               (telnet:telnet-send-mssp-response
+                conn
+                (list (cons "NAME" "Apeiron")
+                      (cons "PLAYERS" "5")))
+               (sleep 0.1)
+               (loop while (listen out-read-stream)
+                     do (vector-push-extend
+                         (read-byte out-read-stream)
+                         read-buf))
+               (is (>= (length read-buf) 10)
+                   "Response should contain enough bytes")
+               (is (= (aref read-buf 0) 255) "Byte 0: IAC")
+               (is (= (aref read-buf 1) 250) "Byte 1: SB")
+               (is (= (aref read-buf 2) 70)  "Byte 2: MSSP (70)")
+               (is (= (aref read-buf 3) 1)   "Byte 3: MSSP-VAR")
+               (is (string= (map 'string #'code-char (subseq read-buf 4 8))
+                            "NAME")
+                   "Bytes 4-7: 'NAME'")
+               (is (= (aref read-buf 8) 2)   "Byte 8: MSSP-VAL")
+               (is (string= (map 'string #'code-char (subseq read-buf 9 16))
+                            "Apeiron")
+                   "Bytes 9-15: 'Apeiron'")
+               (let ((len (length read-buf)))
+                 (is (= (aref read-buf (- len 2)) 255) "Penultimate byte: IAC")
+                 (is (= (aref read-buf (1- len)) 240)  "Final byte: SE")))
+          (dolist (s (list in-stream out-stream out-read-stream))
+            (ignore-errors (close s :abort t)))
+          (dolist (fd (list pipe-in-read pipe-in-write pipe-out-read pipe-out-write
+                             out-fd))
+            (ignore-errors (sb-posix:close fd))))))))
+
+(test telnet-mssp-handler-dispatches-on-request
+  "When an MSSP subneg handler is registered, sending
+IAC SB MSSP MSSP-VAR 'REQUEST' IAC SE should invoke the handler
+and produce a response."
+  (multiple-value-bind (pipe-in-read pipe-in-write) (sb-posix:pipe)
+    (multiple-value-bind (pipe-out-read pipe-out-write) (sb-posix:pipe)
+      (let* ((in-stream (sb-sys:make-fd-stream pipe-in-read
+                                               :input t :output nil
+                                               :element-type '(unsigned-byte 8)
+                                               :buffering :none
+                                               :name "h-input"))
+             (in-write-stream
+               (sb-sys:make-fd-stream pipe-in-write
+                                      :input nil :output t
+                                      :element-type '(unsigned-byte 8)
+                                      :buffering :none
+                                      :name "h-in-write"))
+             (out-fd (sb-posix:dup pipe-out-write))
+             (out-stream (sb-sys:make-fd-stream out-fd
+                                                :input nil :output t
+                                                :element-type '(unsigned-byte 8)
+                                                :buffering :none
+                                                :name "h-output"))
+             (out-read-stream
+               (sb-sys:make-fd-stream pipe-out-read
+                                      :input t :output nil
+                                      :element-type '(unsigned-byte 8)
+                                      :buffering :none
+                                      :name "h-out-read"))
+             (handler-called nil)
+             (protocol (make-instance 'telnet::telnet-protocol))
+             (conn (make-instance 'telnet::telnet-connection
+                                  :usocket nil
+                                  :raw-stream in-stream
+                                  :out-stream out-stream
+                                  :protocol protocol)))
+        (telnet:telnet-register-option-handler
+         protocol telnet:+telnet-opt-mssp+
+         (lambda (proto opt data)
+           (declare (ignore proto opt))
+           (setf handler-called t)
+           (let ((parts (make-array 6 :element-type '(unsigned-byte 8)
+                                      :adjustable t :fill-pointer 0)))
+             (vector-push-extend telnet:+mssp-var+ parts)
+             (loop for c across "OK" do (vector-push-extend (char-code c) parts))
+             (list (telnet::make-subneg-command telnet:+telnet-opt-mssp+ parts)))))
+        (unwind-protect
+             (progn
+               ;; IAC SB MSSP MSSP-VAR \"REQUEST\" IAC SE
+               (write-bytes in-write-stream
+                            (concatenate '(vector (unsigned-byte 8))
+                                         #(255 250 70 1)
+                                         (map '(vector (unsigned-byte 8))
+                                              #'char-code "REQUEST")
+                                         #(255 240)))
+               (sleep 0.1)
+               (telnet:telnet-read-char conn :timeout 2)
+               (is-true handler-called
+                        "MSSP subneg handler should have been called")
+               (let ((resp-buf (make-array 16 :element-type '(unsigned-byte 8)
+                                             :fill-pointer 0)))
+                 (sleep 0.1)
+                 (loop while (listen out-read-stream)
+                       do (vector-push-extend
+                           (read-byte out-read-stream) resp-buf))
+                 (is (>= (length resp-buf) 6)
+                     "Response should contain bytes")
+                 (is (= (aref resp-buf 0) 255) "Response starts with IAC")
+                 (is (= (aref resp-buf 1) 250) "Response has SB")
+                 (is (= (aref resp-buf 2) 70)  "Response has MSSP option")
+                 (is (= (aref resp-buf 3) 1)   "Response has MSSP-VAR")
+                 (is (string= (map 'string #'code-char (subseq resp-buf 4 6)) "OK")
+                     "Response has 'OK' value")
+                 (let ((len (length resp-buf)))
+                   (is (= (aref resp-buf (- len 2)) 255) "Response ends with IAC")
+                   (is (= (aref resp-buf (1- len)) 240)  "Response ends with SE"))))
+          (dolist (s (list in-stream in-write-stream out-stream out-read-stream))
+            (ignore-errors (close s :abort t)))
+          (dolist (fd (list pipe-in-read pipe-in-write pipe-out-read pipe-out-write
+                             out-fd))
+            (ignore-errors (sb-posix:close fd))))))))
+
+(test telnet-mssp-handler-ignores-non-request
+  "The MSSP handler should ignore subneg data where MSSP-VAR is not
+followed by 'REQUEST'."
+  (multiple-value-bind (pipe-in-read pipe-in-write) (sb-posix:pipe)
+    (multiple-value-bind (pipe-out-read pipe-out-write) (sb-posix:pipe)
+      (let* ((in-stream (sb-sys:make-fd-stream pipe-in-read
+                                               :input t :output nil
+                                               :element-type '(unsigned-byte 8)
+                                               :buffering :none
+                                               :name "ignore-input"))
+             (in-write-stream
+               (sb-sys:make-fd-stream pipe-in-write
+                                      :input nil :output t
+                                      :element-type '(unsigned-byte 8)
+                                      :buffering :none
+                                      :name "ignore-in-write"))
+             (out-fd (sb-posix:dup pipe-out-write))
+             (out-stream (sb-sys:make-fd-stream out-fd
+                                                :input nil :output t
+                                                :element-type '(unsigned-byte 8)
+                                                :buffering :none
+                                                :name "ignore-output"))
+             (out-read-stream
+               (sb-sys:make-fd-stream pipe-out-read
+                                      :input t :output nil
+                                      :element-type '(unsigned-byte 8)
+                                      :buffering :none
+                                      :name "ignore-out-read"))
+             (handler-called nil)
+             (protocol (make-instance 'telnet::telnet-protocol))
+             (conn (make-instance 'telnet::telnet-connection
+                                  :usocket nil
+                                  :raw-stream in-stream
+                                  :out-stream out-stream
+                                  :protocol protocol)))
+        (telnet:telnet-register-option-handler
+         protocol telnet:+telnet-opt-mssp+
+         (lambda (proto opt data)
+           (declare (ignore proto opt))
+           (setf handler-called t)
+           (when (and (>= (length data) 8)
+                      (= (aref data 0) telnet:+mssp-var+)
+                      (string= (map 'string #'code-char (subseq data 1))
+                               "REQUEST"))
+             (list (telnet::make-subneg-command telnet:+telnet-opt-mssp+
+                                                #())))))
+        (unwind-protect
+             (progn
+               ;; Send MSSP-VAR \"NOTREQUEST\" instead of REQUEST
+               (write-bytes in-write-stream
+                            (concatenate '(vector (unsigned-byte 8))
+                                         #(255 250 70 1)
+                                         (map '(vector (unsigned-byte 8))
+                                              #'char-code "NOTREQUEST")
+                                         #(255 240)))
+               (sleep 0.1)
+               (telnet:telnet-read-char conn :timeout 2)
+               (is-true handler-called
+                        "MSSP subneg handler should have been called")
+               (sleep 0.1)
+               (is-false (listen out-read-stream)
+                         "Non-REQUEST subneg should produce no output"))
+          (dolist (s (list in-stream in-write-stream out-stream out-read-stream))
+            (ignore-errors (close s :abort t)))
+          (dolist (fd (list pipe-in-read pipe-in-write pipe-out-read pipe-out-write
+                             out-fd))
+            (ignore-errors (sb-posix:close fd))))))))
+
 (test telnet-read-char-multiple-ascii
   "telnet-read-char should read multiple ASCII bytes in sequence."
   (multiple-value-bind (conn write-stream) (make-test-telnet-connection)

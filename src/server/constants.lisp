@@ -39,3 +39,7 @@ practice (TinTin++ does not implement it, Mudlet has partial support).
 The dedicated TLS port (controlled by *SERVER-TLS-PORT*) is the
 reliable way to provide encrypted connections.  Set this to T only
 if you know your client supports option 46.")
+
+(defparameter *mud-name* "Apeiron MUD"
+  "The name of this MUD server, used in MSSP responses and other
+protocol-level identification contexts.")

@@ -81,6 +81,12 @@
 
 (defconstant +telnet-opt-start-tls+         46 "START_TLS — upgrade to TLS (IETF draft).")
 
+(defconstant +telnet-opt-mssp+ 70 "MSSP — MUD Server Status Protocol.")
+
+(defconstant +mssp-var+ 1 "MSSP variable marker byte — precedes each variable name.")
+
+(defconstant +mssp-val+ 2 "MSSP value marker byte — precedes each value.")
+
 ;;; ----------------------------------------------------------------
 ;;; Option State
 ;;; ----------------------------------------------------------------

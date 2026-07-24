@@ -27,10 +27,13 @@
    #:*server-ssl-key*
    #:*server-ssl-password*
    #:*server-tls-prefer-start-tls*
+   #:*mud-name*
+   #:*server-start-time*
 
    ;; Telnet session constructors (bridge between telnet and core)
    #:telnet-session
    #:session-telnet-connection
+   #:session-mssp-info-fn
    #:new-telnet-session
    #:new-telnet-tls-session
    #:new-telnet-session-with-start-tls))

@@ -17,7 +17,13 @@
 (defclass telnet-session (mud-session)
   ((telnet-conn :initarg :telnet-conn
                 :reader session-telnet-connection
-                :documentation "The telnet:telnet-connection backing this session."))
+                :documentation "The telnet:telnet-connection backing this session.")
+   (mssp-info-fn :initarg :mssp-info-fn
+                 :initform nil
+                 :reader session-mssp-info-fn
+                 :documentation "A function of no arguments returning an alist of
+(variable-name-string . value-string) conses for MSSP responses, or NIL to
+disable MSSP support on this session."))
   (:documentation "A session backed by a telnet:telnet-connection.
 
 This session implements RFC 854-compliant telnet I/O with proper
@@ -95,7 +101,59 @@ ignored."
 
 ;; ─── Telnet session constructors ────────────────────────────────────────────
 
-(defun new-telnet-session (usocket &key start-tls certificate key password)
+;; ─── MSSP support ───────────────────────────────────────────────────────────
+
+(defun %setup-telnet-mssp (protocol mssp-info-fn)
+  "Register MSSP (MUD Server Status Protocol) support on PROTOCOL.
+
+MSSP-INFO-FN is a function of no arguments.  It should return a list of
+(variable-name-string . value-string) conses describing the server state.
+
+This function:
+1. Marks the MSSP telnet option (70) as wanted locally, so the server
+   responds WILL to any DO MSSP the client sends.
+2. Registers a subnegotiation handler that responds to MSSP-VAR
+   \"REQUEST\" by calling MSSP-INFO-FN and sending the result back
+   as an MSSP response: IAC SB MSSP (MSSP-VAR N MSSP-VAL V)* IAC SE."
+  ;; Mark the MSSP option as wanted locally
+  (let ((state (telnet::ensure-option-state protocol :local +telnet-opt-mssp+)))
+    (setf (telnet::telnet-option-state-wanted state) t
+          (telnet::telnet-option-state-pending state) t))
+  ;; Register the subnegotiation handler
+  (telnet-register-option-handler
+   protocol +telnet-opt-mssp+
+   (lambda (protocol option data)
+     (declare (ignore protocol option))
+     ;; An MSSP request is: MSSP-VAR \"REQUEST\"
+     (when (and (>= (length data) 8)
+                (= (aref data 0) +mssp-var+))
+       (let ((request (map 'string #'code-char (subseq data 1))))
+         (when (string= request "REQUEST")
+           (let ((vars (funcall mssp-info-fn)))
+             (when vars
+               (let ((parts (make-array 64 :element-type '(unsigned-byte 8)
+                                           :adjustable t :fill-pointer 0)))
+                 (dolist (pair vars)
+                   (vector-push-extend +mssp-var+ parts)
+                   (loop for c across (car pair)
+                         do (vector-push-extend (char-code c) parts))
+                   (vector-push-extend +mssp-val+ parts)
+                   (loop for c across (cdr pair)
+                         do (vector-push-extend (char-code c) parts)))
+                 (list (telnet::make-subneg-command +telnet-opt-mssp+ parts)))))))))))
+
+(defun %make-telnet-session (conn &key mssp-info-fn)
+  "Create a telnet-session from an already-validated telnet-connection.
+When MSSP-INFO-FN is provided, enables MSSP support on the session."
+  (when mssp-info-fn
+    (%setup-telnet-mssp (telnet:telnet-conn-protocol conn) mssp-info-fn))
+  (make-instance 'telnet-session
+                 :id (make-id)
+                 :telnet-conn conn
+                 :mssp-info-fn mssp-info-fn))
+
+(defun new-telnet-session (usocket &key start-tls certificate key password
+                                           mssp-info-fn)
   "Create a new telnet-session from an accepted usocket.
 Performs initial RFC 854 telnet option negotiation and returns
 a session ready for I/O.
@@ -105,12 +163,17 @@ during initial negotiation.  If the client responds DO START_TLS, the
 connection is automatically upgraded to TLS in-band.  CERTIFICATE,
 KEY, and PASSWORD are required when START-TLS is true.
 
+MSSP-INFO-FN, when provided, enables MSSP (MUD Server Status Protocol,
+telnet option 70) support.  It is a function of no arguments that
+returns a list of (variable-name-string . value-string) conses describing
+the server state (e.g. NAME, PLAYERS, UPTIME).
+
 Returns NIL if the connection is rejected as non-telnet traffic
 (e.g., HTTP requests or TLS ClientHello on the plain-text port)."
   (let* ((protocol (if start-tls
-                       (telnet:telnet-register-start-tls
-                        (make-instance 'telnet:telnet-protocol))
-                       (make-instance 'telnet:telnet-protocol)))
+                       (telnet-register-start-tls
+                        (make-instance 'telnet-protocol))
+                       (make-instance 'telnet-protocol)))
          (conn (telnet:make-telnet-connection usocket :protocol protocol)))
     ;; Validate that the client is actually speaking telnet, not HTTP/TLS/etc.
     (unless (telnet-validate-connection conn :timeout 1.5)
@@ -136,17 +199,20 @@ Returns NIL if the connection is rejected as non-telnet traffic
                     (log-error
                      "START_TLS upgrade failed: ~A"
                      (telnet:telnet-error-message e))))))))
-    (make-instance 'telnet-session
-                   :id (make-id)
-                   :telnet-conn conn)))
+    (%make-telnet-session conn :mssp-info-fn mssp-info-fn)))
 
-(defun new-telnet-tls-session (usocket &key certificate key password)
+(defun new-telnet-tls-session (usocket &key certificate key password mssp-info-fn)
   "Create a new telnet-session with immediate TLS encryption from an
 accepted usocket.  Performs the TLS handshake (SSL_accept) and then
 initial RFC 854 telnet option negotiation.
 
 CERTIFICATE and KEY are paths to PEM-encoded certificate and private
 key files.  PASSWORD is the optional decryption password for the key.
+
+MSSP-INFO-FN, when provided, enables MSSP (MUD Server Status Protocol,
+telnet option 70) support.  It is a function of no arguments that
+returns a list of (variable-name-string . value-string) conses describing
+the server state (e.g. NAME, PLAYERS, UPTIME).
 
 Returns NIL if the connection is rejected as non-telnet traffic
 (e.g., HTTP-over-TLS on the secure port)."
@@ -159,18 +225,23 @@ Returns NIL if the connection is rejected as non-telnet traffic
       (log-message "Rejected non-telnet TLS connection on secure port")
       (usocket:socket-close usocket)
       (return-from new-telnet-tls-session nil))
-    (make-instance 'telnet-session
-                   :id (make-id)
-                   :telnet-conn conn)))
+    (%make-telnet-session conn :mssp-info-fn mssp-info-fn)))
 
-(defun new-telnet-session-with-start-tls (usocket &key certificate key password)
+(defun new-telnet-session-with-start-tls (usocket &key certificate key password
+                                                        mssp-info-fn)
   "Create a telnet-session that offers the START_TLS telnet option (46).
 The initial connection is plain-text.  If the client negotiates START_TLS,
 the connection is upgraded to TLS in-band using the provided credentials.
+
+MSSP-INFO-FN, when provided, enables MSSP (MUD Server Status Protocol,
+telnet option 70) support.  It is a function of no arguments that
+returns a list of (variable-name-string . value-string) conses describing
+the server state (e.g. NAME, PLAYERS, UPTIME).
 
 This is a convenience wrapper around NEW-TELNET-SESSION with :START-TLS T."
   (new-telnet-session usocket
                       :start-tls t
                       :certificate certificate
                       :key key
-                      :password password))
+                      :password password
+                      :mssp-info-fn mssp-info-fn))

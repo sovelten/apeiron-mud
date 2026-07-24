@@ -40,6 +40,7 @@
    #:telnet-write-string
    #:telnet-send-nop
    #:telnet-send-eor
+   #:telnet-send-mssp-response
    #:telnet-write-raw
 
    ;; Stream access (for application layer)
@@ -61,7 +62,11 @@
    #:+telnet-opt-terminal-type+
    #:+telnet-opt-eor+
    #:+telnet-opt-start-tls+
-   ;; +telnet-opt-naws+ above is the NAWS (window size) option
+   #:+telnet-opt-mssp+
+
+   ;; MSSP constants
+   #:+mssp-var+
+   #:+mssp-val+
 
    ;; Option negotiation API
    #:telnet-local-option
