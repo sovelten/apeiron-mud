@@ -124,10 +124,10 @@ This function:
   ;; send the MSSP data immediately upon receiving DO MSSP.
   (setf (telnet:telnet-mssp-response-fn protocol)
         (lambda ()
-          (let ((vars (funcall mssp-info-fn)))
-            vars))))
-
-(defun %drain-telnet-negotiation (conn)
+                (let ((vars (funcall mssp-info-fn)))
+                      vars))))
+          
+          (defun %drain-telnet-negotiation (conn)
   "Process all pending telnet negotiation commands (IAC WILL/WONT/DO/DONT
 and subnegotiations) from the connection, before the login flow starts.
 
@@ -145,13 +145,9 @@ grapevine MSSP checker typically responds within a few hundred ms of
 receiving the initial server negotiation)."
   (let* ((chars (make-array 64 :element-type 'character
                               :adjustable t :fill-pointer 0))
-         (peek (slot-value conn 'telnet::peek-buffer))
          (drain-timeout 1.5)
          (deadline (+ (get-internal-real-time)
                       (* drain-timeout internal-time-units-per-second))))
-    (log-message "[MSSP] Drain: start (peek-buffer=~D bytes: ~{~2,'0X ~})"
-                 (fill-pointer peek)
-                 (loop for i below (fill-pointer peek) collect (aref peek i)))
     (loop
       (let ((remaining (- deadline (get-internal-real-time))))
         (when (<= remaining 0) (return))
@@ -205,42 +201,42 @@ the server state (e.g. NAME, PLAYERS, UPTIME).
 
 Returns NIL if the connection is rejected as non-telnet traffic
 (e.g., HTTP requests or TLS ClientHello on the plain-text port)."
-  (let* ((protocol (if start-tls
+  (let ((protocol (if start-tls
                        (telnet-register-start-tls
                         (make-instance 'telnet-protocol))
-                       (make-instance 'telnet-protocol)))
-         ;; Setup MSSP on protocol BEFORE make-telnet-connection so that
-         ;; telnet-init-negotiation includes IAC WILL MSSP in the initial
-         ;; server negotiation.  The grapevine MSSP checker expects the
-         ;; server to proactively offer MSSP, not wait for DO MSSP.
-         (_ (when mssp-info-fn
-              (%setup-telnet-mssp protocol mssp-info-fn)))
-         (conn (telnet:make-telnet-connection usocket :protocol protocol)))
-    ;; Validate that the client is actually speaking telnet, not HTTP/TLS/etc.
-    (unless (telnet-validate-connection conn :timeout 1.5)
-      (log-message "Rejected non-telnet connection on plain-text port")
-      (usocket:socket-close usocket)
-      (return-from new-telnet-session nil))
-    ;; Install START_TLS upgrade callback if requested
-    (when start-tls
-      (setf (telnet:telnet-conn-tls-upgrade-fn conn)
-            (let ((cert certificate)
-                  (key key)
-                  (pwd password))
-              (lambda ()
-                (handler-case
-                    (progn
-                      (telnet:telnet-start-tls conn
-                                               :certificate cert
-                                               :key key
-                                               :password pwd)
-                      (log-message
-                       "Connection upgraded to TLS via START_TLS"))
-                  (telnet:telnet-tls-error (e)
-                    (log-error
-                     "START_TLS upgrade failed: ~A"
-                     (telnet:telnet-error-message e))))))))
-      (%make-telnet-session conn :mssp-info-fn mssp-info-fn)))
+                       (make-instance 'telnet-protocol))))
+    ;; Setup MSSP on protocol BEFORE make-telnet-connection so that
+    ;; telnet-init-negotiation includes IAC WILL MSSP in the initial
+    ;; server negotiation.  The grapevine MSSP checker expects the
+    ;; server to proactively offer MSSP, not wait for DO MSSP.
+    (when mssp-info-fn
+      (%setup-telnet-mssp protocol mssp-info-fn))
+    (let* ((conn (telnet:make-telnet-connection usocket :protocol protocol)))
+      ;; Validate that the client is actually speaking telnet, not HTTP/TLS/etc.
+      (unless (telnet-validate-connection conn :timeout 1.5)
+        (log-message "Rejected non-telnet connection on plain-text port")
+        (usocket:socket-close usocket)
+        (return-from new-telnet-session nil))
+      ;; Install START_TLS upgrade callback if requested
+      (when start-tls
+        (setf (telnet:telnet-conn-tls-upgrade-fn conn)
+              (let ((cert certificate)
+                    (key key)
+                    (pwd password))
+                (lambda ()
+                  (handler-case
+                      (progn
+                        (telnet:telnet-start-tls conn
+                                                 :certificate cert
+                                                 :key key
+                                                 :password pwd)
+                        (log-message
+                         "Connection upgraded to TLS via START_TLS"))
+                    (telnet:telnet-tls-error (e)
+                      (log-error
+                       "START_TLS upgrade failed: ~A"
+                       (telnet:telnet-error-message e))))))))
+      (%make-telnet-session conn :mssp-info-fn mssp-info-fn))))
 
 (defun new-telnet-tls-session (usocket &key certificate key password mssp-info-fn)
   "Create a new telnet-session with immediate TLS encryption from an
@@ -266,8 +262,6 @@ Returns NIL if the connection is rejected as non-telnet traffic
       (log-message "Rejected non-telnet TLS connection on secure port")
       (usocket:socket-close usocket)
       (return-from new-telnet-tls-session nil))
-    (log-message "[MSSP] new-telnet-session: mssp-info-fn is ~:[nil~;provided~]"
-                 mssp-info-fn)
     (let ((session (%make-telnet-session conn :mssp-info-fn mssp-info-fn)))
       session)))
 
