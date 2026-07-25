@@ -61,7 +61,7 @@ Returns (values character account)."
                                                   account-email))))
           (mud-write session (format nil "Account ~A created successfully!" (bright-green account-name)))
           (let* ((char-name (ask-input session "Choose a character name:" :default account-name))
-                 (character (new-character char-name session :owner account)))
+                 (character (new-character char-name session :owner (account-name account))))
             (values character account)))
       (error (e)
         (mud-write session (format nil "~A" e))
@@ -95,7 +95,7 @@ Returns (values character account)."
                 (values existing-char account))
               ;; No existing character — create one
               (let* ((char-name (ask-input session "Choose a character name:" :default account-name))
-                     (character (new-character char-name session :owner account)))
+                     (character (new-character char-name session :owner (account-name account))))
                 (values character account))))
         (progn
           (mud-write session "Invalid account name or password.")

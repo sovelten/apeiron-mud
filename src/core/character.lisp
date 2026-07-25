@@ -1,6 +1,6 @@
 (in-package #:apeiron.core)
 
-;; TODO: split character and character-character for building NPCs
+;; TODO: split character and player-character for building NPCs
 
 (defclass mud-character (mud-object container-mixin)
   ((session :initarg :session
@@ -10,7 +10,7 @@
    (owner :initarg :owner
           :accessor character-owner
           :initform nil
-          :documentation "The mud-account that owns this character.
+          :documentation "The name of the mud-account that owns this character.
 NIL for guest characters."))
   (:documentation "A character character in the MUD"))
 

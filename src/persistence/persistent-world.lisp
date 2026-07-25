@@ -14,6 +14,10 @@
   ()
   (:transient-slots contents))
 
+(defwrapping-persistent-class persistent-character (mud-character persistent-object)
+  ()
+  (:transient-slots session))
+
 (defwrapping-persistent-class persistent-guestbook (mud-guestbook persistent-object)
   ()
   (:transient-slots entries))
