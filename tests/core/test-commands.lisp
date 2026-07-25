@@ -340,13 +340,13 @@
     (is (search "Widget" result))
     (is (search "MUD-OBJECT" result))))
 
-(test eval-helper-slots-direct
-  "Test (slots obj) directly — returns slot info as a string"
+(test eval-helper-slots-of-direct
+  "Test (slots-of obj) directly — returns slot info as a string"
   (let* ((obj (make-instance 'apeiron.core:mud-object
                              :name "Widget"
                              :id 5002
                              :description "A widget."))
-         (result (slots obj)))
+         (result (slots-of obj)))
     (is (stringp result))
     (is (plusp (length result)))
     (is (search "Widget" result))))
@@ -434,15 +434,15 @@
   (let ((result (d nil)))
     (is (stringp result))))
 
-(test eval-helper-slots-mud-character
-  "Test (slots) on a mud-character"
+(test eval-helper-slots-of-mud-character
+  "Test (slots-of) on a mud-character"
   (let* ((session (make-instance 'apeiron.core:stream-session
                                  :stream (make-string-output-stream)))
          (char (make-instance 'apeiron.core:mud-character
                               :name "Sir Test"
                               :id 5011
                               :session session))
-         (result (slots char)))
+         (result (slots-of char)))
     (is (stringp result))
     (is (plusp (length result)))
     (is (search "Sir Test" result))
@@ -470,8 +470,8 @@
                (is (search "MUD-CHARACTER" (first captured))))
           (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
 
-(test command-processing-eval-slots
-  "Test the eval slots helper — describe slots returning a string"
+(test command-processing-eval-slots-of
+  "Test the eval slots-of helper — describe slots returning a string"
   (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
     (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
@@ -486,7 +486,7 @@
                        (declare (ignore p newline))
                        (push msg captured)))
                (setf captured '())
-               (apeiron.core:process-command world player "eval (slots (me))")
+               (apeiron.core:process-command world player "eval (slots-of (me))")
                (is (= 1 (length captured)))
                (is (search "TestPlayer" (first captured))))
           (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))

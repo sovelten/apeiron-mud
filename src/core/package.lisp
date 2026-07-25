@@ -292,7 +292,7 @@
 
    ;; Eval debug helpers
    #:d
-   #:slots
+   #:slots-of
    #:props
    #:inv
    #:loc

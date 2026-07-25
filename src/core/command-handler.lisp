@@ -149,10 +149,10 @@ Example: (d (me))"
   (with-output-to-string (*standard-output*)
     (describe object)))
 
-(defun slots (object)
+(defun slots-of (object)
   "Describe all slots of OBJECT, returning a string.
 Like CL:DESCRIBE but returns a string instead of printing to *standard-output*.
-Example: (slots (me))"
+Example: (slots-of (me))"
   (with-output-to-string (*standard-output*)
     (let ((*print-circle* nil))
       (describe object))))
@@ -202,7 +202,7 @@ Example: (obj-type (me))"
 (define-command "eval" (world player args)
   "Evaluate Lisp code and send output to the player.
 Use (me) for the current player, (here) for current room, (world) for the world.
-Debug helpers that return strings: (d obj), (slots obj), (props obj), (inv obj), (loc obj), (obj-type obj)"
+Debug helpers that return strings: (d obj), (slots-of obj), (props obj), (inv obj), (loc obj), (obj-type obj)"
   (declare (ignore world))
   (let ((code-str args))
     (if (zerop (length code-str))
