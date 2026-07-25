@@ -138,7 +138,71 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
         (use-package '#:apeiron.core p)
         p)))
 
+;; ─── Eval debug helper functions ────────────────────────────────────────────
+;; These are available in the eval context (apeiron.eval package) and are
+;; designed to help debug/inspect objects from within the game.
+
+(defun d (object)
+  "Describe OBJECT, capturing output to a string.
+Like CL:DESCRIBE but returns a string instead of printing to *standard-output*.
+Example: (d (me))"
+  (with-output-to-string (*standard-output*)
+    (describe object)))
+
+(defun slots (object)
+  "Describe all slots of OBJECT, returning a string.
+Like CL:DESCRIBE but returns a string instead of printing to *standard-output*.
+Example: (slots (me))"
+  (with-output-to-string (*standard-output*)
+    (let ((*print-circle* nil))
+      (describe object))))
+
+(defun props (object)
+  "Return all properties of OBJECT as a string (from its properties hash-table).
+Example: (props (me))"
+  (let ((ht (object-properties object)))
+    (if (zerop (hash-table-count ht))
+        (format nil "No properties on ~A." (object-name object))
+        (with-output-to-string (*standard-output*)
+          (format t "Properties of ~A:~%" (object-name object))
+          (loop for key being the hash-keys of ht
+                  using (hash-value val)
+                do (format t "  ~S => ~S~%" key val))))))
+
+(defun inv (container)
+  "Return the contents of CONTAINER as a string.
+Example: (inv (here))"
+  (let ((objects (container-all-objects container)))
+    (if (null objects)
+        (format nil "~A is empty." (object-name container))
+        (with-output-to-string (*standard-output*)
+          (format t "Contents of ~A:~%" (object-name container))
+          (dolist (obj objects)
+            (format t "  ~A~%" (object-describe obj)))))))
+
+(defun loc (object)
+  "Return the location chain of OBJECT as a string, from innermost to outermost.
+Example: (loc (me)) — shows player -> room -> world containment."
+  (with-output-to-string (*standard-output*)
+    (loop for obj = object then (object-location obj)
+          while obj
+          for i from 0
+          do (format t "~V@T~A (ID: ~D) [~A]~%"
+                     (* i 2)
+                     (object-name obj)
+                     (object-id obj)
+                     (type-of obj)))))
+
+(defun class-of* (object)
+  "Return the class/type name of OBJECT as a string.
+Useful when ~S printing is too verbose.
+Example: (class-of* (me))"
+  (format nil "~A" (type-of object)))
+
 (define-command "eval" (world player args)
+  "Evaluate Lisp code and send output to the player.
+Use (me) for the current player, (here) for current room, (world) for the world.
+Debug helpers that return strings: (d obj), (slots obj), (props obj), (inv obj), (loc obj)"
   (declare (ignore world))
   (let ((code-str args))
     (if (zerop (length code-str))
@@ -154,8 +218,9 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
                 (loop for obj in (container-all-objects room) do
                   (when (and (typep obj 'mud-character)
                              (not (eq obj player)))
-                    (player-send-message obj (format nil "~A casts the spell: ~A" (object-name player) form))
-                    (player-send-message obj (format nil "~A" result))))
+                    (player-send-message obj
+                                         (format nil "~A casts the spell: ~A"
+                                                 (object-name player) form))))
                 (player-send-message player (format nil "~A" result)))
             (error (e)
               (player-send-message player (format nil "Error: ~A" e))))))))
