@@ -297,3 +297,89 @@ accounts.dat, with no character-slot link needed."
          (ignore-errors (bknr.datastore:close-store))
          (makunbound 'bknr.datastore:*store*))
        (clrhash *accounts*)))))
+
+(test owned-character-survives-crash
+  "An owned character must survive a server crash (close-store without sync).
+The transaction log — not the snapshot — should allow recovery of the
+character with its name, owner, location, and index membership intact."
+  (let* ((*data-directory* *data-directory*)
+         (*store-directory* *store-directory*)
+         (session (make-instance 'stream-session
+                                 :stream (make-string-output-stream))))
+    (unwind-protect
+         (progn
+           ;; ---- Phase 1: Create account + character --------------------
+           (clrhash *accounts*)
+           (let* ((world (apeiron.persistence:world-restore-or-initialize :force-new t))
+                  (account (register-account "CrashHero" "p4ssw0rd!"
+                                             :email "crash@test.com"))
+                  (character (new-character "CrashTestDummy" session
+                                            :owner (account-name account))))
+             (create-object! world character)
+             (place-character! world character)
+             (is (equal "CrashTestDummy" (object-name character)))
+             (is-true (character-owner character))
+             (is (= 1 (world-total-characters world))))
+
+           ;; ---- Phase 2: Simulate crash (close without sync) ----------
+           (save-accounts)
+           ;; Deliberately NO sync-world here — simulates a crash.
+           (bknr.datastore:close-store)
+           (clrhash *accounts*)
+
+           ;; ---- Phase 3: Restore after crash ---------------------------
+           (load-accounts)
+           (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
+                  (restored-chars (loop for c being the hash-values
+                                         of (world-characters new-world)
+                                       collect c)))
+             (is-true (account-exists-p "CrashHero")
+                      "Account should survive a crash")
+             (is (= 1 (length restored-chars))
+                 "Owned character should survive a crash (transaction log recovery)")
+             (let ((c (first restored-chars)))
+               (is (equal "CrashTestDummy" (object-name c))
+                   "Character name should survive a crash")
+               (is (equal "CrashHero" (character-owner c))
+                   "Character owner should survive a crash")
+               (is (not (null (object-location c)))
+                   "Character location should survive a crash"))))
+
+      ;; ---- Cleanup ----------------------------------------------------
+      (ignore-errors
+       (when (boundp 'bknr.datastore:*store*)
+         (ignore-errors (bknr.datastore:close-store))
+         (makunbound 'bknr.datastore:*store*))
+       (clrhash *accounts*)))))
+
+(test guest-character-not-restored-after-crash
+  "Guest characters ARE persisted in BKNR during a session, but they are
+deleted during world restore — only owned characters survive a crash."
+  (let* ((*data-directory* *data-directory*)
+         (*store-directory* *store-directory*)
+         (session (make-instance 'stream-session
+                                 :stream (make-string-output-stream))))
+    (unwind-protect
+         (progn
+           (let* ((world (apeiron.persistence:world-restore-or-initialize :force-new t))
+                  (character (new-character "GuestCrashTest" session
+                                            :owner nil)))
+             (create-object! world character)
+             (place-character! world character)
+             (is (= 1 (world-total-characters world)))
+             (is (null (character-owner character))))
+
+           ;; Simulate crash — no sync
+           (bknr.datastore:close-store)
+
+           (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
+                  (restored-chars (loop for c being the hash-values
+                                         of (world-characters new-world)
+                                       collect c)))
+             (is (= 0 (length restored-chars))
+                 "Guest characters should NOT survive a crash")))
+      ;; ---- Cleanup ----------------------------------------------------
+      (ignore-errors
+       (when (boundp 'bknr.datastore:*store*)
+         (ignore-errors (bknr.datastore:close-store))
+         (makunbound 'bknr.datastore:*store*))))))

@@ -93,7 +93,18 @@ Already-persistent objects (e.g., reconnected characters) are registered
 directly without re-materialization."
   (bknr.datastore:with-transaction ("create-object")
     (unless (typep object 'bknr.datastore:store-object)
-      (materialize-object object))
+      (materialize-object object)
+      ;; CHANGE-CLASS preserves slot values without going through
+      ;; (SETF SLOT-VALUE), so BKNR never records them in the
+      ;; transaction log.  Touch every persistent slot so its value
+      ;; is persisted and survives a crash without sync-world.
+      (let ((transient-slots (class-transient-slots (class-of object))))
+        (dolist (slotd (sb-mop:class-slots (class-of object)))
+          (let ((sname (sb-mop:slot-definition-name slotd)))
+            (when (and (not (member sname transient-slots))
+                       (slot-boundp object sname))
+              (setf (slot-value object sname)
+                    (slot-value object sname)))))))
     (world-add-object! world object))
   object)
 
@@ -278,18 +289,31 @@ When FORCE-NEW is true any existing store data is wiped first."
   (let ((world (get-persistent-world)))
     (if world
         (progn
-          ;; Populate world's indices from BKNR objects.
-          ;; Guest characters that were properly removed (via world-remove-object!)
-          ;; are deleted from the datastore and won't appear here.
-          (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-object))
-            (world-add-object! world obj))
-          ;; Rebuild room contents from persistent object locations.
-          ;; persistent-object queries also return subclasses (room, guestbook, npc).
-          ;; Wrapped in a single transaction to avoid per-object auto-wrap overhead.
-          (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-object))
-            (let ((location (object-location obj)))
-              (when (typep location 'persistent-room)
-                (container-add-object location obj))))
+          ;; Guest characters (no owner) don't survive crashes or
+          ;; restarts — remove them via world-remove-object! which
+          ;; handles its own transaction and destroyed-object guards.
+          (let ((guests (remove-if-not
+                         (lambda (o)
+                           (and (typep o 'mud-character)
+                                (null (character-owner o))
+                                (not (bknr.indices:object-destroyed-p o))))
+                         (bknr.datastore:store-objects-with-class
+                          'persistent-object))))
+            (dolist (g guests)
+              (world-remove-object! world g)))
+          ;; Populate world indices and rebuild room contents from
+          ;; surviving BKNR objects.
+          (bknr.datastore:with-transaction ("restore-world")
+            (dolist (obj (bknr.datastore:store-objects-with-class
+                          'persistent-object))
+              (unless (bknr.indices:object-destroyed-p obj)
+                (world-add-object! world obj)))
+            (dolist (obj (bknr.datastore:store-objects-with-class
+                          'persistent-object))
+              (unless (bknr.indices:object-destroyed-p obj)
+                (let ((location (object-location obj)))
+                  (when (typep location 'persistent-room)
+                    (container-add-object location obj))))))
           (when *debug-mode*
             (log-message "World restored from BKNR datastore."))
           world)
