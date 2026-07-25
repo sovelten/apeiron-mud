@@ -325,3 +325,264 @@
       (let ((text (get-output-stream-string output)))
         (is (search "Hello MUD!" text))
         (is (search "Alice" text))))))
+
+;; ─── Eval debug helper function tests ──────────────────────────────────────
+
+(test eval-helper-d-direct
+  "Test (d obj) directly — returns describe output as a string, does not print to *standard-output*"
+  (let* ((obj (make-instance 'apeiron.core:mud-object
+                             :name "Widget"
+                             :id 5001
+                             :description "A widget."))
+         (result (d obj)))
+    (is (stringp result))
+    (is (plusp (length result)))
+    (is (search "Widget" result))
+    (is (search "MUD-OBJECT" result))))
+
+(test eval-helper-slots-direct
+  "Test (slots obj) directly — returns slot info as a string"
+  (let* ((obj (make-instance 'apeiron.core:mud-object
+                             :name "Widget"
+                             :id 5002
+                             :description "A widget."))
+         (result (slots obj)))
+    (is (stringp result))
+    (is (plusp (length result)))
+    (is (search "Widget" result))))
+
+(test eval-helper-props-direct
+  "Test (props obj) directly — returns properties as a string"
+  (let* ((obj (make-instance 'apeiron.core:mud-object
+                             :name "Widget"
+                             :id 5003
+                             :description "A widget."))
+         (result (props obj)))
+    ;; No properties set yet — should say "No properties"
+    (is (stringp result))
+    (is (search "No properties" result))
+    ;; Now set a property and check again
+    (apeiron.core:object-set-property obj "my-key" "my-val")
+    (let ((result2 (props obj)))
+      (is (stringp result2))
+      (is (search "my-key" result2))
+      (is (search "my-val" result2)))))
+
+(test eval-helper-inv-direct
+  "Test (inv container) directly — returns container contents as a string"
+  (let* ((container (make-instance 'apeiron.core:mud-room
+                                   :name "Chest"
+                                   :id 5004))
+         (sword (make-instance 'apeiron.core:mud-object
+                               :name "Silver Sword"
+                               :id 5005
+                               :description "A shiny silver sword."))
+         (result (inv container)))
+    ;; Empty container
+    (is (stringp result))
+    (is (search "empty" result))
+    ;; Add an object
+    (apeiron.core:container-add-object container sword)
+    (let ((result2 (inv container)))
+      (is (stringp result2))
+      (is (search "Silver Sword" result2)))))
+
+(test eval-helper-loc-direct
+  "Test (loc obj) directly — returns location chain as a string"
+  (let* ((room (make-instance 'apeiron.core:mud-room
+                              :name "Test Room"
+                              :id 5006))
+         (obj (make-instance 'apeiron.core:mud-object
+                             :name "Test Object"
+                             :id 5007
+                             :location room))
+         (result (loc obj)))
+    (is (stringp result))
+    (is (plusp (length result)))
+    (is (search "Test Object" result))
+    (is (search "Test Room" result))))
+
+(test eval-helper-obj-type-direct
+  "Test (obj-type obj) directly — returns type name as a string"
+  (let* ((obj (make-instance 'apeiron.core:mud-object
+                             :name "Foo"
+                             :id 5008))
+         (result (obj-type obj)))
+    (is (stringp result))
+    (is (search "MUD-OBJECT" result)))
+  (let* ((char (make-instance 'apeiron.core:mud-character
+                              :name "Hero"
+                              :id 5009
+                              :session (make-instance 'apeiron.core:stream-session
+                                                       :stream (make-string-output-stream))))
+         (result (obj-type char)))
+    (is (stringp result))
+    (is (search "MUD-CHARACTER" result))))
+
+(test eval-helper-props-empty-direct
+  "Test (props obj) on an object with no properties"
+  (let* ((obj (make-instance 'apeiron.core:mud-object
+                             :name "Empty Thing"
+                             :id 5010
+                             :description "Nothing special."))
+         (result (props obj)))
+    (is (stringp result))
+    (is (search "No properties" result))))
+
+(test eval-helper-d-nil-safe
+  "Test that (d nil) doesn't crash"
+  (let ((result (d nil)))
+    (is (stringp result))))
+
+(test eval-helper-slots-mud-character
+  "Test (slots) on a mud-character"
+  (let* ((session (make-instance 'apeiron.core:stream-session
+                                 :stream (make-string-output-stream)))
+         (char (make-instance 'apeiron.core:mud-character
+                              :name "Sir Test"
+                              :id 5011
+                              :session session))
+         (result (slots char)))
+    (is (stringp result))
+    (is (plusp (length result)))
+    (is (search "Sir Test" result))
+    (is (search "MUD-CHARACTER" result))))
+
+(test command-processing-eval-d
+  "Test the eval d helper — describe object returning a string"
+  (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
+    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+                                                                           :stream (make-string-output-stream)
+                                                                           :use-colors nil)))
+          (captured '()))
+      (apeiron.core:world-add-character! world player)
+      (let ((original-send-message (fdefinition 'apeiron.core:player-send-message)))
+        (unwind-protect
+             (progn
+               (setf (fdefinition 'apeiron.core:player-send-message)
+                     (lambda (p msg &key newline)
+                       (declare (ignore p newline))
+                       (push msg captured)))
+               (setf captured '())
+               (apeiron.core:process-command world player "eval (d (me))")
+               (is (= 1 (length captured)))
+               (is (search "TestPlayer" (first captured)))
+               (is (search "MUD-CHARACTER" (first captured))))
+          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+
+(test command-processing-eval-slots
+  "Test the eval slots helper — describe slots returning a string"
+  (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
+    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+                                                                           :stream (make-string-output-stream)
+                                                                           :use-colors nil)))
+          (captured '()))
+      (apeiron.core:world-add-character! world player)
+      (let ((original-send-message (fdefinition 'apeiron.core:player-send-message)))
+        (unwind-protect
+             (progn
+               (setf (fdefinition 'apeiron.core:player-send-message)
+                     (lambda (p msg &key newline)
+                       (declare (ignore p newline))
+                       (push msg captured)))
+               (setf captured '())
+               (apeiron.core:process-command world player "eval (slots (me))")
+               (is (= 1 (length captured)))
+               (is (search "TestPlayer" (first captured))))
+          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+
+(test command-processing-eval-props
+  "Test the eval props helper — show object properties returning a string"
+  (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
+    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+                                                                           :stream (make-string-output-stream)
+                                                                           :use-colors nil)))
+          (captured '()))
+      (apeiron.core:world-add-character! world player)
+      (let* ((room (apeiron.core:object-location player))
+             (original-send-message (fdefinition 'apeiron.core:player-send-message)))
+        ;; Set a property on the player so props output has something to show
+        (apeiron.core:object-set-property player "test-key" "test-value")
+        (unwind-protect
+             (progn
+               (setf (fdefinition 'apeiron.core:player-send-message)
+                     (lambda (p msg &key newline)
+                       (declare (ignore p newline))
+                       (push msg captured)))
+               (setf captured '())
+               (apeiron.core:process-command world player
+                                             "eval (props (me))")
+               (is (= 1 (length captured)))
+               (is (search "test-key" (first captured)))
+               (is (search "test-value" (first captured))))
+          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+
+(test command-processing-eval-inv
+  "Test the eval inv helper — show container contents returning a string"
+  (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
+    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+                                                                           :stream (make-string-output-stream)
+                                                                           :use-colors nil)))
+          (captured '()))
+      (apeiron.core:world-add-character! world player)
+      (let* ((room (apeiron.core:object-location player))
+             (sword (make-instance 'apeiron.core:mud-object
+                                   :name "Rusty Sword"
+                                   :id 9002
+                                   :description "A rusty old blade."))
+             (original-send-message (fdefinition 'apeiron.core:player-send-message)))
+        (apeiron.core:container-add-object room sword)
+        (unwind-protect
+             (progn
+               (setf (fdefinition 'apeiron.core:player-send-message)
+                     (lambda (p msg &key newline)
+                       (declare (ignore p newline))
+                       (push msg captured)))
+               (setf captured '())
+               (apeiron.core:process-command world player "eval (inv (here))")
+               (is (= 1 (length captured)))
+               (is (search "Rusty Sword" (first captured))))
+          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+
+(test command-processing-eval-loc
+  "Test the eval loc helper — show location chain returning a string"
+  (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
+    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+                                                                           :stream (make-string-output-stream)
+                                                                           :use-colors nil)))
+          (captured '()))
+      (apeiron.core:world-add-character! world player)
+      (let ((original-send-message (fdefinition 'apeiron.core:player-send-message)))
+        (unwind-protect
+             (progn
+               (setf (fdefinition 'apeiron.core:player-send-message)
+                     (lambda (p msg &key newline)
+                       (declare (ignore p newline))
+                       (push msg captured)))
+               (setf captured '())
+               (apeiron.core:process-command world player "eval (loc (me))")
+               (is (= 1 (length captured)))
+               (is (search "TestPlayer" (first captured)))
+               (is (search "MUD-CHARACTER" (first captured))))
+          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+
+(test command-processing-eval-obj-type
+  "Test the eval obj-type helper — show type name returning a string"
+  (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
+    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+                                                                           :stream (make-string-output-stream)
+                                                                           :use-colors nil)))
+          (captured '()))
+      (apeiron.core:world-add-character! world player)
+      (let ((original-send-message (fdefinition 'apeiron.core:player-send-message)))
+        (unwind-protect
+             (progn
+               (setf (fdefinition 'apeiron.core:player-send-message)
+                     (lambda (p msg &key newline)
+                       (declare (ignore p newline))
+                       (push msg captured)))
+               (setf captured '())
+               (apeiron.core:process-command world player "eval (obj-type (me))")
+               (is (= 1 (length captured)))
+               (is (search "MUD-CHARACTER" (first captured))))
+          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))

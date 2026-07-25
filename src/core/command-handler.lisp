@@ -193,16 +193,16 @@ Example: (loc (me)) — shows player -> room -> world containment."
                      (object-id obj)
                      (type-of obj)))))
 
-(defun class-of* (object)
+(defun obj-type (object)
   "Return the class/type name of OBJECT as a string.
 Useful when ~S printing is too verbose.
-Example: (class-of* (me))"
+Example: (obj-type (me))"
   (format nil "~A" (type-of object)))
 
 (define-command "eval" (world player args)
   "Evaluate Lisp code and send output to the player.
 Use (me) for the current player, (here) for current room, (world) for the world.
-Debug helpers that return strings: (d obj), (slots obj), (props obj), (inv obj), (loc obj)"
+Debug helpers that return strings: (d obj), (slots obj), (props obj), (inv obj), (loc obj), (obj-type obj)"
   (declare (ignore world))
   (let ((code-str args))
     (if (zerop (length code-str))

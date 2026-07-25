@@ -288,4 +288,12 @@
    #:handle-event
    #:handle-tell
    #:handle-read
-   #:handle-write))
+   #:handle-write
+
+   ;; Eval debug helpers
+   #:d
+   #:slots
+   #:props
+   #:inv
+   #:loc
+   #:obj-type))
