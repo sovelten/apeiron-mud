@@ -97,6 +97,12 @@ directly without re-materialization."
     (world-add-object! world object))
   object)
 
+(defmethod world-remove-object! ((world persistent-world) object)
+  "Remove OBJECT from world indices.
+Guest characters are also destroyed in BKNR to prevent re-materialization."
+  (call-next-method)
+  object)
+
 ;; ─── Store lifecycle ────────────────────────────────────────────────────────
 
 (defvar *store-directory*

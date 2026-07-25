@@ -125,21 +125,40 @@ it does not assign IDs or index into world tables."
 (defun world-total-characters (world)
   (hash-table-count (world-characters world)))
 
-(defun world-remove-character! (world character)
-  "Remove a character from their current room location.
-Owned characters (with a non-nil OWNER) are kept in the world but
-removed from their room — they survive restarts and can reconnect.
-Guest characters (no owner) are removed from the world entirely."
-  ;; Remove from current room
+(defgeneric world-remove-object! (world object)
+  (:documentation
+   "Remove OBJECT from all world indices (world-objects, world-characters,
+world-rooms).  The default method handles hash-table removal; the
+persistence layer specialises this to also destroy the BKNR object.
+Returns the removed OBJECT.")
+  (:method (world object)
+    (remhash (object-id object) (world-objects world))
+    (when (typep object 'mud-character)
+      (remhash (object-id object) (world-characters world)))
+    (when (typep object 'mud-room)
+      (remhash (object-id object) (world-rooms world)))
+    (log-message "~A removed from world indices" (object-name object))
+    object))
+
+(defun displace-character! (character)
+  "Remove CHARACTER from their current room location.
+Sets location to NIL and removes from the room's contents.  Does NOT
+touch world indices — use WORLD-REMOVE-OBJECT! for that."
   (let ((room (object-location character)))
     (when (typep room 'mud-room)
       (container-remove-object room character))
-    (setf (object-location character) nil))
-  ;; Guest characters (no owner) are removed from the world entirely
+    (setf (object-location character) nil)))
+
+(defun world-remove-character! (world character)
+  "Remove a character from the world.
+Owned characters (with a non-nil OWNER) are displaced from their room
+but kept in world indices — they survive restarts and can reconnect.
+Guest characters (no owner) are displaced AND removed from indices."
+  (displace-character! character)
+  ;; Guest characters (no owner) are removed from world indices entirely
   (unless (character-owner character)
-    (remhash (object-id character) (world-characters world))
-    (log-message "Guest ~A removed from world" (object-name character)))
-  (log-message "~A removed from room" (object-name character)))
+    (world-remove-object! world character))
+  (log-message "~A removed from world" (object-name character)))
 
 (defun character-by-id (world char-id)
   "Get a character by ID."

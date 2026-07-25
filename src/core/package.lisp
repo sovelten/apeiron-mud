@@ -250,6 +250,7 @@
    #:get-config-key
    #:world-gen-id!
    #:world-add-object!
+   #:world-remove-object!
    #:world-set-starting-room!
    #:starting-room
    #:place-character!
