@@ -368,9 +368,11 @@ Debug helpers that return strings: (d obj), (slots-of obj), (props obj), (inv ob
   "Disconnect from the game."
   (declare (ignore args))
   (character-send-message character "Goodbye!")
-  ;; Save session before world-remove-character! — for guest characters
-  ;; that deletes the BKNR object, making slot access impossible afterward.
   (let ((session (character-session character)))
+    ;; Clear session-character FIRST — world-remove-character! may
+    ;; destroy the BKNR object (for guest characters), so prevent
+    ;; handle-client cleanup from double-processing it.
+    (setf (session-character session) nil)
     (world-remove-character! world character)
     (session-disconnect session)))
 

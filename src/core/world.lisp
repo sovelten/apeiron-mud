@@ -123,7 +123,9 @@ it does not assign IDs or index into world tables."
         return char))
 
 (defun world-total-characters (world)
-  (hash-table-count (world-characters world)))
+  "Count active (online) characters — those with a live session."
+  (loop for character being the hash-values of (world-characters world)
+        count (character-session character)))
 
 (defgeneric world-remove-object! (world object)
   (:documentation
@@ -154,22 +156,29 @@ touch world indices — use WORLD-REMOVE-OBJECT! for that."
 Owned characters (with a non-nil OWNER) are displaced from their room
 but kept in world indices — they survive restarts and can reconnect.
 Guest characters (no owner) are displaced AND removed from indices."
-  ;; Save name before any destructive ops — world-remove-object! may
-  ;; destroy the BKNR object, making slot access impossible afterward.
-  (let ((name (object-name character)))
-    (displace-character! character)
-    ;; Guest characters (no owner) are removed from world indices entirely
-    (unless (character-owner character)
-      (world-remove-object! world character))
-    (log-message "~A removed from world" name)))
+  (handler-case
+      (let ((name (object-name character)))
+        (displace-character! character)
+        ;; Guest characters (no owner) are removed from world indices entirely
+        (unless (character-owner character)
+          (world-remove-object! world character))
+        ;; Owned characters stay in world indices but go offline:
+        ;; clear the session so they are no longer counted as active.
+        (when (character-owner character)
+          (setf (character-session character) nil))
+        (log-message "~A removed from world" name))
+    (error (e)
+      (log-message "world-remove-character! skipped (already destroyed): ~A" e)
+      nil)))
 
 (defun character-by-id (world char-id)
   "Get a character by ID."
   (gethash char-id (world-characters world)))
 
 (defun characters (world)
-  "Get all active characters."
+  "Get all active (online) characters — those with a live session."
   (loop for character being the hash-values of (world-characters world)
+        when (character-session character)
         collect character))
 
 (defun world-broadcast (world message &optional exclude-character)

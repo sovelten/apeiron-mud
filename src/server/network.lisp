@@ -177,9 +177,16 @@ Returns (values character account)."
     ;; Cleanup when disconnected
     (let ((session-id (session-id session)))
       (log-message "Attempting to remove thread for session ~A" session-id)
+      (let ((character (session-character session)))
+        (when character
+          ;; Clear session links first — this prevents stop-mud-server
+          ;; from racing to world-remove-character! on the same character.
+          (setf (session-character session) nil)
+          (setf (character-session character) nil)
+          (world-remove-character! world character)))
+      ;; Remove from tracking AFTER cleanup so stop-mud-server joins
+      ;; this thread before processing characters.
       (remhash session-id *player-threads*)
-      (when (session-character session)
-        (world-remove-character! world (session-character session)))
       (session-disconnect session))))
 
 (defun accept-connections (world)
@@ -402,12 +409,20 @@ connection to TLS in-band."
             (log-error "Error joining acceptance thread: ~A" e)))
         (setf *acceptance-thread* nil))
 
-      ;; Disconnect all characters
+      ;; Wait for all player threads to finish their cleanup before
+      ;; we touch any characters — avoids racing with handle-client.
+      (maphash (lambda (id thread)
+                 (declare (ignore id))
+                 (handler-case
+                     (bordeaux-threads:join-thread thread)
+                   (error (e)
+                     (log-error "Error joining player thread: ~A" e))))
+               *player-threads*)
+      (clrhash *player-threads*)
+
+      ;; Disconnect all remaining characters (safety net)
       (let ((world (get-persistent-world)))
         (dolist (character (characters world))
-          ;; Save session before world-remove-character! — for guest
-          ;; characters that deletes the BKNR object, making slot
-          ;; access impossible afterward.
           (let ((session (character-session character)))
             (world-remove-character! world character)
             (when session
