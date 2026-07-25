@@ -189,7 +189,7 @@
       ;; Place the guestbook in The Gathering
       (container-add-object gathering guestbook)
       ;; Connect The Gathering (hub) to the four biomes
-      (connect-north-south! world gathering forest)
+      (connect-north-south! world forest gathering)
       (connect-west-east! world gathering desert)
       (connect-west-east! world swamp gathering)
       (connect-north-south! world gathering volcano)

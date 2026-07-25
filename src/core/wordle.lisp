@@ -287,19 +287,41 @@ gets :absent."
   "Format an empty slot line."
   (format nil "  ~A" (color-text "· · · · ·" +sgr-dim+)))
 
+(defun wordle-format-result-block (result)
+  "Format a result as a UTF-8 emoji square with no letter.
+
+  :correct - 🟩 green square
+  :present - 🟨 yellow square
+  :absent  - ⬛ black square"
+  (ecase result
+    (:correct "🟩")
+    (:present "🟨")
+    (:absent  "⬛")))
+
+(defun wordle-format-shareable-line (results)
+  "Format a single guess result line as UTF-8 emoji squares with no letters.
+Useful for sharing results without spoiling the answer — renders correctly
+on any platform (chat, social media, etc.) without ANSI codes."
+  (format nil "  ~{~A~^ ~}"
+          (loop for i from 0 below 5
+                collect (wordle-format-result-block (nth i results)))))
+
 ;; ─── Display the puzzle ────────────────────────────────────────────────────
 
 (defun wordle-display (puzzle player-name)
   "Display the Wordle puzzle state for PLAYER-NAME.
 
-Shows the board with all guesses and the remaining empty slots."
+Shows the board with all guesses and the remaining empty slots.
+When solved or failed, the result message shows a shareable pattern
+of UTF-8 emoji squares (no letters) so it can be pasted to other media
+without spoiling the answer."
   (wordle-ensure-fresh-word! puzzle)
   (let* ((guesses  (wordle-player-guesses-list puzzle player-name))
          (solved   (wordle-player-solved-p puzzle player-name))
          (failed   (wordle-player-failed-p puzzle player-name))
-         (target   (wordle-target-word puzzle))
          (max      (wordle-max-guesses puzzle))
-         (n-guesses (length guesses)))
+         (n-guesses (length guesses))
+         (location (object-location puzzle)))
     (with-output-to-string (stream)
       ;; Header
       (format stream "~A~%~A~%~%"
@@ -320,14 +342,24 @@ Shows the board with all guesses and the remaining empty slots."
       (cond
         (solved
          (format stream "~A~%"
-                 (bold-green (format nil "You solved it in ~D ~A! The word was: ~A"
+                 (bold-green (format nil "I solved it in ~D ~A!"
                                      n-guesses
-                                     (if (= n-guesses 1) "guess" "guesses")
-                                     (string-upcase target)))))
+                                     (if (= n-guesses 1) "guess" "guesses"))))
+         (dolist (pair guesses)
+           (write-string (wordle-format-shareable-line (cdr pair)) stream)
+           (terpri stream))
+         (when location
+           (format stream "Go to ~A to play.~%"
+                   (object-name location))))
         (failed
          (format stream "~A~%"
-                 (bold-red (format nil "Out of guesses! The word was: ~A"
-                                   (string-upcase target)))))
+                 (bold-red "Out of guesses!"))
+         (dolist (pair guesses)
+           (write-string (wordle-format-shareable-line (cdr pair)) stream)
+           (terpri stream))
+         (when location
+           (format stream "Go to ~A to play.~%"
+                   (object-name location))))
         (t
          (format stream "~A~%"
                  (yellow (let ((rem (- max n-guesses)))
@@ -464,17 +496,23 @@ where RESULT-CODE is one of:
            (wordle-guess puzzle (object-name speaker) lower)
          (player-send-message speaker display)
          (when (or (eq result-code :solved) (eq result-code :failed))
-           (let ((room (object-location speaker)))
+           (let* ((room (object-location speaker))
+                  (guesses (wordle-player-guesses-list puzzle (object-name speaker)))
+                  (result-text (with-output-to-string (s)
+                                 (dolist (pair guesses)
+                                   (write-string (wordle-format-shareable-line (cdr pair)) s)
+                                   (terpri s)))))
              (loop for obj in (container-all-objects room)
                    do (when (and (typep obj 'mud-character)
                                  (not (eq obj speaker)))
                         (player-send-message
                          obj
-                         (format nil "~A ~A the Wordle puzzle!"
+                         (format nil "~A ~A the Wordle puzzle!~%~A"
                                  (bright-green (object-name speaker))
                                  (if (eq result-code :solved)
                                      (bold-green "solved")
-                                     (bold-red "failed to solve"))))))))
+                                     (bold-red "failed to solve"))
+                                 result-text))))))
          (not (eq result-code :invalid))))
       ;; Anything else — not handled here
       (t nil))))
@@ -483,6 +521,4 @@ where RESULT-CODE is one of:
 
 (defmethod print-object ((puzzle mud-wordle-puzzle) stream)
   (print-unreadable-object (puzzle stream :type t)
-    (format stream "~A - word: ~A"
-            (object-name puzzle)
-            (string-upcase (wordle-target-word puzzle)))))
+    (format stream "~A (ID: ~D)" (object-name puzzle) (object-id puzzle))))
