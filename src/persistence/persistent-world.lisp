@@ -14,6 +14,10 @@
   ()
   (:transient-slots contents))
 
+(defwrapping-persistent-class persistent-character (mud-character persistent-object)
+  ()
+  (:transient-slots session))
+
 (defwrapping-persistent-class persistent-guestbook (mud-guestbook persistent-object)
   ()
   (:transient-slots entries))
@@ -23,7 +27,7 @@
 
 (defwrapping-persistent-class persistent-wordle (mud-wordle-puzzle persistent-object)
   ()
-  (:transient-slots player-guesses))
+  (:transient-slots character-guesses))
 
 (defwrapping-persistent-class persistent-connection (mud-connection persistent-object)
   ())
@@ -62,7 +66,7 @@ Usage from the MUD: eval (refresh-guestbooks)"
 
 (defwrapping-persistent-class persistent-world (mud-world)
   ()
-  (:transient-slots players objects rooms))
+  (:transient-slots characters objects rooms))
 
 (defmethod object-set-property ((obj persistent-object) property-name value)
   "Set a property on a persistent object, ensuring BKNR tracks the change.
@@ -84,10 +88,22 @@ change in the outer transaction's buffer."
 (defmethod create-object! ((world persistent-world) object)
   "Register OBJECT in WORLD by converting it to a persistent object in-place.
 The transient OBJECT is converted in-place via MATERIALIZE-OBJECT, which
-uses CHANGE-CLASS to preserve slot values and object identity."
+uses CHANGE-CLASS to preserve slot values and object identity.
+Already-persistent objects (e.g., reconnected characters) are registered
+directly without re-materialization."
   (bknr.datastore:with-transaction ("create-object")
-    (materialize-object object)
+    (unless (typep object 'bknr.datastore:store-object)
+      (materialize-object object))
     (world-add-object! world object))
+  object)
+
+(defmethod world-remove-object! ((world persistent-world) object)
+  "Remove OBJECT from world indices and destroy it in the BKNR datastore."
+  (bknr.datastore:with-transaction ("remove-object")
+    (call-next-method)
+    (when (and (typep object 'bknr.datastore:store-object)
+               (not (bknr.indices:object-destroyed-p object)))
+      (bknr.datastore:delete-object object)))
   object)
 
 ;; ─── Store lifecycle ────────────────────────────────────────────────────────
@@ -182,21 +198,18 @@ logging)."
 (defun materialize-world (transient-world)
   "Convert TRANSIENT-WORLD into a persistent world in-place.
 
-Every game object (rooms, connections, NPCs, guestbooks, puzzles) and the
-world itself are converted to their persistent counterparts via
-CHANGE-CLASS + INITIALIZE-INSTANCE.  Because object identity is preserved,
-all cross-references remain valid without any fixup pass.
-
-Characters (players) are excluded -- they are transient by nature and
-never stored in the datastore.
+Every game object (rooms, connections, NPCs, guestbooks, puzzles,
+characters) and the world itself are converted to their persistent
+counterparts via CHANGE-CLASS + INITIALIZE-INSTANCE.  Because object
+identity is preserved, all cross-references remain valid without any
+fixup pass.
 
 Returns TRANSIENT-WORLD (now a persistent-world)."
   (build-persistent-class-map)
   (bknr.datastore:with-transaction ("materialize-world")
-    ;; Convert all non-character game objects in-place
+    ;; Convert all game objects in-place (including characters)
     (dolist (obj (world-all-objects transient-world))
-      (unless (typep obj 'mud-character)
-        (materialize-object obj)))
+      (materialize-object obj))
     ;; Convert the world itself via the same generic mechanism
     (materialize-object transient-world)
     ;; Ensure the id-counter is tracked in the transaction log
@@ -264,7 +277,8 @@ When FORCE-NEW is true any existing store data is wiped first."
     (if world
         (progn
           ;; Populate world's indices from BKNR objects.
-          ;; persistent-object queries also return subclasses (room, guestbook, npc).
+          ;; Guest characters that were properly removed (via world-remove-object!)
+          ;; are deleted from the datastore and won't appear here.
           (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-object))
             (world-add-object! world obj))
           ;; Rebuild room contents from persistent object locations.

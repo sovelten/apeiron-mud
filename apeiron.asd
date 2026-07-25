@@ -22,6 +22,7 @@
   :depends-on ("bordeaux-threads"
                "cl-csv"
                "deeds"
+               "ironclad"
                "str")
   :components ((:module "src/core"
                 :components
@@ -39,7 +40,8 @@
                  (:file "npc" :depends-on ("object"))
                  (:file "combat" :depends-on ("npc" "character"))
                  (:file "session" :depends-on ("utils"))
-                 (:file "character" :depends-on ("object" "session" "container"))
+                 (:file "account" :depends-on ("utils" "constants"))
+                 (:file "character" :depends-on ("object" "session" "container" "account"))
                  (:file "command-handler" :depends-on ("session"))
                  (:file "world" :depends-on ("room" "connection" "guestbook" "character"))))))
 

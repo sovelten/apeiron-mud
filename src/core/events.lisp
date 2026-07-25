@@ -35,12 +35,12 @@ can select for all MUD events with a single event-type specifier."))
                    :documentation "Name of the character (or NIL if not yet set)."))
   (:documentation "Base class for events tied to a particular player session."))
 
-(deeds:define-event player-input-event (session-event)
+(deeds:define-event character-input-event (session-event)
   ((input :initarg :input :reader input
           :documentation "The raw input line sent by the player."))
   (:documentation "Issued whenever a player sends a line of input to the server."))
 
-(deeds:define-event player-output-event (session-event)
+(deeds:define-event character-output-event (session-event)
   ((output :initarg :output :reader output
            :documentation "The output sent to the player's session."))
   (:documentation "Issued whenever the server sends output to a player's session."))
@@ -92,8 +92,8 @@ current value of *EVENT-LOG-FILE*.  When LOG-FILE is NIL, logging is
 not started.
 
 Registers queued-handler instances on the standard Deeds event loop that
-write formatted log lines for info/error/warning and player-input events.
-Player-output events are intentionally NOT logged — they produce the
+write formatted log lines for info/error/warning and character-input events.
+Character-output events are intentionally NOT logged — they produce the
 bulk of the log volume and are rarely needed for debugging.  Returns T
 if logging was started, NIL otherwise."
   (when log-file
@@ -116,7 +116,7 @@ if logging was started, NIL otherwise."
     (push (deeds:with-handler deeds:warning-event (ev message)
             (%write-log-line :WARN message))
           *event-log-handlers*)
-    (push (deeds:with-handler player-input-event (ev input session-id character-name)
+    (push (deeds:with-handler character-input-event (ev input session-id character-name)
             (%write-log-line :INPUT input
                              :session-id session-id
                              :character-name character-name))
@@ -157,16 +157,16 @@ Deregisters all file-logging handlers from the event loop."
   (deeds:do-issue deeds:warning-event
     :message (apply #'format nil format-string format-args)))
 
-(defun issue-player-input-event (session-id character-name input-line)
-  "Issue a player-input-event for the given session and input line."
-  (deeds:do-issue player-input-event
+(defun issue-character-input-event (session-id character-name input-line)
+  "Issue a character-input-event for the given session and input line."
+  (deeds:do-issue character-input-event
     :session-id session-id
     :character-name character-name
     :input input-line))
 
-(defun issue-player-output-event (session-id character-name output-text)
-  "Issue a player-output-event for the given session and output text."
-  (deeds:do-issue player-output-event
+(defun issue-character-output-event (session-id character-name output-text)
+  "Issue a character-output-event for the given session and output text."
+  (deeds:do-issue character-output-event
     :session-id session-id
     :character-name character-name
     :output output-text))
@@ -186,12 +186,12 @@ event loop via DEEDS:REGISTER-HANDLER (or the higher-level helpers above).
 
 Example:
 
-  (defmethod handle-event ((npc mud-npc) (event player-input-event))
+  (defmethod handle-event ((npc mud-npc) (event character-input-event))
     (when (string-equal (input event) \"hello\")
       (format t \"NPC ~A heard hello!~%\" (object-name npc))))
 
   ;; Register the NPC:
-  (deeds:with-handler player-input-event (ev)
+  (deeds:with-handler character-input-event (ev)
     (handle-event my-npc ev))
 "))
 

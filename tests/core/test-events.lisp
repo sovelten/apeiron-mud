@@ -59,13 +59,13 @@ Example:
   "Verify that our custom event types inherit correctly from deeds:event."
   (is (subtypep 'mud-event 'deeds:event))
   (is (subtypep 'session-event 'mud-event))
-  (is (subtypep 'player-input-event 'session-event))
-  (is (subtypep 'player-output-event 'session-event)))
+  (is (subtypep 'character-input-event 'session-event))
+  (is (subtypep 'character-output-event 'session-event)))
 
 (test mud-event-subtypes-do-not-leak
   "MUD events are not subtypes of deeds:message-event or its children."
   (is (not (subtypep 'mud-event 'deeds:message-event)))
-  (is (not (subtypep 'player-input-event 'deeds:info-event))))
+  (is (not (subtypep 'character-input-event 'deeds:info-event))))
 
 ;; ---------------------------------------------------------------------------
 ;; Event issuance (synchronous via deeds:handle)
@@ -87,9 +87,9 @@ Example:
     (is (typep captured 'deeds:error-event))
     (is (search "error 99" (deeds:message captured)))))
 
-(test player-input-event-slots
-  "A player-input-event should expose its slots correctly."
-  (let ((ev (make-instance 'player-input-event
+(test character-input-event-slots
+  "A character-input-event should expose its slots correctly."
+  (let ((ev (make-instance 'character-input-event
                            :session-id 42
                            :character-name "TestHero"
                            :input "look")))
@@ -97,9 +97,9 @@ Example:
     (is (equal "TestHero" (character-name ev)))
     (is (equal "look" (input ev)))))
 
-(test player-output-event-slots
-  "A player-output-event should expose its slots correctly."
-  (let ((ev (make-instance 'player-output-event
+(test character-output-event-slots
+  "A character-output-event should expose its slots correctly."
+  (let ((ev (make-instance 'character-output-event
                            :session-id 7
                            :character-name "Alice"
                            :output "You see a dark passage.")))
@@ -158,13 +158,13 @@ Example:
               (log-file-contents lp)))))
     (is (search "ERROR something broke" contents))))
 
-(test log-file-captures-player-input-event
-  "A player-input-event issued while logging is active should appear in the log."
+(test log-file-captures-character-input-event
+  "A character-input-event issued while logging is active should appear in the log."
   (let ((contents
           (with-temp-log-file
             (lambda (lp)
               (start-event-logging :log-file *event-log-file*)
-              (issue-player-input-event 1 "Hero" "attack goblin")
+              (issue-character-input-event 1 "Hero" "attack goblin")
               (sleep 0.2)
               (stop-event-logging)
               (log-file-contents lp)))))
@@ -172,14 +172,14 @@ Example:
     (is (search "session=1" contents))
     (is (search "char=Hero" contents))))
 
-(test log-file-does-not-capture-player-output-event
-  "A player-output-event issued while logging is active should NOT appear
+(test log-file-does-not-capture-character-output-event
+  "A character-output-event issued while logging is active should NOT appear
 in the log — output events are intentionally excluded to reduce log volume."
   (let ((contents
           (with-temp-log-file
             (lambda (lp)
               (start-event-logging :log-file *event-log-file*)
-              (issue-player-output-event 2 "Mage" "The room is dark.")
+              (issue-character-output-event 2 "Mage" "The room is dark.")
               (sleep 0.2)
               (stop-event-logging)
               (log-file-contents lp)))))
@@ -199,7 +199,7 @@ in the log — output events are intentionally excluded to reduce log volume."
 (test handle-event-default-is-noop
   "The default handle-event method should return NIL for any object+event."
   (let ((obj (new-object :name "dummy")))
-    (is (null (handle-event obj (make-instance 'player-input-event
+    (is (null (handle-event obj (make-instance 'character-input-event
                                                :session-id 0
                                                :character-name "X"
                                                :input ""))))))
@@ -217,10 +217,10 @@ in the log — output events are intentionally excluded to reduce log volume."
            (add-method #'handle-event
                        (make-instance 'standard-method
                                       :specializers (list (find-class 'mud-object)
-                                                          (find-class 'player-input-event))
+                                                          (find-class 'character-input-event))
                                       :lambda-list '(obj ev)
                                       :function method-fn))
-           (handle-event obj (make-instance 'player-input-event
+           (handle-event obj (make-instance 'character-input-event
                                             :session-id 0
                                             :character-name "X"
                                             :input "hi"))
@@ -231,5 +231,5 @@ in the log — output events are intentionally excluded to reduce log volume."
                          (find-method #'handle-event
                                       nil
                                       (list (find-class 'mud-object)
-                                            (find-class 'player-input-event))))
+                                            (find-class 'character-input-event))))
         (error () nil)))))

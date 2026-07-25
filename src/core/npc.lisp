@@ -1,4 +1,4 @@
-;;;; src/core/npc.lisp — NPC (non-player character) definitions
+;;;; src/core/npc.lisp — NPC (non-character character) definitions
 
 (in-package #:apeiron.core)
 
@@ -28,8 +28,8 @@
    (victory-flag :initarg :victory-flag
                  :accessor npc-victory-flag
                  :initform nil
-                 :documentation "Player property key set when this NPC is defeated"))
-  (:documentation "A non-player character that can be fought in the MUD"))
+                 :documentation "Character property key set when this NPC is defeated"))
+  (:documentation "A non-character character that can be fought in the MUD"))
 
 (defmethod object-describe ((obj mud-npc))
   "Describe an NPC for examine/inventory output."

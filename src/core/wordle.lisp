@@ -1,8 +1,8 @@
 ;;;; src/core/wordle.lisp - Wordle puzzle game objects
 ;;;;
-;;;; A Wordle-like puzzle that can be placed in a room for players to
+;;;; A Wordle-like puzzle that can be placed in a room for characters to
 ;;;; interact with.  Each puzzle has a 5-letter target word and tracks
-;;;; guesses per player independently.  Multiple players can play the
+;;;; guesses per character independently.  Multiple characters can play the
 ;;;; same puzzle simultaneously.
 
 (in-package #:apeiron.core)
@@ -120,7 +120,7 @@
       (aref word-list (mod day-index (length word-list))))))
 
 (defun wordle-set-daily-word! (puzzle &optional (universal-time (get-universal-time)))
-  "Set the puzzle's target word to today's daily word and reset all player progress."
+  "Set the puzzle's target word to today's daily word and reset all character progress."
   (wordle-reset puzzle :new-word (wordle-daily-word (wordle-word-list puzzle)
                                                      universal-time)))
 
@@ -133,7 +133,7 @@
 
 (defun wordle-ensure-fresh-word! (puzzle &optional (universal-time (wordle-now)))
   "If the puzzle's word is stale (different date than UNIVERSAL-TIME), rotate
-  to today's daily word and clear all player state.  Returns T if rotated, NIL
+  to today's daily word and clear all character state.  Returns T if rotated, NIL
   if the word was already current."
   (let ((today (wordle-date-key universal-time)))
     (unless (= today (wordle-word-date puzzle))
@@ -147,20 +147,20 @@
   ((target-word :initarg :target-word
                 :accessor wordle-target-word
                 :initform "world"
-                :documentation "The 5-letter word players must guess.")
-   (player-guesses :initarg :player-guesses
-                   :accessor wordle-player-guesses
+                :documentation "The 5-letter word characters must guess.")
+   (character-guesses :initarg :character-guesses
+                   :accessor wordle-character-guesses
                    :initform (make-hash-table :test #'equal)
                    :documentation
-                   "Hash table mapping player-name => plist of guess data.
+                   "Hash table mapping character-name => plist of guess data.
                     Each entry is a plist with:
                       :guesses  - list of guess words (strings)
-                      :solved   - whether this player solved it
-                      :failed   - whether this player ran out of guesses")
+                      :solved   - whether this character solved it
+                      :failed   - whether this character ran out of guesses")
    (max-guesses :initarg :max-guesses
                 :accessor wordle-max-guesses
                 :initform 6
-                :documentation "Maximum allowed guesses per player.")
+                :documentation "Maximum allowed guesses per character.")
    (word-list :initarg :word-list
               :accessor wordle-word-list
               :initform *wordle-default-words*
@@ -171,7 +171,7 @@
               :documentation "Integer date key (YYYYMMDD) of the current target-word."))
   (:documentation "A Wordle-like puzzle object for the MUD.
 
-Players interact with the puzzle by telling it words.  Each player's
+Characters interact with the puzzle by telling it words.  Each character's
 guesses are tracked independently.  When a new day arrives the puzzle
 automatically rotates to that day's word and resets all progress."))
 
@@ -202,27 +202,27 @@ all puzzles created on the same date."
                  :max-guesses max-guesses
                  :word-list word-list))
 
-;; ─── Per-player state management ───────────────────────────────────────────
+;; ─── Per-character state management ───────────────────────────────────────────
 
-(defun wordle-player-data (puzzle player-name)
-  "Get the guess data plist for PLAYER-NAME, creating it if needed."
-  (let ((data (gethash player-name (wordle-player-guesses puzzle))))
+(defun wordle-character-data (puzzle character-name)
+  "Get the guess data plist for CHARACTER-NAME, creating it if needed."
+  (let ((data (gethash character-name (wordle-character-guesses puzzle))))
     (unless data
       (setf data (list :guesses '() :solved nil :failed nil))
-      (setf (gethash player-name (wordle-player-guesses puzzle)) data))
+      (setf (gethash character-name (wordle-character-guesses puzzle)) data))
     data))
 
-(defun wordle-player-guesses-list (puzzle player-name)
-  "Get the list of guesses for PLAYER-NAME."
-  (getf (wordle-player-data puzzle player-name) :guesses))
+(defun wordle-character-guesses-list (puzzle character-name)
+  "Get the list of guesses for CHARACTER-NAME."
+  (getf (wordle-character-data puzzle character-name) :guesses))
 
-(defun wordle-player-solved-p (puzzle player-name)
-  "Check if PLAYER-NAME has solved the puzzle."
-  (getf (wordle-player-data puzzle player-name) :solved))
+(defun wordle-character-solved-p (puzzle character-name)
+  "Check if CHARACTER-NAME has solved the puzzle."
+  (getf (wordle-character-data puzzle character-name) :solved))
 
-(defun wordle-player-failed-p (puzzle player-name)
-  "Check if PLAYER-NAME has failed the puzzle."
-  (getf (wordle-player-data puzzle player-name) :failed))
+(defun wordle-character-failed-p (puzzle character-name)
+  "Check if CHARACTER-NAME has failed the puzzle."
+  (getf (wordle-character-data puzzle character-name) :failed))
 
 ;; ─── Core game logic ───────────────────────────────────────────────────────
 
@@ -308,17 +308,17 @@ on any platform (chat, social media, etc.) without ANSI codes."
 
 ;; ─── Display the puzzle ────────────────────────────────────────────────────
 
-(defun wordle-display (puzzle player-name)
-  "Display the Wordle puzzle state for PLAYER-NAME.
+(defun wordle-display (puzzle character-name)
+  "Display the Wordle puzzle state for CHARACTER-NAME.
 
 Shows the board with all guesses and the remaining empty slots.
 When solved or failed, the result message shows a shareable pattern
 of UTF-8 emoji squares (no letters) so it can be pasted to other media
 without spoiling the answer."
   (wordle-ensure-fresh-word! puzzle)
-  (let* ((guesses  (wordle-player-guesses-list puzzle player-name))
-         (solved   (wordle-player-solved-p puzzle player-name))
-         (failed   (wordle-player-failed-p puzzle player-name))
+  (let* ((guesses  (wordle-character-guesses-list puzzle character-name))
+         (solved   (wordle-character-solved-p puzzle character-name))
+         (failed   (wordle-character-failed-p puzzle character-name))
          (max      (wordle-max-guesses puzzle))
          (n-guesses (length guesses))
          (location (object-location puzzle)))
@@ -368,8 +368,8 @@ without spoiling the answer."
 
 ;; ─── Make a guess ──────────────────────────────────────────────────────────
 
-(defun wordle-guess (puzzle player-name guess-word)
-  "Process a guess from PLAYER-NAME.
+(defun wordle-guess (puzzle character-name guess-word)
+  "Process a guess from CHARACTER-NAME.
 
 Returns multiple values:
   (values display-string result-code)
@@ -383,14 +383,14 @@ where RESULT-CODE is one of:
   ;; Rotate word if a new day has arrived
   (wordle-ensure-fresh-word! puzzle)
   ;; Check for already-complete
-  (let ((solved (wordle-player-solved-p puzzle player-name))
-        (failed (wordle-player-failed-p puzzle player-name)))
+  (let ((solved (wordle-character-solved-p puzzle character-name))
+        (failed (wordle-character-failed-p puzzle character-name)))
     (when solved
       (return-from wordle-guess
-        (values (wordle-display puzzle player-name) :already)))
+        (values (wordle-display puzzle character-name) :already)))
     (when failed
       (return-from wordle-guess
-        (values (wordle-display puzzle player-name) :already))))
+        (values (wordle-display puzzle character-name) :already))))
   ;; Validate guess
   (let* ((cleaned (string-trim '(#\Space #\Tab #\Newline) guess-word))
          (lower   (string-downcase cleaned)))
@@ -406,7 +406,7 @@ where RESULT-CODE is one of:
                         (yellow "The board ignores:"))
                 :invalid)))
     ;; Check for repeated guess
-    (let ((guesses (wordle-player-guesses-list puzzle player-name)))
+    (let ((guesses (wordle-character-guesses-list puzzle character-name)))
       (when (find lower guesses :test (lambda (a b) (string= a b))
                   :key #'car)
         (return-from wordle-guess
@@ -417,38 +417,38 @@ where RESULT-CODE is one of:
     ;; Evaluate
     (let* ((target (wordle-target-word puzzle))
            (results (wordle-evaluate-guess target lower))
-           (guesses (wordle-player-guesses-list puzzle player-name))
+           (guesses (wordle-character-guesses-list puzzle character-name))
            (new-guesses (append guesses (list (cons lower results))))
-           (data (wordle-player-data puzzle player-name)))
+           (data (wordle-character-data puzzle character-name)))
       ;; Record the guess
       (setf (getf data :guesses) new-guesses)
       ;; Check for win
       (if (every (lambda (r) (eq r :correct)) results)
           (progn
             (setf (getf data :solved) t)
-            (values (wordle-display puzzle player-name) :solved))
+            (values (wordle-display puzzle character-name) :solved))
           ;; Check for failure
           (if (>= (length new-guesses) (wordle-max-guesses puzzle))
               (progn
                 (setf (getf data :failed) t)
-                (values (wordle-display puzzle player-name) :failed))
+                (values (wordle-display puzzle character-name) :failed))
               ;; Continue
-              (values (wordle-display puzzle player-name) :continue))))))
+              (values (wordle-display puzzle character-name) :continue))))))
 
 ;; ─── Reset ─────────────────────────────────────────────────────────────────
 
 (defun wordle-reset (puzzle &key new-word)
-  "Reset the puzzle for all players.  Optionally set a NEW-WORD.
+  "Reset the puzzle for all characters.  Optionally set a NEW-WORD.
   When NEW-WORD is given the WORD-DATE is updated to today."
-  (clrhash (wordle-player-guesses puzzle))
+  (clrhash (wordle-character-guesses puzzle))
   (when new-word
     (setf (wordle-target-word puzzle) new-word)
     (setf (wordle-word-date puzzle) (wordle-date-key)))
   t)
 
-(defun wordle-reset-player (puzzle player-name)
-  "Reset the puzzle for a single player."
-  (remhash player-name (wordle-player-guesses puzzle))
+(defun wordle-reset-character (puzzle character-name)
+  "Reset the puzzle for a single character."
+  (remhash character-name (wordle-character-guesses puzzle))
   t)
 
 ;; ─── Help text ────────────────────────────────────────────────────────────
@@ -476,28 +476,28 @@ where RESULT-CODE is one of:
 ;; ─── Speech interaction ────────────────────────────────────────────────────
 
 (defmethod handle-tell ((puzzle mud-wordle-puzzle) speaker message)
-  "Respond when a player tells the puzzle a 5-letter word, help, or board."
+  "Respond when a character tells the puzzle a 5-letter word, help, or board."
   (wordle-ensure-fresh-word! puzzle)
   (let* ((cleaned (string-trim '(#\Space #\Tab #\Newline) message))
          (lower (string-downcase cleaned)))
     (cond
       ;; "help" — show instructions
       ((member lower '("help" "instructions" "rules") :test #'string=)
-       (player-send-message speaker (wordle-help-text puzzle))
+       (character-send-message speaker (wordle-help-text puzzle))
        t)
       ;; "show" — show current puzzle state
       ((member lower '("show") :test #'string=)
-       (player-send-message speaker (wordle-display puzzle (object-name speaker)))
+       (character-send-message speaker (wordle-display puzzle (object-name speaker)))
        t)
       ;; 5-letter word — process as a guess
       ((and (= (length lower) 5)
             (every (lambda (c) (find c "abcdefghijklmnopqrstuvwxyz")) lower))
        (multiple-value-bind (display result-code)
            (wordle-guess puzzle (object-name speaker) lower)
-         (player-send-message speaker display)
+         (character-send-message speaker display)
          (when (or (eq result-code :solved) (eq result-code :failed))
            (let* ((room (object-location speaker))
-                  (guesses (wordle-player-guesses-list puzzle (object-name speaker)))
+                  (guesses (wordle-character-guesses-list puzzle (object-name speaker)))
                   (result-text (with-output-to-string (s)
                                  (dolist (pair guesses)
                                    (write-string (wordle-format-shareable-line (cdr pair)) s)
@@ -505,7 +505,7 @@ where RESULT-CODE is one of:
              (loop for obj in (container-all-objects room)
                    do (when (and (typep obj 'mud-character)
                                  (not (eq obj speaker)))
-                        (player-send-message
+                        (character-send-message
                          obj
                          (format nil "~A ~A the Wordle puzzle!~%~A"
                                  (bright-green (object-name speaker))

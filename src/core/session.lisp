@@ -10,6 +10,12 @@
 
 ;; On timeout, should send :timeout on second return value
 (defgeneric mud-read-line (obj &key timeout))
+
+(defgeneric mud-read-secret (obj &key timeout)
+  (:documentation "Read a line of input with masked echo (password).
+The default method falls back to MUD-READ-LINE without masking.
+Subclasses should override to provide proper masking."))
+
 (defgeneric mud-write (obj message &key newline))
 (defgeneric session-keepalive (session)
   (:documentation "Send a keepalive heartbeat for this session.
@@ -26,10 +32,10 @@ The default method is a no-op."))
        :initform (make-id)
        :accessor session-id
        :documentation "Unique identifier for this object")
-   (character :initarg :player
+   (character :initarg :character
               :accessor session-character
               :initform nil
-              :documentation "Player controlled by this session")
+              :documentation "Character controlled by this session")
    (use-colors :initarg :use-colors
                :accessor session-use-colors
                :initform t
@@ -56,7 +62,7 @@ call CALL-NEXT-METHOD to clear the character link."
     (setf (session-character session) nil)))
 
 (defgeneric session-send-prompt (session)
-  (:documentation "Send a prompt to the player on the same line (no newline).
+  (:documentation "Send a prompt to the character on the same line (no newline).
 The default method sends \"> \" and returns.
 Subclasses (e.g. telnet-session) may override to add protocol-specific
 signalling (e.g. EOR for prompt detection)."))
@@ -91,10 +97,19 @@ this method to provide their own line-reading implementation."
          (t
           (return (values nil status)))))))
 
-(defun ask-input (obj question &optional (default ""))
-  "Asks input from the user"
+(defmethod mud-read-secret ((obj mud-session) &key (timeout 300))
+  "Default: fall back to plain line reading without masking.
+Subclasses with I/O capabilities should override this."
+  (mud-read-line obj :timeout timeout))
+
+(defun ask-input (obj question &key (default "") secret)
+  "Asks input from the user.  When SECRET is non-NIL the input is not
+echoed (for passwords etc.)."
   (mud-write obj question :newline t)
-  (multiple-value-bind (line status) (mud-read-line obj)
+  (multiple-value-bind (line status)
+      (if secret
+          (mud-read-secret obj)
+          (mud-read-line obj))
     (if (and line (null status))
         (let ((trimmed (string-trim '(#\Return #\Newline) line)))
           (if (and trimmed (> (length trimmed) 0))
@@ -128,6 +143,29 @@ that provide their own stream abstraction."))
           (error (e)
             (values nil e))))))
 
+(defmethod mud-read-secret ((session stream-session) &key (timeout 300))
+  "Read a password line character-by-character, echoing an asterisk
+for each typed character."
+  (declare (ignore timeout))
+  (let ((stream (session-stream session)))
+    (if (null stream)
+        (values nil :eof)
+        (let ((chars (make-array 64 :element-type 'character
+                                     :adjustable t :fill-pointer 0)))
+          (loop
+            (let ((ch (read-char stream nil :eof)))
+              (cond
+                ((eq ch :eof)
+                 (return (values nil :eof)))
+                ((or (char= ch #\Newline) (char= ch #\Return))
+                 (write-char #\Newline stream)
+                 (force-output stream)
+                 (return (values (coerce chars 'string) nil)))
+                (t
+                 (vector-push-extend ch chars)
+                 (write-char #\* stream)
+                 (force-output stream)))))))))
+
 (defmethod mud-write ((obj stream-session) message &key (newline t))
   (let ((stream (session-stream obj)))
     (when stream
@@ -145,10 +183,10 @@ that provide their own stream abstraction."))
                          (session-id obj) e))))))))
 
 (defmethod mud-write :after ((session mud-session) message &key (newline t))
-  "After every mud-write, issue a player-output-event so loggers can capture it."
+  "After every mud-write, issue a character-output-event so loggers can capture it."
   (declare (ignore newline))
   (let ((char (session-character session)))
-    (issue-player-output-event (session-id session)
+    (issue-character-output-event (session-id session)
                                (if char (object-name char) nil)
                                (etypecase message
                                  (string message)

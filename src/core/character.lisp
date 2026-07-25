@@ -6,26 +6,31 @@
   ((session :initarg :session
             :accessor character-session
             :initform nil
-            :documentation "The session controlling this character"))
-  (:documentation "A player character in the MUD"))
+            :documentation "The session controlling this character")
+   (owner :initarg :owner
+          :accessor character-owner
+          :initform nil
+          :documentation "The name (string) of the mud-account that owns this character.
+NIL for guest characters.  Stored as a plain string so it survives
+BKNR restarts without needing an object reference."))
+  (:documentation "A character in the MUD"))
 
-(defun new-character (name session)
+(defun new-character (name session &key owner)
   (let ((character (make-instance 'mud-character
-                                  :id (make-id)
                                   :name name
-                                  
-                                  :session session)))
-    ;; Link player to session
+                                  :session session
+                                  :owner owner)))
+    ;; Link character to session (one-way: session knows its character)
     (setf (session-character session) character)
     character))
 
-(defun player-send-message (player message &key (newline t))
-  "Send a message to a player. If NEWLINE is nil, don't add a trailing newline.
+(defun character-send-message (character message &key (newline t))
+  "Send a message to a character. If NEWLINE is nil, don't add a trailing newline.
 Honors the session's color preference by binding *COLORIZE* around the write."
-  (let ((session (character-session player)))
+  (let ((session (character-session character)))
     (let ((*colorize* (session-use-colors session)))
       (mud-write session message :newline newline))))
 
 (defmethod object-describe ((obj mud-character))
-  "Bright green for player characters."
+  "Bright green for character characters."
   (bright-green (format nil "~A (ID: ~D)" (object-name obj) (object-id obj))))

@@ -122,9 +122,9 @@
    #:npc-roll-attack
    #:find-npc-in-room
    #:combat-attack-npc
-   #:player-hp
-   #:player-max-hp
-   #:player-ensure-combat-stats
+   #:character-hp
+   #:character-max-hp
+   #:character-ensure-combat-stats
    #:build-shopping-mall
    #:build-team-rocket-cavern
 
@@ -168,17 +168,17 @@
    #:mud-wordle-puzzle
    #:new-wordle-puzzle
    #:wordle-target-word
-   #:wordle-player-guesses
+   #:wordle-character-guesses
    #:wordle-max-guesses
    #:wordle-word-list
    #:wordle-evaluate-guess
    #:wordle-guess
    #:wordle-display
    #:wordle-reset
-   #:wordle-reset-player
-   #:wordle-player-guesses-list
-   #:wordle-player-solved-p
-   #:wordle-player-failed-p
+   #:wordle-reset-character
+   #:wordle-character-guesses-list
+   #:wordle-character-solved-p
+   #:wordle-character-failed-p
    #:wordle-help-text
    #:wordle-daily-word
    #:wordle-set-daily-word!
@@ -188,6 +188,7 @@
 
    ;; Session protocols / base
    #:mud-read-line
+   #:mud-read-secret
    #:mud-write
    #:session-stream
    #:session-keepalive
@@ -207,17 +208,33 @@
    #:read-line-with-timeout-loop
    #:ask-input
 
+   ;; Account
+   #:mud-account
+   #:account-name
+   #:account-password-hash
+   #:account-email
+   #:find-account
+   #:account-exists-p
+   #:register-account
+   #:authenticate-account
+   #:hash-password
+   #:check-password
+   #:save-accounts
+   #:load-accounts
+   #:*accounts*
+
    ;; Character
    #:mud-character
    #:new-character
    #:character-session
+   #:character-owner
    #:container-contents
    #:container-add-object
    #:container-remove-object
    #:container-all-objects
    #:container-object-by-id
    #:container-objects-matching
-   #:player-send-message
+   #:character-send-message
 
    ;; World
    #:mud-world
@@ -227,20 +244,22 @@
    #:connect-west-east!
    #:world-id-counter
    #:world-config
-   #:world-players
+   #:world-characters
    #:world-objects
    #:world-rooms
    #:get-config-key
    #:world-gen-id!
    #:world-add-object!
+   #:world-remove-object!
    #:world-set-starting-room!
    #:starting-room
-   #:world-add-character!
-   #:world-total-players
+   #:place-character!
+   #:world-total-characters
    #:world-remove-character!
    #:character-by-id
    #:characters
    #:find-character-in-room
+   #:find-character-by-owner
    #:world-broadcast
    #:world-object-by-id
    #:world-object-with-name
@@ -254,7 +273,7 @@
    #:define-command
    #:parse-command
    #:process-command
-   #:*eval-player*
+   #:*eval-character*
    #:me
    #:*eval-location*
    #:here
@@ -265,8 +284,8 @@
    ;; Event system
    #:mud-event
    #:session-event
-   #:player-input-event
-   #:player-output-event
+   #:character-input-event
+   #:character-output-event
    #:session-id
    #:character-name
    #:input
@@ -281,8 +300,8 @@
    #:issue-info-event
    #:issue-error-event
    #:issue-warning-event
-   #:issue-player-input-event
-   #:issue-player-output-event
+   #:issue-character-input-event
+   #:issue-character-output-event
 
    ;; Extensibility
    #:handle-event

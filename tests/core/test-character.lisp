@@ -28,6 +28,7 @@
   (let ((world (apeiron.persistence:world-restore-or-initialize))
         (player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
-    (apeiron.core:world-add-character! world player)
+    (apeiron.core:world-add-object! world player)
+    (apeiron.core:place-character! world player)
     (is (not (null (apeiron.core:object-location player))))
     (is (typep (apeiron.core:object-location player) 'apeiron.core:mud-room))))

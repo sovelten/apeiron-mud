@@ -108,9 +108,9 @@ telnet localhost 8888
 | `inventory` | `inventory` | View carried items |
 | `examine` | `examine <name>` | Examine an object or NPC |
 | `attack` | `attack <name>` | Attack an NPC |
-| `say` | `say <message>` | Speak to other players in room |
-| `shout` | `shout <message>` | Broadcast to all players |
-| `tell` | `tell <name> <message>` | Private message to a player or object |
+| `say` | `say <message>` | Speak to other characters in room |
+| `shout` | `shout <message>` | Broadcast to all characters |
+| `tell` | `tell <name> <message>` | Private message to a character or object |
 | `read` | `read <name>` | Read a readable object (guestbook, sign, etc.) |
 | `write` | `write <name>` | Write a message on a writable object |
 | `answer` | `answer <text>` | Answer a challenge/puzzle |
@@ -203,25 +203,25 @@ In the SBCL REPL:
 Commands are defined in `src/command-handler.lisp` using the `define-command` macro:
 
 ```lisp
-(define-command "wave" (world player args)
+(define-command "wave" (world character args)
   (declare (ignore world args))
-  (player-send-message player "You wave your hand."))
+  (character-send-message character "You wave your hand."))
 ```
 
 The macro takes:
 - **Name**: Command string (will be lowercased)
-- **Parameters**: `world` (the mud-world instance), `player` (the player object), and `args` (raw argument string)
+- **Parameters**: `world` (the mud-world instance), `character` (the character object), and `args` (raw argument string)
 - **Body**: Command implementation
 
 ### Example: More Complex Command
 
 ```lisp
-(define-command "examine" (world player args)
+(define-command "examine" (world character args)
   (declare (ignore world))
   (let ((obj-name (string-trim '(#\Space #\Tab) args)))
     (if (zerop (length obj-name))
-        (player-send-message player "Examine what?")
-        (player-send-message player (format nil "You examine the ~A." obj-name)))))
+        (character-send-message character "Examine what?")
+        (character-send-message character (format nil "You examine the ~A." obj-name)))))
 ```
 
 ### Creating New Object Types
@@ -250,11 +250,11 @@ Objects have a flexible property storage system:
 
 ```lisp
 ;; Set properties
-(object-set-property player "experience" 1000)
+(object-set-property character "experience" 1000)
 (object-set-property room "dark" t)
 
 ;; Get properties
-(object-get-property player "experience")  ; → 1000
+(object-get-property character "experience")  ; → 1000
 (object-get-property room "dark")          ; → T
 ```
 
@@ -278,14 +278,14 @@ Objects have a flexible property storage system:
 
 ### Broadcasting Messages
 
-Send messages to all players:
+Send messages to all characters:
 
 ```lisp
-;; Message to all players
+;; Message to all characters
 (world-broadcast "A loud bell rings!")
 
 ;; Message to all except one
-(world-broadcast "A wizard teleports away!" except-player)
+(world-broadcast "A wizard teleports away!" except-character)
 ```
 
 ### Testing Commands
@@ -321,7 +321,7 @@ Edit `src/constants.lisp`:
 ;; Check status
 (mud:get-server-status)
 
-;; Get running players
+;; Get running characters
 (apeiron.core:characters (apeiron.persistence:get-persistent-world))
 
 ;; Get all rooms
@@ -338,7 +338,7 @@ This:
 1. Sets `*server-running*` to NIL
 2. Closes the server socket
 3. Waits for acceptance thread to exit
-4. Disconnects all players
+4. Disconnects all characters
 
 ---
 
@@ -363,7 +363,7 @@ We'll use the in-game `eval` command, which runs Lisp code inside the live serve
 1. Create a hidden room: *The Ancient Library*
 2. Create a secret diary (guestbook) and place it in the library
 3. Connect the library to **the room you are standing in** through a *crack in the wall*
-4. Lock the passage with a password challenge — players must `answer` correctly to enter
+4. Lock the passage with a password challenge — characters must `answer` correctly to enter
 
 ### Step-by-Step
 
@@ -413,11 +413,11 @@ Replace `12` and `13` with the IDs you got in steps 2 and 3.
 #<MUD-CONNECTION a crack in the wall (ID: 14)>
 ```
 
-A player in the hub room can now `go north` and find the crack, and a player in the library can `go south` back.
+A character in the hub room can now `go north` and find the crack, and a character in the library can `go south` back.
 
 #### 6. Add the password challenge
 
-Lock the connection with a password. Players must type `answer <password>` to pass:
+Lock the connection with a password. Characters must type `answer <password>` to pass:
 
 ```
 > eval (connection-set-challenge (connection-find (here) "north") "The wall whispers: 'Speak the password.'" "open-sesame" "has-heard-secret")
@@ -429,9 +429,9 @@ This sets up three things on the *crack in the wall* connection:
 
 | Property | Your value | Purpose |
 |---|---|---|
-| `challenge-question` | `"The wall whispers: 'Speak the password.'"` | Shown to players who try to pass without answering |
+| `challenge-question` | `"The wall whispers: 'Speak the password.'"` | Shown to characters who try to pass without answering |
 | `challenge-answer` | `"open-sesame"` | The correct answer (case-insensitive) |
-| `challenge-flag` | `"has-heard-secret"` | A flag set on the player after a correct answer; once set, the player can pass freely |
+| `challenge-flag` | `"has-heard-secret"` | A flag set on the character after a correct answer; once set, the character can pass freely |
 
 #### 7. Test it
 
@@ -506,11 +506,11 @@ You write your message in the diary.
 | `new-guestbook` | Create a new guestbook (entries are persisted as CSV) |
 | `world-add-object!` | Register an object/room in the world |
 | `world-object-by-id` | Look up an object by its world-level ID |
-| `container-add-object` | Place an object inside a container (room, player, etc.) |
+| `container-add-object` | Place an object inside a container (room, character, etc.) |
 | `connect-rooms!` | Create a bidirectional connection between two rooms |
 | `connection-find` | Find the connection leaving a room in a given direction |
 | `connection-set-challenge` | Lock a connection with a question/answer/flag challenge |
-| `here` | Returns the current player's room (handy in `eval`) |
+| `here` | Returns the current character's room (handy in `eval`) |
 | `world` | Returns the current world (handy in `eval`) |
 
 ### Tips
@@ -524,7 +524,7 @@ You write your message in the diary.
 
 ## Wordle Puzzle Game
 
-A Wordle-like puzzle game you can drop into any room. Each puzzle has a secret 5-letter word, and players guess it by telling the puzzle their guesses. Each player's progress is tracked independently, so everyone can play simultaneously.
+A Wordle-like puzzle game you can drop into any room. Each puzzle has a secret 5-letter word, and characters guess it by telling the puzzle their guesses. Each character's progress is tracked independently, so everyone can play simultaneously.
 
 ### Create a Wordle Puzzle
 
@@ -538,11 +538,11 @@ Use `eval` to create a puzzle and place it in your current room:
 #<MUD-WORDLE-PUZZLE a Wordle puzzle board (ID: 25)>
 ```
 
-The puzzle uses today's **daily word** — determined by the current date, so all players see the same word each day and it changes daily. Create a puzzle with `eval` and drop it in your current room:
+The puzzle uses today's **daily word** — determined by the current date, so all characters see the same word each day and it changes daily. Create a puzzle with `eval` and drop it in your current room:
 
 ### Play the Game
 
-Interact with the puzzle using the `tell` command (whisper privately to it — other players won't see your guesses):
+Interact with the puzzle using the `tell` command (whisper privately to it — other characters won't see your guesses):
 
 | Command | What it does |
 |---|---|
@@ -582,7 +582,7 @@ Speak a 5-letter word aloud (5 guesses remaining)
 You solved it in 2 guesses! The word was: CRANE
 ```
 
-When someone solves or fails the puzzle, other players in the room are notified:
+When someone solves or fails the puzzle, other characters in the room are notified:
 ```
 Alice solved the Wordle puzzle!
 ```
@@ -606,14 +606,14 @@ Create a puzzle with a specific word or custom settings:
 | Parameter | Default | Description |
 |---|---|---|
 | `:name` | `"a Wordle puzzle board"` | Display name of the puzzle |
-| `:description` | *(default description)* | What players see when examining or viewing the board |
+| `:description` | *(default description)* | What characters see when examining or viewing the board |
 | `:target-word` | today's daily word | The 5-letter word to guess (omit for date-based daily word) |
-| `:max-guesses` | `6` | How many guesses players get |
+| `:max-guesses` | `6` | How many guesses characters get |
 | `:word-list` | built-in ~500 words | A vector of valid 5-letter words to pick from |
 
 ### Reset a Puzzle
 
-Reset all player progress (keeping the same word) or set a new word:
+Reset all character progress (keeping the same word) or set a new word:
 
 ```
 > eval (wordle-reset (world-object-with-name (world) "Riddle Sphinx"))
@@ -640,7 +640,7 @@ Find a room by name and place the puzzle there:
 
 ### Persistence
 
-Wordle puzzles are fully persistent. The word list and max guesses are saved to the BKNR datastore. Per-player guess state and the daily word are ephemeral (the puzzle recalculates its daily word on server restart). If you want a permanent fixed word, pass `:target-word` explicitly when creating the puzzle. To add a puzzle to the default world permanently, include it in the world builder function in `src/worlds/world-areas.lisp`.
+Wordle puzzles are fully persistent. The word list and max guesses are saved to the BKNR datastore. Per-character guess state and the daily word are ephemeral (the puzzle recalculates its daily word on server restart). If you want a permanent fixed word, pass `:target-word` explicitly when creating the puzzle. To add a puzzle to the default world permanently, include it in the world builder function in `src/worlds/world-areas.lisp`.
 
 ---
 

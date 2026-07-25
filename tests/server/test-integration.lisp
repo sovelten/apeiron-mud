@@ -18,7 +18,15 @@
            ;; Wait a moment for connection to establish and negotiation to complete
            (sleep 0.5)
            
-           ;; Server should ask for name (telnet-read-line strips IAC negotiation)
+           ;; Server should present login prompt
+           (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)
+             (is (not (null line)))
+             (is (search "Choose:" line)))
+           
+           ;; Choose guest
+           (telnet:telnet-write-string client-conn "g")
+           
+           ;; Server should ask for name
            (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)
              (is (not (null line)))
              (is (equal line "What is your name?")))
@@ -45,32 +53,36 @@
              (setf prompt-char (telnet:telnet-read-char client-conn :timeout 2))
              (is (char= prompt-char #\Space)))
            
-           ;; Verify player exists in the world
+           ;; Verify character exists in the world
            (let* ((world (apeiron.persistence:get-persistent-world))
-                  (player (loop for p being the hash-values of (apeiron.core:world-players world)
+                  (character (loop for p being the hash-values of (apeiron.core:world-characters world)
                                when (equal (apeiron.core:object-name p) "QuitTestPlayer")
                                  return p)))
-             (is (not (null player)))
-             
-             ;; Now send "quit"
-             (telnet:telnet-write-string client-conn "quit")
-             
-             ;; Server should send "Goodbye!"
-             (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)
-               (declare (ignore status))
-               (is (string= line "Goodbye!")))
-             
-             ;; Wait for session thread to cleanup
-             (sleep 0.5)
-             
-             ;; Verify player is removed from the world
-             (is (not (gethash (apeiron.core:object-id player) (apeiron.core:world-players world))))))
+             (is (not (null character)))
+
+             ;; Save the character's ID before quit — the quit command
+             ;; destroys the BKNR object for guest characters, so slot
+             ;; access afterward would fail.
+             (let ((char-id (apeiron.core:object-id character)))
+               ;; Now send "quit"
+               (telnet:telnet-write-string client-conn "quit")
+
+               ;; Server should send "Goodbye!"
+               (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)
+                 (declare (ignore status))
+                 (is (string= line "Goodbye!")))
+
+               ;; Wait for session thread to cleanup
+               (sleep 0.5)
+
+               ;; Verify character is removed from the world
+               (is (not (gethash char-id (apeiron.core:world-characters world)))))))
       ;; Cleanup
       (when client-conn (telnet:telnet-connection-close client-conn))
       (when client-socket (usocket:socket-close client-socket))
       (apeiron.server:stop-mud-server))))
 
-(test player-contextual-eval
+(test character-contextual-eval
   "Test evaluation of (me) command, returning the player character"
   (apeiron.server:stop-mud-server)
   (is (apeiron.server:start-mud-server :host "127.0.0.1" :port 0))
@@ -86,13 +98,21 @@
            ;; Wait a moment for connection to establish and negotiation to complete
            (sleep 0.5)
 
-           ;; Server should ask for name (telnet-read-line strips IAC negotiation)
+           ;; Server should present login prompt
+           (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)
+             (is (not (null line)))
+             (is (search "Choose:" line)))
+           
+           ;; Choose guest
+           (telnet:telnet-write-string client-conn "g")
+           
+           ;; Server should ask for name
            (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)
              (is (not (null line)))
              (is (equal line "What is your name?")))
 
-           ;; Send player name
-           (telnet:telnet-write-string client-conn "TestPlayer")
+           ;; Send character name
+           (telnet:telnet-write-string client-conn "TestCharacter")
 
            ;; Server should create character and send room description and greeting
            (sleep 0.2)
@@ -113,20 +133,20 @@
              (setf prompt-char (telnet:telnet-read-char client-conn :timeout 2))
              (is (char= prompt-char #\Space)))
 
-           ;; Verify player interactions
+           ;; Verify character interactions
            (let* ((world (apeiron.persistence:get-persistent-world))
-                  (player (loop for p being the hash-values of (apeiron.core:world-players world)
-                                when (equal (apeiron.core:object-name p) "TestPlayer")
+                  (character (loop for p being the hash-values of (apeiron.core:world-characters world)
+                                when (equal (apeiron.core:object-name p) "TestCharacter")
                                   return p)))
-             (is (not (null player)))
+             (is (not (null character)))
 
              ;; Now send eval
              (telnet:telnet-write-string client-conn "eval (object-name (me))")
 
-             ;; Server should respond with player name
+             ;; Server should respond with character name
              (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)
                (declare (ignore status))
-               (is (string= line "TestPlayer")))
+               (is (string= line "TestCharacter")))
 
              ;; Consume prompt before next command
              (let ((prompt-char nil))
@@ -138,10 +158,10 @@
              ;; (here) should bind to current location
              (telnet:telnet-write-string client-conn "eval (object-name (here))")
 
-             ;; Server should respond with player location name
+             ;; Server should respond with character location name
              (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)
                (declare (ignore status))
-               (is (string= line (object-name (object-location player)))))))
+               (is (string= line (object-name (object-location character)))))))
 
       ;; Cleanup
       (when client-conn (telnet:telnet-connection-close client-conn))
@@ -163,34 +183,45 @@
            
            (sleep 0.5)
            
+           ;; Server should present login prompt
+           (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)
+             (is (not (null line)))
+             (is (search "Choose:" line)))
+           
+           ;; Choose guest
+           (telnet:telnet-write-string client-conn "g")
+           
            ;; Server should ask for name
            (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)
              (is (not (null line)))
              (is (equal line "What is your name?")))
            
-           ;; Send player name
-           (telnet:telnet-write-string client-conn "AbruptPlayer")
+           ;; Send character name
+           (telnet:telnet-write-string client-conn "AbruptCharacter")
            
            (sleep 0.3)
            
-           ;; Verify player is in world
+           ;; Verify character is in world
            (let* ((world (apeiron.persistence:get-persistent-world))
-                  (player (loop for p being the hash-values of (apeiron.core:world-players world)
-                                when (equal (apeiron.core:object-name p) "AbruptPlayer")
+                  (character (loop for p being the hash-values of (apeiron.core:world-characters world)
+                                when (equal (apeiron.core:object-name p) "AbruptCharacter")
                                   return p)))
-             (is (not (null player)))
-             
-             ;; Now close client connection abruptly without quitting!
-             (telnet:telnet-connection-close client-conn)
-             (usocket:socket-close client-socket)
-             (setf client-conn nil
-                   client-socket nil)
-             
-             ;; Wait for server loop to detect EOF / socket error and run cleanup
-             (sleep 0.5)
-             
-             ;; Verify player is cleaned up from the world
-             (is (not (gethash (apeiron.core:object-id player) (apeiron.core:world-players world))))))
+             (is (not (null character)))
+
+             ;; Save ID before disconnect — the cleanup destroys the
+             ;; BKNR object for guest characters.
+             (let ((char-id (apeiron.core:object-id character)))
+               ;; Now close client connection abruptly without quitting!
+               (telnet:telnet-connection-close client-conn)
+               (usocket:socket-close client-socket)
+               (setf client-conn nil
+                     client-socket nil)
+
+               ;; Wait for server loop to detect EOF / socket error and run cleanup
+               (sleep 0.5)
+
+               ;; Verify character is cleaned up from the world
+               (is (not (gethash char-id (apeiron.core:world-characters world)))))))
       ;; Cleanup
       (when client-conn (telnet:telnet-connection-close client-conn))
       (when client-socket (usocket:socket-close client-socket))

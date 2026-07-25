@@ -1480,12 +1480,12 @@ after the method word). This prevents false positives on real user input."
       (close-test-connection conn write-stream))))
 
 ;; ----------------------------------------------------------------------
-;; Test: Non-HTTP uppercase text (like a player name) is accepted
+;; Test: Non-HTTP uppercase text (like a character name) is accepted
 ;; ----------------------------------------------------------------------
 
 (test telnet-validate-accepts-uppercase-name
   "telnet-validate-connection should accept a connection whose first
-word starts with uppercase and looks like a player name, not an HTTP method."
+word starts with uppercase and looks like a character name, not an HTTP method."
   (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
     (unwind-protect
          (progn
@@ -1495,7 +1495,7 @@ word starts with uppercase and looks like a player name, not an HTTP method."
                              "Gandalf"))
            (sleep 0.1)
            (is-true (telnet:telnet-validate-connection conn :timeout 2)
-                    "Player name starting with uppercase should be accepted"))
+                    "Character name starting with uppercase should be accepted"))
       (close-test-connection conn write-stream))))
 
 ;; ----------------------------------------------------------------------

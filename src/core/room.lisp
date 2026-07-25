@@ -43,11 +43,11 @@
                  
                  :location nil))
 
-(defun find-character-in-room (room player-name)
-  "Find a player in a room by name."
+(defun find-character-in-room (room character-name)
+  "Find a character in a room by name."
   (loop for obj in (container-all-objects room)
         when (and (typep obj 'mud-character)
-                  (string-equal (object-name obj) player-name))
+                  (string-equal (object-name obj) character-name))
         return obj))
 
 (defun room-exit-target (room direction)
@@ -65,28 +65,28 @@ DIRECTION is a lowercase string, CONNECTION is the MUD-CONNECTION."
   (loop for conn in (room-connections room)
         collect (list (connection-direction-to conn room) conn)))
 
-(defun room-exit-blocked-p (room player direction)
-  "Return a blocking message if the player cannot use this exit yet.
+(defun room-exit-blocked-p (room character direction)
+  "Return a blocking message if the character cannot use this exit yet.
 
 Three independent checks:
 1. Regular block — the connection is blocked for everyone (locked door)
-2. Challenge block — the connection requires a flag the player doesn't have (riddle)
-3. Flag gate — the room requires a flag the player doesn't have (defeat NPC)"
+2. Challenge block — the connection requires a flag the character doesn't have (riddle)
+3. Flag gate — the room requires a flag the character doesn't have (defeat NPC)"
   (let* ((dir (string-downcase direction))
          (conn (connection-find room dir)))
     (or
      ;; 1. Regular block — blocked for everyone
      (connection-exit-blocked-message room dir)
-     ;; 2. Challenge block — stored on the connection, per-player
+     ;; 2. Challenge block — stored on the connection, per-character
      (when conn
        (let ((challenge-flag (object-get-property conn "challenge-flag")))
          (when (and challenge-flag
-                    (not (object-get-property player challenge-flag)))
+                    (not (object-get-property character challenge-flag)))
            (or (object-get-property conn "challenge-question")
                "A challenge blocks your way. Try: answer <your answer>"))))
      ;; 3. Flag-based gate — stored on the room
      (let ((required-flag (object-get-property room (format nil "gate-~A" dir))))
-       (when (and required-flag (not (object-get-property player required-flag)))
+       (when (and required-flag (not (object-get-property character required-flag)))
          (or (object-get-property room (format nil "gate-~A-message" dir))
              (format nil "Something blocks the ~A exit. You are not ready to pass."
                      direction)))))))

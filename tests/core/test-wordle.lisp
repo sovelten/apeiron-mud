@@ -107,7 +107,7 @@
   "A valid guess returns :continue when not solved"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
     (multiple-value-bind (display result-code)
-        (wordle-guess puzzle "TestPlayer" "train")
+        (wordle-guess puzzle "TestCharacter" "train")
       (declare (ignore display))
       (is (eq :continue result-code)))))
 
@@ -115,34 +115,34 @@
   "Correct guess returns :solved"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
     (multiple-value-bind (display result-code)
-        (wordle-guess puzzle "TestPlayer" "crane")
+        (wordle-guess puzzle "TestCharacter" "crane")
       (declare (ignore display))
       (is (eq :solved result-code)))))
 
 (test wordle-guess-failed
   "Running out of guesses returns :failed"
   (let ((puzzle (make-test-puzzle :target-word "crane" :max-guesses 2)))
-    (wordle-guess puzzle "TestPlayer" "train")
+    (wordle-guess puzzle "TestCharacter" "train")
     (multiple-value-bind (display result-code)
-        (wordle-guess puzzle "TestPlayer" "dumpy")
+        (wordle-guess puzzle "TestCharacter" "dumpy")
       (declare (ignore display))
       (is (eq :failed result-code)))))
 
 (test wordle-guess-already-solved
   "Guessing after already solved returns :already"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
-    (wordle-guess puzzle "TestPlayer" "crane")
+    (wordle-guess puzzle "TestCharacter" "crane")
     (multiple-value-bind (display result-code)
-        (wordle-guess puzzle "TestPlayer" "crane")
+        (wordle-guess puzzle "TestCharacter" "crane")
       (declare (ignore display))
       (is (eq :already result-code)))))
 
 (test wordle-guess-already-failed
   "Guessing after already failed returns :already"
   (let ((puzzle (make-test-puzzle :target-word "crane" :max-guesses 1)))
-    (wordle-guess puzzle "TestPlayer" "dumpy")
+    (wordle-guess puzzle "TestCharacter" "dumpy")
     (multiple-value-bind (display result-code)
-        (wordle-guess puzzle "TestPlayer" "train")
+        (wordle-guess puzzle "TestCharacter" "train")
       (declare (ignore display))
       (is (eq :already result-code)))))
 
@@ -150,11 +150,11 @@
   "Wrong length returns :invalid"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
     (multiple-value-bind (display result-code)
-        (wordle-guess puzzle "TestPlayer" "cr")
+        (wordle-guess puzzle "TestCharacter" "cr")
       (declare (ignore display))
       (is (eq :invalid result-code)))
     (multiple-value-bind (display result-code)
-        (wordle-guess puzzle "TestPlayer" "cranes")
+        (wordle-guess puzzle "TestCharacter" "cranes")
       (declare (ignore display))
       (is (eq :invalid result-code)))))
 
@@ -162,16 +162,16 @@
   "Non-alpha characters return :invalid"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
     (multiple-value-bind (display result-code)
-        (wordle-guess puzzle "TestPlayer" "cran3")
+        (wordle-guess puzzle "TestCharacter" "cran3")
       (declare (ignore display))
       (is (eq :invalid result-code)))))
 
 (test wordle-guess-repeat
   "Repeating a previous guess returns :repeat"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
-    (wordle-guess puzzle "TestPlayer" "train")
+    (wordle-guess puzzle "TestCharacter" "train")
     (multiple-value-bind (display result-code)
-        (wordle-guess puzzle "TestPlayer" "train")
+        (wordle-guess puzzle "TestCharacter" "train")
       (declare (ignore display))
       (is (eq :repeat result-code)))))
 
@@ -179,7 +179,7 @@
   "Guess is trimmed of whitespace"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
     (multiple-value-bind (display result-code)
-        (wordle-guess puzzle "TestPlayer" "  crane  ")
+        (wordle-guess puzzle "TestCharacter" "  crane  ")
       (declare (ignore display))
       (is (eq :solved result-code)))))
 
@@ -187,53 +187,53 @@
   "Guess is case-insensitive"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
     (multiple-value-bind (display result-code)
-        (wordle-guess puzzle "TestPlayer" "CRANE")
+        (wordle-guess puzzle "TestCharacter" "CRANE")
       (declare (ignore display))
       (is (eq :solved result-code)))))
 
-;; ─── Per-player state
+;; ─── Per-character state
 
-(test wordle-per-player-independent
-  "Two players' guesses are tracked independently"
+(test wordle-per-character-independent
+  "Two characters' guesses are tracked independently"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
     (wordle-guess puzzle "Alice" "train")
     (wordle-guess puzzle "Bob" "crane")
-    (is-false (wordle-player-solved-p puzzle "Alice"))
-    (is-true (wordle-player-solved-p puzzle "Bob"))
-    (is (= 1 (length (wordle-player-guesses-list puzzle "Alice"))))
-    (is (= 1 (length (wordle-player-guesses-list puzzle "Bob"))))))
+    (is-false (wordle-character-solved-p puzzle "Alice"))
+    (is-true (wordle-character-solved-p puzzle "Bob"))
+    (is (= 1 (length (wordle-character-guesses-list puzzle "Alice"))))
+    (is (= 1 (length (wordle-character-guesses-list puzzle "Bob"))))))
 
-(test wordle-per-player-different-outcomes
-  "One player can solve while another fails"
+(test wordle-per-character-different-outcomes
+  "One character can solve while another fails"
   (let ((puzzle (make-test-puzzle :target-word "crane" :max-guesses 2)))
     (wordle-guess puzzle "Bob" "dumpy")
     (wordle-guess puzzle "Bob" "train")
     (wordle-guess puzzle "Alice" "crane")
-    (is-true (wordle-player-failed-p puzzle "Bob"))
-    (is-true (wordle-player-solved-p puzzle "Alice"))))
+    (is-true (wordle-character-failed-p puzzle "Bob"))
+    (is-true (wordle-character-solved-p puzzle "Alice"))))
 
 ;; ─── Display
 
 (test wordle-display-header
   "Display includes puzzle name and description"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
-    (let ((display (wordle-display puzzle "TestPlayer")))
+    (let ((display (wordle-display puzzle "TestCharacter")))
       (is (search "a test wordle board" display))
       (is (search "A test board for wordle." display)))))
 
 (test wordle-display-remaining-slots
   "Display shows empty slots for remaining guesses"
   (let ((puzzle (make-test-puzzle :target-word "crane" :max-guesses 3)))
-    (wordle-guess puzzle "TestPlayer" "train")
-    (let ((display (wordle-display puzzle "TestPlayer")))
+    (wordle-guess puzzle "TestCharacter" "train")
+    (let ((display (wordle-display puzzle "TestCharacter")))
       (is (search "Speak a 5-letter word" display))
       (is (search "2 guesses remaining" display)))))
 
 (test wordle-display-solved-message
   "Display shows solved message with shareable result"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
-    (wordle-guess puzzle "TestPlayer" "crane")
-    (let ((display (wordle-display puzzle "TestPlayer")))
+    (wordle-guess puzzle "TestCharacter" "crane")
+    (let ((display (wordle-display puzzle "TestCharacter")))
       (is (search "I solved it" display))
       ;; Should NOT reveal the word
       (is (not (search "CRANE" display)))
@@ -243,8 +243,8 @@
 (test wordle-display-failed-message
   "Display shows failure message with shareable result"
   (let ((puzzle (make-test-puzzle :target-word "crane" :max-guesses 1)))
-    (wordle-guess puzzle "TestPlayer" "dumpy")
-    (let ((display (wordle-display puzzle "TestPlayer")))
+    (wordle-guess puzzle "TestCharacter" "dumpy")
+    (let ((display (wordle-display puzzle "TestCharacter")))
       (is (search "Out of guesses" display))
       ;; Should NOT reveal the word
       (is (not (search "CRANE" display))))))
@@ -252,23 +252,23 @@
 ;; ─── Reset
 
 (test wordle-reset-all
-  "Reset clears all players and optionally sets a new word"
+  "Reset clears all characters and optionally sets a new word"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
     (wordle-guess puzzle "Alice" "crane")
     (wordle-guess puzzle "Bob" "train")
     (wordle-reset puzzle :new-word "quest")
-    (is-false (wordle-player-solved-p puzzle "Alice"))
-    (is-false (wordle-player-solved-p puzzle "Bob"))
+    (is-false (wordle-character-solved-p puzzle "Alice"))
+    (is-false (wordle-character-solved-p puzzle "Bob"))
     (is (equal "quest" (wordle-target-word puzzle)))))
 
-(test wordle-reset-player
-  "Reset-player clears a single player's state"
+(test wordle-reset-character
+  "Reset-character clears a single character's state"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
     (wordle-guess puzzle "Alice" "crane")
     (wordle-guess puzzle "Bob" "train")
-    (wordle-reset-player puzzle "Alice")
-    (is-false (wordle-player-solved-p puzzle "Alice"))
-    (is-true (wordle-player-guesses-list puzzle "Bob"))
+    (wordle-reset-character puzzle "Alice")
+    (is-false (wordle-character-solved-p puzzle "Alice"))
+    (is-true (wordle-character-guesses-list puzzle "Bob"))
     (is (equal "crane" (wordle-target-word puzzle)))))
 
 ;; ─── Handle-tell
@@ -278,42 +278,42 @@
   (let* ((session (make-instance 'stream-session
                                  :stream (make-string-output-stream)
                                  :use-colors nil))
-         (player (new-character "TestPlayer" session))
+         (character (new-character "TestCharacter" session))
          (puzzle (make-test-puzzle :target-word "crane"))
          (room (new-room :name "test"))
          captured-messages)
-    (setf (object-location player) room)
+    (setf (object-location character) room)
     (flet ((mock-send (p msg &key newline)
              (declare (ignore p newline))
              (push msg captured-messages)))
-      (let ((old (fdefinition 'player-send-message)))
-        (setf (fdefinition 'player-send-message) #'mock-send)
+      (let ((old (fdefinition 'character-send-message)))
+        (setf (fdefinition 'character-send-message) #'mock-send)
         (unwind-protect
              (progn
-               (is-true (handle-tell puzzle player "crane"))
+               (is-true (handle-tell puzzle character "crane"))
                (is (search "I solved it" (car captured-messages))))
-          (setf (fdefinition 'player-send-message) old))))))
+          (setf (fdefinition 'character-send-message) old))))))
 
 (test wordle-handle-tell-non-word-ignored
   "handle-tell returns nil for non-5-letter messages"
   (let* ((session (make-instance 'stream-session
                                  :stream (make-string-output-stream)))
-         (player (new-character "TestPlayer" session))
+         (character (new-character "TestCharacter" session))
          (puzzle (make-test-puzzle :target-word "crane")))
-    (is-false (handle-tell puzzle player "hello there"))
-    (is-false (handle-tell puzzle player "hi"))
-    (is-false (handle-tell puzzle player "a b c d e"))
-    (is-false (handle-tell puzzle player ""))))
+    (is-false (handle-tell puzzle character "hello there"))
+    (is-false (handle-tell puzzle character "hi"))
+    (is-false (handle-tell puzzle character "a b c d e"))
+    (is-false (handle-tell puzzle character ""))))
 
 (test wordle-handle-tell-non-alpha-ignored
   "handle-tell returns nil for non-alpha 5-char strings"
   (let* ((session (make-instance 'stream-session
                                  :stream (make-string-output-stream)))
-         (player (new-character "TestPlayer" session))
+         (character (new-character "TestCharacter" session))
          (puzzle (make-test-puzzle :target-word "crane")))
-    (is-false (handle-tell puzzle player "12345"))
-    (is-false (handle-tell puzzle player "cr@ne"))
-    (is-false (handle-tell puzzle player "cra?e"))))
+    (is-false (handle-tell puzzle character "12345"))
+    (is-false (handle-tell puzzle character "cr@ne"))
+    (is-false (handle-tell puzzle character "cra?e"))))
 
 ;; ─── Edge cases
 
@@ -321,34 +321,34 @@
   "Empty guess string returns :invalid"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
     (multiple-value-bind (display result-code)
-        (wordle-guess puzzle "TestPlayer" "")
+        (wordle-guess puzzle "TestCharacter" "")
       (declare (ignore display))
       (is (eq :invalid result-code)))))
 
-(test wordle-player-data-auto-creates
-  "Player data is auto-created on first access"
+(test wordle-character-data-auto-creates
+  "Character data is auto-created on first access"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
-    (is (null (wordle-player-guesses-list puzzle "NewPlayer")))
-    (is (eq 0 (length (wordle-player-guesses-list puzzle "NewPlayer"))))
-    (is-false (wordle-player-solved-p puzzle "NewPlayer"))
-    (is-false (wordle-player-failed-p puzzle "NewPlayer"))))
+    (is (null (wordle-character-guesses-list puzzle "NewCharacter")))
+    (is (eq 0 (length (wordle-character-guesses-list puzzle "NewCharacter"))))
+    (is-false (wordle-character-solved-p puzzle "NewCharacter"))
+    (is-false (wordle-character-failed-p puzzle "NewCharacter"))))
 
 (test wordle-solved-then-repeat-returns-already
   "After solving, any further guess returns :already (not :repeat)"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
-    (wordle-guess puzzle "TestPlayer" "crane")
+    (wordle-guess puzzle "TestCharacter" "crane")
     (multiple-value-bind (display result-code)
-        (wordle-guess puzzle "TestPlayer" "train")
+        (wordle-guess puzzle "TestCharacter" "train")
       (declare (ignore display))
       (is (eq :already result-code)))))
 
 (test wordle-max-guesses-exact
   "Guessing exactly max-guesses times then failing works"
   (let ((puzzle (make-test-puzzle :target-word "crane" :max-guesses 3)))
-    (wordle-guess puzzle "TestPlayer" "dumpy")
-    (wordle-guess puzzle "TestPlayer" "train")
+    (wordle-guess puzzle "TestCharacter" "dumpy")
+    (wordle-guess puzzle "TestCharacter" "train")
     (multiple-value-bind (display result-code)
-        (wordle-guess puzzle "TestPlayer" "noble")
+        (wordle-guess puzzle "TestCharacter" "noble")
       (declare (ignore display))
       (is (eq :failed result-code)))))
 
@@ -366,66 +366,66 @@
   (let* ((session (make-instance 'stream-session
                                  :stream (make-string-output-stream)
                                  :use-colors nil))
-         (player (new-character "TestPlayer" session))
+         (character (new-character "TestCharacter" session))
          (puzzle (make-test-puzzle :target-word "crane"))
          captured-messages)
     (flet ((mock-send (p msg &key newline)
              (declare (ignore p newline))
              (push msg captured-messages)))
-      (let ((old (fdefinition 'player-send-message)))
-        (setf (fdefinition 'player-send-message) #'mock-send)
+      (let ((old (fdefinition 'character-send-message)))
+        (setf (fdefinition 'character-send-message) #'mock-send)
         (unwind-protect
              (progn
-               (is-true (handle-tell puzzle player "help"))
+               (is-true (handle-tell puzzle character "help"))
                (is (search "How to play" (car captured-messages)))
                (is (search "Guess the 5-letter word" (car captured-messages))))
-          (setf (fdefinition 'player-send-message) old))))))
+          (setf (fdefinition 'character-send-message) old))))))
 
 (test wordle-handle-tell-show
   "handle-tell responds to 'show' with the puzzle state"
   (let* ((session (make-instance 'stream-session
                                  :stream (make-string-output-stream)
                                  :use-colors nil))
-         (player (new-character "TestPlayer" session))
+         (character (new-character "TestCharacter" session))
          (puzzle (make-test-puzzle :target-word "crane"))
          captured-messages)
     (flet ((mock-send (p msg &key newline)
              (declare (ignore p newline))
              (push msg captured-messages)))
-      (let ((old (fdefinition 'player-send-message)))
-        (setf (fdefinition 'player-send-message) #'mock-send)
+      (let ((old (fdefinition 'character-send-message)))
+        (setf (fdefinition 'character-send-message) #'mock-send)
         (unwind-protect
              (progn
-               (is-true (handle-tell puzzle player "show"))
+               (is-true (handle-tell puzzle character "show"))
                (is (search "a test wordle board" (car captured-messages)))
                (is (search "Speak a 5-letter word" (car captured-messages))))
-          (setf (fdefinition 'player-send-message) old))))))
+          (setf (fdefinition 'character-send-message) old))))))
 
 (test wordle-handle-tell-five-letter-not-command
   "A 5-letter word like 'board' or 'state' is treated as a guess, not a command"
   (let* ((session (make-instance 'stream-session
                                  :stream (make-string-output-stream)
                                  :use-colors nil))
-         (player (new-character "TestPlayer" session))
+         (character (new-character "TestCharacter" session))
          (puzzle (make-test-puzzle :target-word "crane"))
          captured-messages)
     (flet ((mock-send (p msg &key newline)
              (declare (ignore p newline))
              (push msg captured-messages)))
-      (let ((old (fdefinition 'player-send-message)))
-        (setf (fdefinition 'player-send-message) #'mock-send)
+      (let ((old (fdefinition 'character-send-message)))
+        (setf (fdefinition 'character-send-message) #'mock-send)
         (unwind-protect
              (progn
-               (is-true (handle-tell puzzle player "show"))
+               (is-true (handle-tell puzzle character "show"))
                (is (search "Speak a 5-letter word" (car captured-messages)))
                (setf captured-messages '())
-               (is-true (handle-tell puzzle player "board"))
+               (is-true (handle-tell puzzle character "board"))
                (is (search "=== a test wordle board" (car captured-messages)))
                (is (search "b o a r d" (car captured-messages)))
                (setf captured-messages '())
-               (is-true (handle-tell puzzle player "state"))
+               (is-true (handle-tell puzzle character "state"))
                (is (search "s t a t e" (car captured-messages))))
-          (setf (fdefinition 'player-send-message) old))))))
+          (setf (fdefinition 'character-send-message) old))))))
 
 (test wordle-daily-word-deterministic
   "Daily word is deterministic for the same date"
@@ -437,7 +437,7 @@
     (is (equal "berry" (wordle-daily-word word-list time-1)))))
 
 (test wordle-daily-rotation
-  "After solving, when a new day arrives, the player sees a fresh puzzle"
+  "After solving, when a new day arrives, the character sees a fresh puzzle"
   (let* ((word-list (vector "apple" "berry" "crane" "dance" "eagle"))
          (day-1 (encode-universal-time 0 0 0 15 6 2026))
          (day-2 (encode-universal-time 0 0 0 16 6 2026))
@@ -446,22 +446,22 @@
          (session (make-instance 'stream-session
                                  :stream (make-string-output-stream)
                                  :use-colors nil))
-         (player (new-character "TestPlayer" session)))
+         (character (new-character "TestCharacter" session)))
     (setf (wordle-word-date puzzle) (wordle-date-key day-1))
     (setf (wordle-target-word puzzle) (wordle-daily-word word-list day-1))
     (let ((*wordle-override-time* day-1))
       (multiple-value-bind (display result-code)
-          (wordle-guess puzzle "TestPlayer" (wordle-daily-word word-list day-1))
+          (wordle-guess puzzle "TestCharacter" (wordle-daily-word word-list day-1))
         (declare (ignore display))
         (is (eq :solved result-code))
-        (is-true (wordle-player-solved-p puzzle "TestPlayer"))))
+        (is-true (wordle-character-solved-p puzzle "TestCharacter"))))
     (let ((*wordle-override-time* day-2))
-      (wordle-display puzzle "TestPlayer")
-      (is-false (wordle-player-solved-p puzzle "TestPlayer"))
+      (wordle-display puzzle "TestCharacter")
+      (is-false (wordle-character-solved-p puzzle "TestCharacter"))
       (is (equal (wordle-daily-word word-list day-2)
                  (wordle-target-word puzzle)))
       (multiple-value-bind (display result-code)
-          (wordle-guess puzzle "TestPlayer" (wordle-daily-word word-list day-2))
+          (wordle-guess puzzle "TestCharacter" (wordle-daily-word word-list day-2))
         (declare (ignore display))
         (is (eq :solved result-code))))))
 
@@ -478,7 +478,7 @@
   (let ((puzzle (make-test-puzzle :target-word "crane")))
     (wordle-guess puzzle "Alice" "crane")
     (wordle-set-daily-word! puzzle)
-    (is-false (wordle-player-solved-p puzzle "Alice"))
+    (is-false (wordle-character-solved-p puzzle "Alice"))
     (is (not (equal "crane" (wordle-target-word puzzle))))))
 
 (test wordle-creation-uses-daily-word

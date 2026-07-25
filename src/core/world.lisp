@@ -9,10 +9,10 @@
            :accessor world-config
            :initform (make-hash-table :test #'eq)
            :documentation "Configuration hash table (keys are keywords).")
-   (players :initarg :players
-            :accessor world-players
+   (characters :initarg :characters
+            :accessor world-characters
             :initform (make-hash-table :test #'equal)
-            :documentation "Stores all online/active players in world")
+            :documentation "Stores all online/active characters in world")
    (objects :initarg :objects
             :accessor world-objects
             :initform (make-hash-table :test #'eql)
@@ -44,6 +44,9 @@ indices, and return the object."
   ;; Also register in rooms hash table if it's a room
   (when (typep object 'mud-room)
     (setf (gethash (object-id object) (world-rooms world)) object))
+  ;; Also register in characters hash table if it's a character
+  (when (typep object 'mud-character)
+    (setf (gethash (object-id object) (world-characters world)) object))
   object)
 
 (defgeneric connect-rooms! (world room-a direction-a room-b direction-b
@@ -55,7 +58,7 @@ DIRECTION-B is the direction name from ROOM-B to ROOM-A (e.g. \"south\").
 SYNONYMS-A and SYNONYMS-B are lists of alternative names for each direction
 (e.g. '(\"n\") for \"north\").
 When BLOCKED is true the passage starts blocked and cannot be traversed.
-BLOCKED-MESSAGE is shown to players when they try to pass.
+BLOCKED-MESSAGE is shown to characters when they try to pass.
 
 The connection is linked into both rooms' CONNECTIONS lists and
 registered in the world.
@@ -101,43 +104,83 @@ Synonyms: \"e\" from west-room, \"w\" from east-room."
   "Get the starting room of the world."
   (world-room-by-id world (get-config-key world :starting-room-id)))
 
-(defun world-add-character! (world character)
-  "Add a character to the world, placing them in the starting room."
+(defun place-character! (world character)
+  "Place CHARACTER in the world's starting room and return the character.
+The character must already be registered in the world (via CREATE-OBJECT!
+or WORLD-ADD-OBJECT!).  This only sets location and room membership —
+it does not assign IDs or index into world tables."
   (let ((room (starting-room world)))
-    (if room
-        (progn
-          (setf (object-location character) room)
-          (container-add-object room character))
-        (log-error "No starting room set for world — cannot place ~A" (object-name character)))
-    (setf (gethash (object-id character) (world-players world)) character)))
+    (when room
+      (setf (object-location character) room)
+      (container-add-object room character))
+    character))
 
-(defun world-total-players (world)
-  (hash-table-count (world-players world)))
+(defun find-character-by-owner (world account-name)
+  "Find a character in the world owned by ACCOUNT-NAME (a string), or NIL."
+  (loop for char being the hash-values of (world-characters world)
+        when (and (character-owner char)
+                  (string-equal (character-owner char) account-name))
+        return char))
 
-(defun world-remove-character! (world character)
-  "Remove a player from the world."
+(defun world-total-characters (world)
+  "Count active (online) characters — those with a live session."
+  (loop for character being the hash-values of (world-characters world)
+        count (character-session character)))
+
+(defgeneric world-remove-object! (world object)
+  (:documentation
+   "Remove OBJECT from all world indices (world-objects, world-characters,
+world-rooms).  The default method handles hash-table removal; the
+persistence layer specialises this to also destroy the BKNR object.
+Returns the removed OBJECT.")
+  (:method (world object)
+    (remhash (object-id object) (world-objects world))
+    (when (typep object 'mud-character)
+      (remhash (object-id object) (world-characters world)))
+    (when (typep object 'mud-room)
+      (remhash (object-id object) (world-rooms world)))
+    (log-message "~A removed from world indices" (object-name object))
+    object))
+
+(defun displace-character! (character)
+  "Remove CHARACTER from their current room location.
+Sets location to NIL and removes from the room's contents.  Does NOT
+touch world indices — use WORLD-REMOVE-OBJECT! for that."
   (let ((room (object-location character)))
-    ;; Remove from room
     (when (typep room 'mud-room)
       (container-remove-object room character))
-    ;; Remove from world
-    (remhash (object-id character) (world-players world))
-    (log-message "~A removed from world" (object-name character))))
+    (setf (object-location character) nil)))
+
+(defun world-remove-character! (world character)
+  "Remove a character from the world.
+Owned characters (with a non-nil OWNER) are displaced from their room
+but kept in world indices. Guest characters (no owner) are completely
+removed"
+  (let ((name (object-name character)))
+    (displace-character! character)
+    (if (character-owner character)
+        ;; Owned: stay in world indices
+        (log-message "~A displaced from world" name)
+        ;; Guest: remove from indices
+        (progn
+          (world-remove-object! world character)
+          (log-message "~A removed from world" name)))))
 
 (defun character-by-id (world char-id)
-  "Get a player by ID."
-  (gethash char-id (world-players world)))
+  "Get a character by ID."
+  (gethash char-id (world-characters world)))
 
 (defun characters (world)
-  "Get all active players."
-  (loop for player being the hash-values of (world-players world)
-        collect player))
+  "Get all active (online) characters — those with a live session."
+  (loop for character being the hash-values of (world-characters world)
+        when (character-session character)
+        collect character))
 
-(defun world-broadcast (world message &optional exclude-player)
-  "Broadcast a message to all players (optionally excluding one)."
-  (dolist (player (characters world))
-    (unless (and exclude-player (eq (object-id player) (object-id exclude-player)))
-      (player-send-message player message))))
+(defun world-broadcast (world message &optional exclude-character)
+  "Broadcast a message to all characters (optionally excluding one)."
+  (dolist (character (characters world))
+    (unless (and exclude-character (eq (object-id character) (object-id exclude-character)))
+      (character-send-message character message))))
 
 ;; ─── World-level object/room queries ─────────────────────────────────────
 

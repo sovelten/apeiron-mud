@@ -22,83 +22,174 @@
 for the given WORLD: NAME, PLAYERS, and UPTIME."
   (lambda ()
     (let ((vars (list (cons "NAME" *mud-name*)
-                      (cons "PLAYERS" (princ-to-string (world-total-players world)))
+                      (cons "PLAYERS" (princ-to-string (world-total-characters world)))
                       (cons "UPTIME" (princ-to-string (floor (- (get-universal-time)
                                                                 *server-start-time*)))))))
       (log-message "[MSSP] mssp-info-fn called: returning ~D vars (NAME=~S PLAYERS=~S UPTIME=~S)"
-                   (length vars) *mud-name* (world-total-players world)
+                   (length vars) *mud-name* (world-total-characters world)
                    (floor (- (get-universal-time) *server-start-time*)))
       vars)))
+
+(defun %client-login-flow (session)
+  "Present the login prompt and dispatch to the appropriate flow.
+Returns (values character account) where ACCOUNT is NIL for guests."
+  (let ((choice (string-downcase
+                 (string-trim '(#\Space #\Tab)
+                              (ask-input session
+                                         (format nil "~A (n)ew, (g)uest, or (c)onnect?"
+                                                 (bright-white "Choose:")))))))
+    (cond
+      ((or (string= choice "n") (string= choice "new"))
+       (%client-register-flow session))
+      ((or (string= choice "g") (string= choice "guest"))
+       (%client-guest-flow session))
+      ((or (string= choice "c") (string= choice "connect"))
+       (%client-connect-flow session))
+      (t
+       (mud-write session (format nil "Invalid choice: ~A" choice))
+       (%client-login-flow session)))))
+
+(defun %client-register-flow (session)
+  "Handle new account registration flow.
+Returns (values character account)."
+  (let* ((account-name (ask-input session "Choose an account name:"))
+         (account-password (ask-input session "Choose a password:" :secret t))
+         (account-email (ask-input session "Email (optional, for password reset):")))
+    (handler-case
+        (let ((account (register-account account-name account-password
+                                         :email (unless (zerop (length account-email))
+                                                  account-email))))
+          (mud-write session (format nil "Account ~A created successfully!" (bright-green account-name)))
+          (let* ((char-name (ask-input session "Choose a character name:" :default account-name))
+                 (character (new-character char-name session :owner (account-name account))))
+            (values character account)))
+      (error (e)
+        (mud-write session (format nil "~A" e))
+        (%client-register-flow session)))))
+
+(defun %client-guest-flow (session)
+  "Handle guest login flow.
+Returns (values character nil)."
+  (let* ((guest-name (format nil "Guest~D" (random 10000)))
+         (char-name (ask-input session "What is your name?" :default guest-name))
+         (character (new-character char-name session)))
+    (values character nil)))
+
+(defun %client-connect-flow (session)
+  "Handle existing account authentication flow.
+Returns (values character account)."
+  (let* ((account-name (ask-input session "Account name:"))
+         (account-password (ask-input session "Password:" :secret t))
+         (account (authenticate-account account-name account-password)))
+    (if account
+        (let* ((world (apeiron.persistence:get-persistent-world))
+               (existing-char (find-character-by-owner world (account-name account))))
+          (mud-write session (format nil "Welcome back, ~A!" (bright-green (account-name account))))
+          (if existing-char
+              (progn
+                (mud-write session (format nil "Reconnecting to your character, ~A." (bright-green (object-name existing-char))))
+                ;; Re-link session to existing character
+                (setf (character-session existing-char) session
+                      (session-character session) existing-char)
+                (values existing-char account))
+              ;; No existing character — create one
+              (let* ((char-name (ask-input session "Choose a character name:" :default (account-name account)))
+                     (character (new-character char-name session :owner (account-name account))))
+                (values character account))))
+        (progn
+          (mud-write session "Invalid account name or password.")
+          (%client-connect-flow session)))))
 
 (defun handle-client (world session)
   "Main loop for handling a client connection."
   (let* ((telnet-conn (and (typep session 'telnet-session)
-                           (session-telnet-connection session)))
-         (guest-name (format nil "Guest~D" (random 10000)))
-         (char-name
-           (progn
-             ;; Drain pending telnet negotiation (MSSP, etc.) BEFORE the
-             ;; login prompt, so the MSSP response is sent immediately
-             ;; after the client's data arrives.
-             (when telnet-conn
-               (%drain-telnet-negotiation telnet-conn))
-             (ask-input session "What is your name?" guest-name)))
-         (character (new-character char-name session)))
-    (log-message "New connection: ~A" char-name)
-    (world-add-character! world character)
-    (mud-write session (object-describe (object-location character)))
-    (mud-write session "Welcome to the MUD!")
-    (handler-case
-        (loop while *server-running*
-              do
-                 (handler-case
-                     (progn
-                       ;; Send prompt
-                       (session-send-prompt session)
+                           (session-telnet-connection session))))
+    ;; Drain pending telnet negotiation (MSSP, etc.) BEFORE the
+    ;; login prompt, so the MSSP response is sent immediately
+    ;; after the client's data arrives.
+    (when telnet-conn
+      (%drain-telnet-negotiation telnet-conn))
 
-                       (multiple-value-bind (line status) (read-line-with-timeout-loop session)
-                         (cond
-                           ((eq status :timeout)
-                            (mud-write session "Timed out due to inactivity.")
-                            (log-message "Client ~A timed out due to inactivity" char-name)
-                            (return))
-                           ((or (eq status :eof) (typep status 'error))
-                            (log-message "Client ~A disconnected ~A" char-name status)
-                            (return))
-                           (line
-                            (let ((trimmed (string-trim '(#\Return #\Newline) line)))
-                              (when (and trimmed (> (length trimmed) 0))
-                                (process-command world character trimmed))))
-                           (t
-                            (return)))))
-                   (end-of-file ()
-                     ;; Connection closed by client
-                     (log-message "Client ~A disconnected end-of-file" char-name)
-                     (return))
-                   (error (e)
-                     ;; Check if this is a "broken pipe" or similar connection error
-                     (let ((error-str (format nil "~A" e)))
-                       (if (or (search "Broken pipe" error-str)
-                               (search "closed" error-str)
-                               (search "reset" error-str))
-                           ;; Connection error, exit gracefully
-                           (progn
-                             (log-message "Client ~A connection lost" char-name)
-                             (return))
-                           ;; Other error, log it
-                           (progn
-                             (log-error "Error in client handler: ~A" e)
-                             (return)))))))
-      (error (e)
-        (log-error "Client handler error for ~A: ~A" char-name e))))
+    ;; ─── Login phase ────────────────────────────────────────────────
+    (multiple-value-bind (character account)
+        (%client-login-flow session)
+      (declare (ignore account))
 
-  ;; Cleanup when disconnected
-  (let ((session-id (session-id session)))
-    (log-message "Attempting to remove thread for session ~A" session-id)
-    (remhash session-id *player-threads*)
-    (when (session-character session)
-      (world-remove-character! world (session-character session)))
-    (session-disconnect session)))
+      ;; Register character in the world.  CREATE-OBJECT! handles
+      ;; materialization on persistent worlds and skips already-persistent
+      ;; objects (reconnected characters).  Then place in the starting room.
+      (create-object! world character)
+      (place-character! world character)
+      (mud-write session (object-describe (object-location character)))
+      (mud-write session "Welcome to the MUD!")
+
+      (let ((char-name (object-name character)))
+        (log-message "New connection: ~A~:[ (guest)~; (account: ~A)~]"
+                     char-name
+                     (character-owner character)
+                     (character-owner character))
+
+        ;; ─── Game loop ────────────────────────────────────────────────
+        (handler-case
+            (loop while *server-running*
+                  do
+                     (handler-case
+                         (progn
+                           ;; Send prompt
+                           (session-send-prompt session)
+
+                           (multiple-value-bind (line status) (read-line-with-timeout-loop session)
+                             (cond
+                               ((eq status :timeout)
+                                (mud-write session "Timed out due to inactivity.")
+                                (log-message "Client ~A timed out due to inactivity" char-name)
+                                (return))
+                               ((or (eq status :eof) (typep status 'error))
+                                (log-message "Client ~A disconnected ~A" char-name status)
+                                (return))
+                               (line
+                                (let ((trimmed (string-trim '(#\Return #\Newline) line)))
+                                  (when (and trimmed (> (length trimmed) 0))
+                                    (process-command world character trimmed))))
+                               (t
+                                (return)))))
+                       (end-of-file ()
+                         ;; Connection closed by client
+                         (log-message "Client ~A disconnected end-of-file" char-name)
+                         (return))
+                       (error (e)
+                         ;; Check if this is a "broken pipe" or similar connection error
+                         (let ((error-str (format nil "~A" e)))
+                           (if (or (search "Broken pipe" error-str)
+                                   (search "closed" error-str)
+                                   (search "reset" error-str))
+                               ;; Connection error, exit gracefully
+                               (progn
+                                 (log-message "Client ~A connection lost" char-name)
+                                 (return))
+                               ;; Other error, log it
+                               (progn
+                                 (log-error "Error in client handler: ~A" e)
+                                 (return)))))))
+          (error (e)
+            (log-error "Client handler error for ~A: ~A" char-name e)))))
+
+    ;; Cleanup when disconnected
+    (let ((session-id (session-id session)))
+      (log-message "Attempting to remove thread for session ~A" session-id)
+      (let ((character (session-character session)))
+        (when character
+          ;; Clear session links first — this prevents stop-mud-server
+          ;; Clear session links before world-remove-character! —
+          ;; this prevents stop-mud-server from racing to process
+          ;; the same character via (characters world).
+          (setf (session-character session) nil
+                (character-session character) nil)
+          (world-remove-character! world character)))
+      ;; Remove from tracking AFTER cleanup so stop-mud-server joins
+      ;; this thread before processing characters.
+      (remhash session-id *player-threads*)
+      (session-disconnect session))))
 
 (defun accept-connections (world)
   "Accept incoming client connections.
@@ -320,11 +411,24 @@ connection to TLS in-band."
             (log-error "Error joining acceptance thread: ~A" e)))
         (setf *acceptance-thread* nil))
 
-      ;; Disconnect all players
+      ;; Wait for all player threads to finish their cleanup before
+      ;; we touch any characters — avoids racing with handle-client.
+      (maphash (lambda (id thread)
+                 (declare (ignore id))
+                 (handler-case
+                     (bordeaux-threads:join-thread thread)
+                   (error (e)
+                     (log-error "Error joining player thread: ~A" e))))
+               *player-threads*)
+      (clrhash *player-threads*)
+
+      ;; Disconnect all remaining characters (safety net)
       (let ((world (get-persistent-world)))
-        (dolist (player (characters world))
-          (world-remove-character! world player)
-          (session-disconnect (character-session player))))
+        (dolist (character (characters world))
+          (let ((session (character-session character)))
+            (world-remove-character! world character)
+            (when session
+              (session-disconnect session)))))
 
       ;; Stop event logging
       (stop-event-logging)
@@ -334,8 +438,8 @@ connection to TLS in-band."
 (defun get-server-status ()
   "Get the current status of the server."
   (let ((world (get-persistent-world)))
-    (format nil "Server running: ~A~%Players online: ~D~%Rooms in world: ~D~%"
+    (format nil "Server running: ~A~%Characters online: ~D~%Rooms in world: ~D~%"
             (if *server-running*
                 "Yes"
                 "No")
-            (world-total-players world) (world-total-rooms world))))
+            (world-total-characters world) (world-total-rooms world))))
