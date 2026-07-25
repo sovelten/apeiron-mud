@@ -59,20 +59,24 @@
                                when (equal (apeiron.core:object-name p) "QuitTestPlayer")
                                  return p)))
              (is (not (null character)))
-             
-             ;; Now send "quit"
-             (telnet:telnet-write-string client-conn "quit")
-             
-             ;; Server should send "Goodbye!"
-             (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)
-               (declare (ignore status))
-               (is (string= line "Goodbye!")))
-             
-             ;; Wait for session thread to cleanup
-             (sleep 0.5)
-             
-             ;; Verify character is removed from the world
-             (is (not (gethash (apeiron.core:object-id character) (apeiron.core:world-characters world))))))
+
+             ;; Save the character's ID before quit — the quit command
+             ;; destroys the BKNR object for guest characters, so slot
+             ;; access afterward would fail.
+             (let ((char-id (apeiron.core:object-id character)))
+               ;; Now send "quit"
+               (telnet:telnet-write-string client-conn "quit")
+
+               ;; Server should send "Goodbye!"
+               (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)
+                 (declare (ignore status))
+                 (is (string= line "Goodbye!")))
+
+               ;; Wait for session thread to cleanup
+               (sleep 0.5)
+
+               ;; Verify character is removed from the world
+               (is (not (gethash char-id (apeiron.core:world-characters world)))))))
       ;; Cleanup
       (when client-conn (telnet:telnet-connection-close client-conn))
       (when client-socket (usocket:socket-close client-socket))
@@ -203,18 +207,21 @@
                                 when (equal (apeiron.core:object-name p) "AbruptCharacter")
                                   return p)))
              (is (not (null character)))
-             
-             ;; Now close client connection abruptly without quitting!
-             (telnet:telnet-connection-close client-conn)
-             (usocket:socket-close client-socket)
-             (setf client-conn nil
-                   client-socket nil)
-             
-             ;; Wait for server loop to detect EOF / socket error and run cleanup
-             (sleep 0.5)
-             
-             ;; Verify character is cleaned up from the world
-             (is (not (gethash (apeiron.core:object-id character) (apeiron.core:world-characters world))))))
+
+             ;; Save ID before disconnect — the cleanup destroys the
+             ;; BKNR object for guest characters.
+             (let ((char-id (apeiron.core:object-id character)))
+               ;; Now close client connection abruptly without quitting!
+               (telnet:telnet-connection-close client-conn)
+               (usocket:socket-close client-socket)
+               (setf client-conn nil
+                     client-socket nil)
+
+               ;; Wait for server loop to detect EOF / socket error and run cleanup
+               (sleep 0.5)
+
+               ;; Verify character is cleaned up from the world
+               (is (not (gethash char-id (apeiron.core:world-characters world)))))))
       ;; Cleanup
       (when client-conn (telnet:telnet-connection-close client-conn))
       (when client-socket (usocket:socket-close client-socket))

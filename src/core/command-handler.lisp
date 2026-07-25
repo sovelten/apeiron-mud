@@ -368,8 +368,11 @@ Debug helpers that return strings: (d obj), (slots-of obj), (props obj), (inv ob
   "Disconnect from the game."
   (declare (ignore args))
   (character-send-message character "Goodbye!")
-  (world-remove-character! world character)
-  (session-disconnect (character-session character)))
+  ;; Save session before world-remove-character! — for guest characters
+  ;; that deletes the BKNR object, making slot access impossible afterward.
+  (let ((session (character-session character)))
+    (world-remove-character! world character)
+    (session-disconnect session)))
 
 ;; ─── Speech handling ──────────────────────────────────────────────────────
 ;; Objects can implement HANDLE-TELL to respond when spoken/told to.

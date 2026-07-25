@@ -405,8 +405,13 @@ connection to TLS in-band."
       ;; Disconnect all characters
       (let ((world (get-persistent-world)))
         (dolist (character (characters world))
-          (world-remove-character! world character)
-          (session-disconnect (character-session character))))
+          ;; Save session before world-remove-character! — for guest
+          ;; characters that deletes the BKNR object, making slot
+          ;; access impossible afterward.
+          (let ((session (character-session character)))
+            (world-remove-character! world character)
+            (when session
+              (session-disconnect session)))))
 
       ;; Stop event logging
       (stop-event-logging)

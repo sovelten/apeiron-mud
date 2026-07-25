@@ -154,11 +154,14 @@ touch world indices — use WORLD-REMOVE-OBJECT! for that."
 Owned characters (with a non-nil OWNER) are displaced from their room
 but kept in world indices — they survive restarts and can reconnect.
 Guest characters (no owner) are displaced AND removed from indices."
-  (displace-character! character)
-  ;; Guest characters (no owner) are removed from world indices entirely
-  (unless (character-owner character)
-    (world-remove-object! world character))
-  (log-message "~A removed from world" (object-name character)))
+  ;; Save name before any destructive ops — world-remove-object! may
+  ;; destroy the BKNR object, making slot access impossible afterward.
+  (let ((name (object-name character)))
+    (displace-character! character)
+    ;; Guest characters (no owner) are removed from world indices entirely
+    (unless (character-owner character)
+      (world-remove-object! world character))
+    (log-message "~A removed from world" name)))
 
 (defun character-by-id (world char-id)
   "Get a character by ID."
