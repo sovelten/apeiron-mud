@@ -234,12 +234,11 @@
   (let ((puzzle (make-test-puzzle :target-word "crane")))
     (wordle-guess puzzle "TestPlayer" "crane")
     (let ((display (wordle-display puzzle "TestPlayer")))
-      (is (search "You solved it" display))
-      (is (search "Shareable result" display))
+      (is (search "I solved it" display))
       ;; Should NOT reveal the word
       (is (not (search "CRANE" display)))
-      ;; Should show green blocks (all correct = all 5 solved)
-      (is (search "█ █ █ █ █" display)))))
+      ;; Should show green emoji squares (all correct = all 5 solved)
+      (is (search "🟩 🟩 🟩 🟩 🟩" display)))))
 
 (test wordle-display-failed-message
   "Display shows failure message with shareable result"
@@ -247,7 +246,6 @@
     (wordle-guess puzzle "TestPlayer" "dumpy")
     (let ((display (wordle-display puzzle "TestPlayer")))
       (is (search "Out of guesses" display))
-      (is (search "Shareable result" display))
       ;; Should NOT reveal the word
       (is (not (search "CRANE" display))))))
 
@@ -293,7 +291,7 @@
         (unwind-protect
              (progn
                (is-true (handle-tell puzzle player "crane"))
-               (is (search "You solved it" (car captured-messages))))
+               (is (search "I solved it" (car captured-messages))))
           (setf (fdefinition 'player-send-message) old))))))
 
 (test wordle-handle-tell-non-word-ignored
@@ -355,11 +353,13 @@
       (is (eq :failed result-code)))))
 
 (test wordle-print-object
-  "Print-object shows puzzle name and word"
+  "Print-object shows puzzle name and ID (not the secret word)"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
     (let ((repr (with-output-to-string (s) (print-object puzzle s))))
       (is (search "a test wordle board" repr))
-      (is (search "CRANE" repr)))))
+      (is (search "ID:" repr))
+      ;; Must NOT reveal the secret word
+      (is (not (search "CRANE" repr))))))
 
 (test wordle-handle-tell-help
   "handle-tell responds to 'help' with instructions"

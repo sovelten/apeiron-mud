@@ -288,19 +288,20 @@ gets :absent."
   (format nil "  ~A" (color-text "· · · · ·" +sgr-dim+)))
 
 (defun wordle-format-result-block (result)
-  "Format a result as a coloured block character with no letter.
+  "Format a result as a UTF-8 emoji square with no letter.
 
-  :correct - green background block
-  :present - yellow background block
-  :absent  - dim/grey block"
+  :correct - 🟩 green square
+  :present - 🟨 yellow square
+  :absent  - ⬛ black square"
   (ecase result
-    (:correct (color-text "█" +sgr-bold+ +sgr-fg-white+ +sgr-bg-green+))
-    (:present (color-text "█" +sgr-bold+ +sgr-fg-black+ +sgr-bg-yellow+))
-    (:absent  (color-text "█" +sgr-dim+))))
+    (:correct "🟩")
+    (:present "🟨")
+    (:absent  "⬛")))
 
 (defun wordle-format-shareable-line (results)
-  "Format a single guess result line as coloured blocks with no letters.
-Useful for sharing results without spoiling the answer."
+  "Format a single guess result line as UTF-8 emoji squares with no letters.
+Useful for sharing results without spoiling the answer — renders correctly
+on any platform (chat, social media, etc.) without ANSI codes."
   (format nil "  ~{~A~^ ~}"
           (loop for i from 0 below 5
                 collect (wordle-format-result-block (nth i results)))))
@@ -312,13 +313,15 @@ Useful for sharing results without spoiling the answer."
 
 Shows the board with all guesses and the remaining empty slots.
 When solved or failed, the result message shows a shareable pattern
-of coloured blocks (no letters) so it can be shared without spoilers."
+of UTF-8 emoji squares (no letters) so it can be pasted to other media
+without spoiling the answer."
   (wordle-ensure-fresh-word! puzzle)
   (let* ((guesses  (wordle-player-guesses-list puzzle player-name))
          (solved   (wordle-player-solved-p puzzle player-name))
          (failed   (wordle-player-failed-p puzzle player-name))
          (max      (wordle-max-guesses puzzle))
-         (n-guesses (length guesses)))
+         (n-guesses (length guesses))
+         (location (object-location puzzle)))
     (with-output-to-string (stream)
       ;; Header
       (format stream "~A~%~A~%~%"
@@ -339,20 +342,24 @@ of coloured blocks (no letters) so it can be shared without spoilers."
       (cond
         (solved
          (format stream "~A~%"
-                 (bold-green (format nil "You solved it in ~D ~A!"
+                 (bold-green (format nil "I solved it in ~D ~A!"
                                      n-guesses
                                      (if (= n-guesses 1) "guess" "guesses"))))
-         (format stream "~A~%" (bold-white "Shareable result:"))
          (dolist (pair guesses)
            (write-string (wordle-format-shareable-line (cdr pair)) stream)
-           (terpri stream)))
+           (terpri stream))
+         (when location
+           (format stream "Go to ~A to play.~%"
+                   (object-name location))))
         (failed
          (format stream "~A~%"
                  (bold-red "Out of guesses!"))
-         (format stream "~A~%" (bold-white "Shareable result:"))
          (dolist (pair guesses)
            (write-string (wordle-format-shareable-line (cdr pair)) stream)
-           (terpri stream)))
+           (terpri stream))
+         (when location
+           (format stream "Go to ~A to play.~%"
+                   (object-name location))))
         (t
          (format stream "~A~%"
                  (yellow (let ((rem (- max n-guesses)))
@@ -514,6 +521,4 @@ where RESULT-CODE is one of:
 
 (defmethod print-object ((puzzle mud-wordle-puzzle) stream)
   (print-unreadable-object (puzzle stream :type t)
-    (format stream "~A - word: ~A"
-            (object-name puzzle)
-            (string-upcase (wordle-target-word puzzle)))))
+    (format stream "~A (ID: ~D)" (object-name puzzle) (object-id puzzle))))
