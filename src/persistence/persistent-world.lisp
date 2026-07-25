@@ -205,7 +205,6 @@ identity is preserved, all cross-references remain valid without any
 fixup pass.
 
 Returns TRANSIENT-WORLD (now a persistent-world)."
-  (build-persistent-class-map)
   (bknr.datastore:with-transaction ("materialize-world")
     ;; Convert all game objects in-place (including characters)
     (dolist (obj (world-all-objects transient-world))
@@ -273,6 +272,9 @@ When FORCE-NEW is true any existing store data is wiped first."
                                 :if-does-not-exist :ignore)
     (makunbound 'bknr.datastore:*store*))
   (open-mud-store)
+  ;; Build the class map for both fresh and restored worlds — new
+  ;; connections need it to materialize guest characters.
+  (build-persistent-class-map)
   (let ((world (get-persistent-world)))
     (if world
         (progn
