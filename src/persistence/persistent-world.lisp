@@ -98,9 +98,11 @@ directly without re-materialization."
   object)
 
 (defmethod world-remove-object! ((world persistent-world) object)
-  "Remove OBJECT from world indices.
-Guest characters are also destroyed in BKNR to prevent re-materialization."
-  (call-next-method)
+  "Remove OBJECT from world indices and destroy it in the BKNR datastore."
+  (bknr.datastore:with-transaction ("remove-object")
+    (call-next-method)
+    (when (typep object 'bknr.datastore:store-object)
+      (bknr.datastore:delete-object object)))
   object)
 
 ;; ─── Store lifecycle ────────────────────────────────────────────────────────
@@ -274,12 +276,10 @@ When FORCE-NEW is true any existing store data is wiped first."
     (if world
         (progn
           ;; Populate world's indices from BKNR objects.
-          ;; Skip guest characters (no owner) — they were removed on
-          ;; disconnect and should not reappear on restart.
+          ;; Guest characters that were properly removed (via world-remove-object!)
+          ;; are deleted from the datastore and won't appear here.
           (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-object))
-            (unless (and (typep obj 'mud-character)
-                         (null (character-owner obj)))
-              (world-add-object! world obj)))
+            (world-add-object! world obj))
           ;; Rebuild room contents from persistent object locations.
           ;; persistent-object queries also return subclasses (room, guestbook, npc).
           ;; Wrapped in a single transaction to avoid per-object auto-wrap overhead.
