@@ -21,6 +21,7 @@
                  (:file "persistence/test-persistent-world" :depends-on ("test-package"))
                  (:file "worlds/test-world-areas" :depends-on ("test-package"))
                  (:file "server/test-network" :depends-on ("test-package"))
+                 (:file "server/test-telnet-session" :depends-on ("test-package"))
                  (:file "server/test-integration" :depends-on ("test-package")))))
   :perform (test-op :after (op c)
              (declare (ignore op c))

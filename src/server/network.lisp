@@ -53,14 +53,14 @@ Returns (values character account) where ACCOUNT is NIL for guests."
   "Handle new account registration flow.
 Returns (values character account)."
   (let* ((account-name (ask-input session "Choose an account name:"))
-         (account-password (ask-input session "Choose a password:"))
+         (account-password (ask-input session "Choose a password:" :secret t))
          (account-email (ask-input session "Email (optional, for password reset):")))
     (handler-case
         (let ((account (register-account account-name account-password
                                          :email (unless (zerop (length account-email))
                                                   account-email))))
           (mud-write session (format nil "Account ~A created successfully!" (bright-green account-name)))
-          (let* ((char-name (ask-input session "Choose a character name:" account-name))
+          (let* ((char-name (ask-input session "Choose a character name:" :default account-name))
                  (character (new-character char-name session :owner account)))
             (values character account)))
       (error (e)
@@ -71,7 +71,7 @@ Returns (values character account)."
   "Handle guest login flow.
 Returns (values character nil)."
   (let* ((guest-name (format nil "Guest~D" (random 10000)))
-         (char-name (ask-input session "What is your name?" guest-name))
+         (char-name (ask-input session "What is your name?" :default guest-name))
          (character (new-character char-name session)))
     (values character nil)))
 
@@ -79,7 +79,7 @@ Returns (values character nil)."
   "Handle existing account authentication flow.
 Returns (values character account)."
   (let* ((account-name (ask-input session "Account name:"))
-         (account-password (ask-input session "Password:"))
+         (account-password (ask-input session "Password:" :secret t))
          (account (authenticate-account account-name account-password)))
     (if account
         (progn
@@ -94,7 +94,7 @@ Returns (values character account)."
                       (session-character session) existing-char)
                 (values existing-char account))
               ;; No existing character — create one
-              (let* ((char-name (ask-input session "Choose a character name:" account-name))
+              (let* ((char-name (ask-input session "Choose a character name:" :default account-name))
                      (character (new-character char-name session :owner account)))
                 (values character account))))
         (progn

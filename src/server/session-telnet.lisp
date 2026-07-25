@@ -53,6 +53,82 @@ Use telnet:telnet-read-line / telnet:telnet-write-string instead."
             (values nil :eof)))
         (values nil :eof))))
 
+(defmethod mud-read-secret ((session telnet-session) &key (timeout 300))
+  "Read a password with telnet ECHO negotiation to mask input.
+Tells the client to stop local echo, reads char-by-char echoing *
+for each keystroke, then restores normal echo mode."
+  (let ((conn (session-telnet-connection session)))
+    (unless conn
+      (return-from mud-read-secret (values nil :eof)))
+    (let* ((protocol (telnet:telnet-conn-protocol conn))
+           (echo-state (telnet::ensure-option-state protocol :local
+                                                    telnet:+telnet-opt-echo+))
+           (chars (make-array 64 :element-type 'character
+                                 :adjustable t :fill-pointer 0))
+           (deadline (+ (get-internal-real-time)
+                        (* timeout internal-time-units-per-second)))
+           (result-status nil))
+      ;; Register ECHO as wanted so the client's DO ECHO is accepted
+      (setf (telnet::telnet-option-state-wanted echo-state) t
+            (telnet::telnet-option-state-pending echo-state) t)
+      ;; Tell the client to stop local echo
+      (telnet:telnet-write-raw
+       conn
+       (make-array 3 :element-type '(unsigned-byte 8)
+                     :initial-contents (list telnet:iac telnet:will
+                                             telnet:+telnet-opt-echo+)))
+      ;; Read char-by-char, echo * for each keystroke
+      (handler-case
+          (loop
+            (let ((remaining (- deadline (get-internal-real-time))))
+              (when (<= remaining 0)
+                (setf result-status :timeout)
+                (return)))
+            (multiple-value-bind (char status)
+                (telnet:telnet-read-char conn :timeout 0.5)
+              (cond
+                                 ((null status)
+                                 (cond
+                                   ((null char) (return))
+                                   ((char= char #\Newline) (return))
+                                   ((char= char #\Return)
+                                    ;; CR received — consume a following LF if present (CRLF)
+                                    (multiple-value-bind (next-char next-status)
+                                        (telnet:telnet-read-char conn :timeout 0.1)
+                                      (declare (ignore next-char next-status)))
+                                    (return))
+                                   (t
+                    (vector-push-extend char chars)
+                    (telnet:telnet-write-raw
+                     conn
+                     (make-array 1 :element-type '(unsigned-byte 8)
+                                   :initial-contents (list (char-code #\*)))))))
+                ((eq status :timeout) nil)
+                ((or (eq status :eof) (eq status :connection-lost))
+                 (setf result-status status)
+                 (return))
+                (t
+                 (setf result-status status)
+                 (return)))))
+        (telnet:telnet-connection-lost ()
+          (setf result-status :connection-lost))
+        (telnet:telnet-error (e)
+          (log-error "Telnet read-secret error: ~A"
+                     (telnet:telnet-error-message e))
+          (setf result-status :eof)))
+      ;; Clean up ECHO negotiation
+      (setf (telnet::telnet-option-state-wanted echo-state) nil
+            (telnet::telnet-option-state-enabled echo-state) nil)
+      (telnet:telnet-write-raw
+       conn
+       (make-array 3 :element-type '(unsigned-byte 8)
+                     :initial-contents (list telnet:iac telnet:wont
+                                             telnet:+telnet-opt-echo+)))
+      (values (if result-status
+                  nil
+                  (coerce chars 'string))
+              result-status))))
+
 (defmethod mud-write ((session telnet-session) message &key (newline t))
   "Write a message to the telnet session using RFC 854-compliant I/O."
   (let ((conn (session-telnet-connection session)))

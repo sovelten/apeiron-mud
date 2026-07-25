@@ -547,54 +547,40 @@ that no data is lost.  Returns no useful value."
                 (%vector-shift-left pending 1))))))))
     (values)))
 
-(defun telnet-read-char (conn &key (timeout 300))
-  "Read a single character from the telnet connection.
+(defgeneric telnet-read-char (conn &key timeout)
+  (:documentation "Read a single character from the telnet connection.
 
 TIMEOUT is in seconds (can be fractional).  If no data arrives within
 TIMEOUT seconds, returns (values nil :timeout).
 
 Returns (values char nil) on success.
 Returns (values nil :eof) when the connection is closed.
-Returns (values nil :connection-lost) on fatal error."
+Returns (values nil :connection-lost) on fatal error."))
+
+(defmethod telnet-read-char ((conn telnet-connection) &key (timeout 300))
   (let ((line (slot-value conn 'line-buffer)))
-    ;; Return buffered characters first
     (when (> (fill-pointer line) 0)
       (let ((c (aref line 0)))
         (replace line line :start2 1 :end2 (fill-pointer line))
         (decf (fill-pointer line))
         (return-from telnet-read-char (values c nil))))
-
-    ;; Wait until the stream is readable (data available OR EOF), or
-    ;; the peek-buffer has pre-read bytes from protocol validation.
-    ;; We do not use usocket:wait-for-input because the usocket
-    ;; character stream would steal bytes from the kernel buffer
-    ;; ahead of our binary stream.
     (unless (or (> (fill-pointer (slot-value conn 'peek-buffer)) 0)
                 (%input-ready-p (telnet-conn-raw-stream conn) timeout))
       (return-from telnet-read-char (values nil :timeout)))
-
-    ;; Read and process bytes from the raw binary stream
     (let ((buf (slot-value conn 'read-buffer)))
       (setf (fill-pointer buf) 0)
-
       (let ((b (%connection-read-byte conn buf 0)))
         (when (eq b :eof)
           (setf (telnet-connection-alive-p conn) nil)
           (return-from telnet-read-char (values nil :eof)))
-
         (if (= b iac)
-            ;; IAC — telnet command
             (let ((cmd (%connection-read-byte conn buf 1)))
               (when (eq cmd :eof)
                 (setf (telnet-connection-alive-p conn) nil)
                 (return-from telnet-read-char (values nil :eof)))
-
               (cond
-                ;; IAC IAC — literal 255 data byte
                 ((= cmd iac)
                  (%emit-data-byte conn iac))
-
-                ;; IAC SB — enter subnegotiation
                 ((= cmd sb)
                  (setf (telnet-in-subneg-p (telnet-conn-protocol conn)) t)
                  (setf (fill-pointer (telnet-subneg-buffer (telnet-conn-protocol conn))) 0)
@@ -606,30 +592,20 @@ Returns (values nil :connection-lost) on fatal error."
                      (%process-incoming-byte conn sbb)
                      (when (not (telnet-in-subneg-p (telnet-conn-protocol conn)))
                        (return)))))
-
-                ;; WILL/WONT/DO/DONT — 3-byte negotiation
                 ((or (= cmd will) (= cmd wont) (= cmd do) (= cmd dont))
                  (let ((opt (%connection-read-byte conn buf 2)))
                    (when (eq opt :eof)
                      (setf (telnet-connection-alive-p conn) nil)
                      (return-from telnet-read-char (values nil :eof)))
                    (%handle-telnet-command conn cmd opt)))
-
-                ;; Other 2-byte commands
                 (t
                  (%handle-telnet-command conn cmd 0))))
-
-            ;; Not IAC — application data byte, feed the UTF-8 decoder
             (%emit-data-byte conn b)))
-
-      ;; Try to return a character from the line buffer
       (when (> (fill-pointer line) 0)
         (let ((c (aref line 0)))
           (replace line line :start2 1 :end2 (fill-pointer line))
           (decf (fill-pointer line))
           (return-from telnet-read-char (values c nil))))
-
-      ;; No character yet — data was consumed by protocol processing
       (values nil :timeout))))
 
 ;;; ----------------------------------------------------------------
@@ -756,12 +732,13 @@ Two NVT transformations are applied to STRING's bytes:
 ;;; Public: Write raw bytes (for protocol commands)
 ;;; ----------------------------------------------------------------
 
-(defun telnet-write-raw (conn byte-vector)
-  "Write raw bytes to the connection without IAC escaping.
-Useful for sending protocol commands."
+(defgeneric telnet-write-raw (conn byte-vector)
+  (:documentation "Write raw bytes to the connection without IAC escaping.
+Useful for sending protocol commands."))
+
+(defmethod telnet-write-raw ((conn telnet-connection) byte-vector)
   (unless (telnet-connection-alive-p conn)
     (error 'telnet-connection-lost :message "Connection is closed"))
-
   (bordeaux-threads:with-lock-held ((telnet-conn-lock conn))
     (handler-case
         (let ((out-stream (telnet-conn-out-stream conn)))

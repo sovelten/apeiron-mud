@@ -199,3 +199,78 @@
          (character (new-character "Guest42" session)))
     (is (null (character-owner character))
         "Guest character should have no owner")))
+
+;; ─── Password masking ───────────────────────────────────────────────────────
+
+(test stream-session-read-secret-masks-input
+  "Test that mud-read-secret on a stream-session echoes * for each character
+and returns the correct password."
+  (let* ((input (make-string-input-stream "s3cr3t!
+"))
+         ;; Use a two-way-stream so we can capture echoed output
+         (output (make-string-output-stream))
+         (combined (make-two-way-stream input output))
+         (session (make-instance 'stream-session :stream combined)))
+    (multiple-value-bind (line status)
+        (mud-read-secret session)
+      (is (null status) "Status should be NIL on success")
+      (is (equal "s3cr3t!" line) "Should read the password correctly")
+      ;; Each typed character should echo a *, plus a newline at end
+      (let ((echoed (get-output-stream-string output)))
+        (is (equal "*******
+" echoed)
+            "Each password character should echo a single * followed by newline")))))
+
+(test stream-session-read-secret-empty-password
+  "Test that mud-read-secret handles an empty password (just newline)."
+  (let* ((input (make-string-input-stream "
+"))
+         (output (make-string-output-stream))
+         (combined (make-two-way-stream input output))
+         (session (make-instance 'stream-session :stream combined)))
+    (multiple-value-bind (line status)
+        (mud-read-secret session)
+      (is (null status) "Status should be NIL")
+      (is (equal "" line) "Should return empty string")
+      (let ((echoed (get-output-stream-string output)))
+        (is (equal "
+" echoed) "Should echo only the newline, no asterisks")))))
+
+(test stream-session-read-secret-eof
+  "Test that mud-read-secret returns :eof when stream is exhausted."
+  (let* ((input (make-string-input-stream ""))
+         (output (make-string-output-stream))
+         (combined (make-two-way-stream input output))
+         (session (make-instance 'stream-session :stream combined)))
+    (multiple-value-bind (line status)
+        (mud-read-secret session)
+      (is (null line) "Line should be NIL on EOF")
+      (is (eq status :eof) "Status should be :eof"))))
+
+(test ask-input-secret-delegates-to-mud-read-secret
+  "Test that ask-input with :secret t calls mud-read-secret instead of
+mud-read-line."
+  (let* ((input (make-string-input-stream "mypass
+"))
+         (output (make-string-output-stream))
+         (combined (make-two-way-stream input output))
+         (session (make-instance 'stream-session :stream combined)))
+    (let ((result (ask-input session "Password:" :secret t)))
+      (is (equal "mypass" result) "Should return the password")
+      (let ((output-str (get-output-stream-string output)))
+        ;; The question "Password:" should be written, then newline,
+        ;; then * for each char, then newline
+        (is (search "Password:" output-str)
+            "Should include the question prompt")
+        (is (search "******" output-str)
+            "Should include asterisks for each password character")))))
+
+(test ask-input-secret-with-default
+  "Test that ask-input with :secret t and empty input returns the default."
+  (let* ((input (make-string-input-stream "
+"))
+         (output (make-string-output-stream))
+         (combined (make-two-way-stream input output))
+         (session (make-instance 'stream-session :stream combined)))
+    (let ((result (ask-input session "Password:" :default "guest" :secret t)))
+      (is (equal "guest" result) "Should return the default on empty input"))))

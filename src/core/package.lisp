@@ -188,6 +188,7 @@
 
    ;; Session protocols / base
    #:mud-read-line
+   #:mud-read-secret
    #:mud-write
    #:session-stream
    #:session-keepalive
