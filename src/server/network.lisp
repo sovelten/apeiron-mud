@@ -180,9 +180,11 @@ Returns (values character account)."
       (let ((character (session-character session)))
         (when character
           ;; Clear session links first — this prevents stop-mud-server
-          ;; from racing to world-remove-character! on the same character.
-          (setf (session-character session) nil)
-          (setf (character-session character) nil)
+          ;; Clear session links before world-remove-character! —
+          ;; this prevents stop-mud-server from racing to process
+          ;; the same character via (characters world).
+          (setf (session-character session) nil
+                (character-session character) nil)
           (world-remove-character! world character)))
       ;; Remove from tracking AFTER cleanup so stop-mud-server joins
       ;; this thread before processing characters.

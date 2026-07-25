@@ -154,22 +154,17 @@ touch world indices — use WORLD-REMOVE-OBJECT! for that."
 (defun world-remove-character! (world character)
   "Remove a character from the world.
 Owned characters (with a non-nil OWNER) are displaced from their room
-but kept in world indices — they survive restarts and can reconnect.
-Guest characters (no owner) are displaced AND removed from indices."
-  (handler-case
-      (let ((name (object-name character)))
-        (displace-character! character)
-        ;; Guest characters (no owner) are removed from world indices entirely
-        (unless (character-owner character)
-          (world-remove-object! world character))
-        ;; Owned characters stay in world indices but go offline:
-        ;; clear the session so they are no longer counted as active.
-        (when (character-owner character)
-          (setf (character-session character) nil))
-        (log-message "~A removed from world" name))
-    (error (e)
-      (log-message "world-remove-character! skipped (already destroyed): ~A" e)
-      nil)))
+but kept in world indices. Guest characters (no owner) are completely
+removed"
+  (let ((name (object-name character)))
+    (displace-character! character)
+    (if (character-owner character)
+        ;; Owned: stay in world indices
+        (log-message "~A displaced from world" name)
+        ;; Guest: remove from indices
+        (progn
+          (world-remove-object! world character)
+          (log-message "~A removed from world" name)))))
 
 (defun character-by-id (world char-id)
   "Get a character by ID."

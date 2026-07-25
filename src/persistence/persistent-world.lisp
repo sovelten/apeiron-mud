@@ -101,7 +101,8 @@ directly without re-materialization."
   "Remove OBJECT from world indices and destroy it in the BKNR datastore."
   (bknr.datastore:with-transaction ("remove-object")
     (call-next-method)
-    (when (typep object 'bknr.datastore:store-object)
+    (when (and (typep object 'bknr.datastore:store-object)
+               (not (bknr.indices:object-destroyed-p object)))
       (bknr.datastore:delete-object object)))
   object)
 
