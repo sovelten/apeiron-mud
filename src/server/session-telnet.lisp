@@ -116,6 +116,11 @@ for each keystroke, then restores normal echo mode."
           (log-error "Telnet read-secret error: ~A"
                      (telnet:telnet-error-message e))
           (setf result-status :eof)))
+      ;; Send a newline to separate the password line from the next prompt
+      (handler-case
+          (telnet:telnet-write-string conn "" :end :crlf)
+        (telnet:telnet-connection-lost ()) ; silently ignore if already lost
+        (telnet:telnet-error ()))
       ;; Clean up ECHO negotiation
       (setf (telnet::telnet-option-state-wanted echo-state) nil
             (telnet::telnet-option-state-enabled echo-state) nil)
