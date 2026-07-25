@@ -586,3 +586,60 @@
                (is (= 1 (length captured)))
                (is (search "MUD-CHARACTER" (first captured))))
           (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+
+(test command-processing-help-specific
+  "Test 'help <command>' shows the specific command's docstring"
+  (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
+    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+                                                                           :stream (make-string-output-stream)
+                                                                           :use-colors nil)))
+          (captured '()))
+      (apeiron.core:world-add-character! world player)
+      (let ((original-send-message (fdefinition 'apeiron.core:player-send-message)))
+        (unwind-protect
+             (progn
+               (setf (fdefinition 'apeiron.core:player-send-message)
+                     (lambda (p msg &key newline)
+                       (declare (ignore p newline))
+                       (push msg captured)))
+               ;; Test help for a specific command
+               (setf captured '())
+               (apeiron.core:process-command world player "help look")
+               (is (= 1 (length captured)))
+               (is (search "Help for" (first captured)))
+               (is (search "look" (first captured)))
+               (is (search "Look around" (first captured)))
+               ;; Test help for unknown command
+               (setf captured '())
+               (apeiron.core:process-command world player "help nonexistent")
+               (is (= 1 (length captured)))
+               (is (search "Unknown command" (first captured)))
+               ;; Test help with no arguments shows the command list
+               (setf captured '())
+               (apeiron.core:process-command world player "help")
+               (is (= 1 (length captured)))
+               (is (search "Available commands" (first captured))))
+          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+
+(test command-processing-help-for-help
+  "Test 'help help' shows help's own docstring"
+  (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
+    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+                                                                           :stream (make-string-output-stream)
+                                                                           :use-colors nil)))
+          (captured '()))
+      (apeiron.core:world-add-character! world player)
+      (let ((original-send-message (fdefinition 'apeiron.core:player-send-message)))
+        (unwind-protect
+             (progn
+               (setf (fdefinition 'apeiron.core:player-send-message)
+                     (lambda (p msg &key newline)
+                       (declare (ignore p newline))
+                       (push msg captured)))
+               (setf captured '())
+               (apeiron.core:process-command world player "help help")
+               (is (= 1 (length captured)))
+               (is (search "help" (first captured)))
+               (is (search "Help for" (first captured)))
+               (is (search "show help" (first captured))))
+          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))

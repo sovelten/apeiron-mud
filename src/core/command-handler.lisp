@@ -14,6 +14,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
 ;; Built-in commands
 
 (define-command "look" (world player args)
+  "Look around the current room to see its description and contents."
   (declare (ignore world args))
   (let ((room (object-location player)))
     (if room
@@ -21,6 +22,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
         (player-send-message player "You are in a void!"))))
 
 (define-command "go" (world player args)
+  "Move in a direction, e.g. 'go north', 'go east', 'go south', 'go west'."
   (declare (ignore world))
   (let ((direction args)
         (room (object-location player)))
@@ -38,22 +40,27 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
                     (player-send-message player "You can't go that way."))))))))
 
 (define-command "n" (world player args)
+  "Shorthand for 'go north'."
   (declare (ignore args))
   (process-command world player "go north"))
 
 (define-command "s" (world player args)
+  "Shorthand for 'go south'."
   (declare (ignore args))
   (process-command world player "go south"))
 
 (define-command "e" (world player args)
+  "Shorthand for 'go east'."
   (declare (ignore args))
   (process-command world player "go east"))
 
 (define-command "w" (world player args)
+  "Shorthand for 'go west'."
   (declare (ignore args))
   (process-command world player "go west"))
 
 (define-command "attack" (world player args)
+  "Attack a foe in the current room, e.g. 'attack goblin'. Combat is turn-based."
   (let ((room (object-location player)))
     (if (zerop (length args))
         (player-send-message player "Attack whom? Usage: attack <name>")
@@ -64,6 +71,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
               (player-send-message player "No such foe here."))))))
 
 (define-command "examine" (world player args)
+  "Examine an object, NPC, or player in the current room, e.g. 'examine sword'."
   (declare (ignore world))
   (let* ((room (object-location player))
          (target-name (string-downcase args)))
@@ -77,6 +85,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
               (player-send-message player "You don't see that here."))))))
 
 (define-command "answer" (world player args)
+  "Answer a challenge/riddle in the current room, e.g. 'answer 42'."
   (declare (ignore world))
   (let ((room (object-location player)))
     (if (zerop (length args))
@@ -96,6 +105,7 @@ PLAYER is the character, ARGS is a raw string that the handler can parse as need
              (player-send-message player "Wrong answer. Try again.")))))))
 
 (define-command "status" (world player args)
+  "Show your current status, including hit points (HP)."
   (declare (ignore world args))
   (player-ensure-combat-stats player)
   (let* ((hp (player-hp player))
@@ -226,6 +236,7 @@ Debug helpers that return strings: (d obj), (slots-of obj), (props obj), (inv ob
               (player-send-message player (format nil "Error: ~A" e))))))))
 
 (define-command "exits" (world player args)
+  "List the visible exits from the current room."
   (declare (ignore world args))
   (let ((room (object-location player)))
     (let ((exits (mapcar #'first (room-exit-list room))))
@@ -236,6 +247,7 @@ Debug helpers that return strings: (d obj), (slots-of obj), (props obj), (inv ob
           (player-send-message player "There are no exits here.")))))
 
 (define-command "inventory" (world player args)
+  "Show what you are carrying in your inventory."
   (declare (ignore world args))
   (let ((inv (container-all-objects player)))
     (if (null inv)
@@ -248,6 +260,7 @@ Debug helpers that return strings: (d obj), (slots-of obj), (props obj), (inv ob
                                              inv))))))
 
 (define-command "say" (world player args)
+  "Say something aloud to everyone in the current room, e.g. 'say Hello!'."
   (declare (ignore world))
   (let ((message args))
     (if (zerop (length message))
@@ -262,6 +275,7 @@ Debug helpers that return strings: (d obj), (slots-of obj), (props obj), (inv ob
                                           (bright-green (format nil "~A says" (object-name player))) message))))))))
 
 (define-command "shout" (world player args)
+  "Shout a message that is heard by all players in all rooms, e.g. 'shout Help!'."
   (let ((message args))
     (if (zerop (length message))
         (player-send-message player "Shout what? Usage: shout <message>")
@@ -274,6 +288,7 @@ Debug helpers that return strings: (d obj), (slots-of obj), (props obj), (inv ob
           (player-send-message player (format nil "~A: ~A" (bold-red "You shout") message))))))
 
 (define-command "read" (world player args)
+  "Read a readable object in the room or your inventory, e.g. 'read guestbook'."
   (declare (ignore world))
   (if (zerop (length args))
       (player-send-message player "Read what? Usage: read <name>")
@@ -288,6 +303,7 @@ Debug helpers that return strings: (d obj), (slots-of obj), (props obj), (inv ob
            (player-send-message player (format nil "There's nothing to read on the ~A." (object-name target))))))))
 
 (define-command "write" (world player args)
+  "Write a message on a writable object in the room, e.g. 'write guestbook'."
   (declare (ignore world))
   (if (zerop (length args))
       (player-send-message player "Write on what? Usage: write <name>")
@@ -306,16 +322,35 @@ Debug helpers that return strings: (d obj), (slots-of obj), (props obj), (inv ob
                    (player-send-message player (format nil "There's nothing to write on the ~A." (object-name target)))))))))))
 
 (define-command "help" (world player args)
-  (declare (ignore world args))
-  (let ((cmd-list (sort (loop for key being the hash-keys of *commands*
-                              collect (cyan key))
-                        #'string< :key #'string)))
-    (player-send-message player
-                         (format nil "~A~%~{~A~%~}~%Type 'help <command>' for more info."
-                                 (bold-white "Available commands:")
-                                 cmd-list))))
+  "Show a list of commands, or show help for a specific command with 'help <command>'."
+  (declare (ignore world))
+  (if (plusp (length args))
+      ;; Specific command help
+      (let* ((cmd-name (string-downcase (string-trim '(#\Space #\Tab) args)))
+             (handler (gethash cmd-name *commands*)))
+        (if handler
+            (let ((doc (documentation handler 'function)))
+              (if doc
+                  (player-send-message player
+                                       (format nil "~A~%~A"
+                                               (bold-white (format nil "Help for '~A':" cmd-name))
+                                               doc))
+                  (player-send-message player
+                                       (format nil "No help available for '~A'." cmd-name))))
+            (player-send-message player
+                                 (format nil "Unknown command '~A'. Type 'help' for available commands."
+                                         cmd-name))))
+      ;; List all commands
+      (let ((cmd-list (sort (loop for key being the hash-keys of *commands*
+                                  collect (cyan key))
+                            #'string< :key #'string)))
+        (player-send-message player
+                             (format nil "~A~%~{~A~%~}~%Type 'help <command>' for more info."
+                                     (bold-white "Available commands:")
+                                     cmd-list)))))
 
 (define-command "toggle-colors" (world player args)
+  "Toggle ANSI color output on/off for your session."
   (declare (ignore world args))
   (let* ((session (character-session player))
          (new-value (not (session-use-colors session))))
@@ -330,6 +365,7 @@ Debug helpers that return strings: (d obj), (slots-of obj), (props obj), (inv ob
                                        (red "disabled")))))))
 
 (define-command "quit" (world player args)
+  "Disconnect from the game."
   (declare (ignore args))
   (player-send-message player "Goodbye!")
   (world-remove-character! world player)
@@ -362,6 +398,7 @@ Debug helpers that return strings: (d obj), (slots-of obj), (props obj), (inv ob
     nil))
 
 (define-command "tell" (world player args)
+  "Send a private message to a player or speak to an object in the room, e.g. 'tell bob hello'."
   (declare (ignore world))
   (if (zerop (length args))
       (player-send-message player "Tell who what? Usage: tell <name> <message>")
