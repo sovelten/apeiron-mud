@@ -44,6 +44,9 @@ indices, and return the object."
   ;; Also register in rooms hash table if it's a room
   (when (typep object 'mud-room)
     (setf (gethash (object-id object) (world-rooms world)) object))
+  ;; Also register in characters hash table if it's a character
+  (when (typep object 'mud-character)
+    (setf (gethash (object-id object) (world-characters world)) object))
   object)
 
 (defgeneric connect-rooms! (world room-a direction-a room-b direction-b
@@ -101,28 +104,42 @@ Synonyms: \"e\" from west-room, \"w\" from east-room."
   "Get the starting room of the world."
   (world-room-by-id world (get-config-key world :starting-room-id)))
 
-(defun world-add-character! (world character)
-  "Add a character to the world, placing them in the starting room."
+(defun place-character! (world character)
+  "Place CHARACTER in the world's starting room and return the character.
+The character must already be registered in the world (via CREATE-OBJECT!
+or WORLD-ADD-OBJECT!).  This only sets location and room membership —
+it does not assign IDs or index into world tables."
   (let ((room (starting-room world)))
-    (if room
-        (progn
-          (setf (object-location character) room)
-          (container-add-object room character))
-        (log-error "No starting room set for world — cannot place ~A" (object-name character)))
-    (setf (gethash (object-id character) (world-characters world)) character)))
+    (when room
+      (setf (object-location character) room)
+      (container-add-object room character))
+    character))
+
+(defun find-character-by-owner (world account-name)
+  "Find a character in the world owned by ACCOUNT-NAME (a string), or NIL."
+  (loop for char being the hash-values of (world-characters world)
+        when (and (character-owner char)
+                  (string-equal (character-owner char) account-name))
+        return char))
 
 (defun world-total-characters (world)
   (hash-table-count (world-characters world)))
 
 (defun world-remove-character! (world character)
-  "Remove a character from the world."
+  "Remove a character from their current room location.
+Owned characters (with a non-nil OWNER) are kept in the world but
+removed from their room — they survive restarts and can reconnect.
+Guest characters (no owner) are removed from the world entirely."
+  ;; Remove from current room
   (let ((room (object-location character)))
-    ;; Remove from room
     (when (typep room 'mud-room)
       (container-remove-object room character))
-    ;; Remove from world
+    (setf (object-location character) nil))
+  ;; Guest characters (no owner) are removed from the world entirely
+  (unless (character-owner character)
     (remhash (object-id character) (world-characters world))
-    (log-message "~A removed from world" (object-name character))))
+    (log-message "Guest ~A removed from world" (object-name character)))
+  (log-message "~A removed from room" (object-name character)))
 
 (defun character-by-id (world char-id)
   "Get a character by ID."

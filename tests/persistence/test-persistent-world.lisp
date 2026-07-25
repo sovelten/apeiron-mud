@@ -221,3 +221,79 @@ initforms so they do not cause SLOT-UNBOUND errors on access."
     (is-false (slot-boundp conn 'apeiron.core::synonyms-a) "unbound after makunbound")
     (bknr.datastore:initialize-transient-instance conn)
     (is-true (slot-boundp conn 'apeiron.core::synonyms-a) "re-bound after init")))
+
+(test owned-character-survives-restart
+  "An owned character created for an account now SURVIVES a service restart.
+Characters are persisted in BKNR (PERSISTENT-CHARACTER) and restored into
+the world's character index.  The account itself is also restored from
+accounts.dat, with no character-slot link needed."
+  (let* ((*data-directory* *data-directory*)
+         (*store-directory* *store-directory*)
+         (session (make-instance 'stream-session
+                                 :stream (make-string-output-stream))))
+    (unwind-protect
+         (progn
+           ;; ---- Phase 1: Create account + character --------------------
+           (clrhash *accounts*)
+           (let* ((world (apeiron.persistence:world-restore-or-initialize :force-new t))
+                  (account (register-account "SurvivorPlayer" "s3cr3t!"
+                                             :email "survivor@test.com"))
+                  (character (new-character "SurvivorHero" session
+                                            :owner (account-name account))))
+             ;; Use create-object! + place-character! (what handle-client does)
+             (create-object! world character)
+             (place-character! world character)
+
+             ;; Verify the initial state
+             (is-true (account-exists-p "SurvivorPlayer")
+                      "Account should exist before restart")
+             (is (equal "SurvivorHero" (object-name character))
+                 "Character name should be set")
+             (is (= 1 (world-total-characters world))
+                 "World should have one character before restart")
+             (is-true (character-owner character)
+                      "Character should have an owner before restart"))
+
+           ;; ---- Phase 2: Simulate service restart ----------------------
+           (save-accounts)
+           (apeiron.persistence:sync-world)
+           (bknr.datastore:close-store)
+           (clrhash *accounts*)
+
+           (is (= 0 (hash-table-count *accounts*))
+               "In-memory accounts cleared after simulated restart")
+
+           ;; ---- Phase 3: Restore after restart -------------------------
+           (load-accounts)
+           (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
+                  (restored-account (find-account "SurvivorPlayer"))
+                  (restored-chars (loop for c being the hash-values
+                                         of (world-characters new-world)
+                                       collect c)))
+
+             ;; Account survived
+             (is-true (account-exists-p "SurvivorPlayer")
+                      "Account should exist after restart")
+             (is-true (authenticate-account "SurvivorPlayer" "s3cr3t!")
+                      "Password should still verify after restart")
+
+             ;; Character SURVIVED the restart — it's in the world
+             (is (= 1 (length restored-chars))
+                 "World should have one character after restart (the owned one)")
+             (is (equal "SurvivorHero" (object-name (first restored-chars)))
+                 "Character name should be preserved after restart")
+             (is (equal "SurvivorPlayer"
+                        (character-owner (first restored-chars)))
+                 "Character owner should be preserved after restart")
+
+             ;; Character is in BKNR as a persistent-character
+             (is (= 1 (length (bknr.datastore:store-objects-with-class
+                               'apeiron.persistence:persistent-character)))
+                 "The owned character exists as a persistent-character in the datastore")))
+
+      ;; ---- Cleanup ----------------------------------------------------
+      (ignore-errors
+       (when (boundp 'bknr.datastore:*store*)
+         (ignore-errors (bknr.datastore:close-store))
+         (makunbound 'bknr.datastore:*store*))
+       (clrhash *accounts*)))))

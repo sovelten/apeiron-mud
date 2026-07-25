@@ -12,9 +12,8 @@
                                 :email "test@example.com")))
     (is (equal "TestPlayer" (account-name account)))
     (is (equal "dummy-hash" (account-password-hash account)))
-    (is (equal "test@example.com" (account-email account)))
-    (is (null (account-character account))
-        "New account should have no associated character")))
+    (is (equal "test@example.com" (account-email account)))))
+    ;; No account-character slot — only character has owner reference
 
 ;; ─── Password hashing ───────────────────────────────────────────────────────
 
@@ -182,13 +181,9 @@
   (let* ((session (make-instance 'stream-session
                                  :stream (make-string-output-stream)))
          (account (register-account "CharOwner" "password"))
-         (character (new-character "Hero" session :owner account)))
-    (is (not (null (character-owner character)))
-        "Character should have an owner")
-    (is (eq account (character-owner character))
-        "Character owner should be the account")
-    (is (eq character (account-character account))
-        "Account character should point back to the character")
+         (character (new-character "Hero" session :owner (account-name account))))
+    (is (equal "CharOwner" (character-owner character))
+        "Character owner should be the account name")
     (is (eq session (character-session character))
         "Character session should still be set")))
 

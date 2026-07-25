@@ -18,6 +18,7 @@
    ;; Persistent classes
    #:persistent-object
    #:persistent-room
+   #:persistent-character
    #:persistent-guestbook
    #:persistent-wordle
    #:persistent-connection
@@ -37,6 +38,7 @@
    #:initial-world
    #:world-restore-or-initialize
    #:get-persistent-world
+   #:materialize-object
 
    ;; Utilities
    #:refresh-guestbooks))

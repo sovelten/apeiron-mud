@@ -82,19 +82,18 @@ Returns (values character account)."
          (account-password (ask-input session "Password:" :secret t))
          (account (authenticate-account account-name account-password)))
     (if account
-        (progn
-          (mud-write session (format nil "Welcome back, ~A!" (bright-green account-name)))
-          ;; Check if this account already has a character
-          (if (account-character account)
-              (let* ((existing-char (account-character account))
-                     (name (object-name existing-char)))
-                (mud-write session (format nil "Reconnecting to your character, ~A." (bright-green name)))
+        (let* ((world (apeiron.persistence:get-persistent-world))
+               (existing-char (find-character-by-owner world (account-name account))))
+          (mud-write session (format nil "Welcome back, ~A!" (bright-green (account-name account))))
+          (if existing-char
+              (progn
+                (mud-write session (format nil "Reconnecting to your character, ~A." (bright-green (object-name existing-char))))
                 ;; Re-link session to existing character
                 (setf (character-session existing-char) session
                       (session-character session) existing-char)
                 (values existing-char account))
               ;; No existing character — create one
-              (let* ((char-name (ask-input session "Choose a character name:" :default account-name))
+              (let* ((char-name (ask-input session "Choose a character name:" :default (account-name account)))
                      (character (new-character char-name session :owner (account-name account))))
                 (values character account))))
         (progn
@@ -116,7 +115,11 @@ Returns (values character account)."
         (%client-login-flow session)
       (declare (ignore account))
 
-      (world-add-character! world character)
+      ;; Register character in the world.  CREATE-OBJECT! handles
+      ;; materialization on persistent worlds and skips already-persistent
+      ;; objects (reconnected characters).  Then place in the starting room.
+      (create-object! world character)
+      (place-character! world character)
       (mud-write session (object-describe (object-location character)))
       (mud-write session "Welcome to the MUD!")
 
@@ -124,8 +127,7 @@ Returns (values character account)."
         (log-message "New connection: ~A~:[ (guest)~; (account: ~A)~]"
                      char-name
                      (character-owner character)
-                     (when (character-owner character)
-                       (account-name (character-owner character))))
+                     (character-owner character))
 
         ;; ─── Game loop ────────────────────────────────────────────────
         (handler-case

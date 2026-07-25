@@ -22,6 +22,8 @@
                                      :stream (make-string-output-stream))))
         (bob   (apeiron.core:new-character "Bob"   (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
+    (setf (apeiron.core:object-id alice) 1)
+    (setf (apeiron.core:object-id bob) 2)
     (setf (apeiron.core:object-location alice) room)
     (setf (apeiron.core:object-location bob) room)
     (apeiron.core:container-add-object room alice)

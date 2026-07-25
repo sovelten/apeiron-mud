@@ -213,7 +213,6 @@
    #:account-name
    #:account-password-hash
    #:account-email
-   #:account-character
    #:find-account
    #:account-exists-p
    #:register-account
@@ -253,12 +252,13 @@
    #:world-add-object!
    #:world-set-starting-room!
    #:starting-room
-   #:world-add-character!
+   #:place-character!
    #:world-total-characters
    #:world-remove-character!
    #:character-by-id
    #:characters
    #:find-character-in-room
+   #:find-character-by-owner
    #:world-broadcast
    #:world-object-by-id
    #:world-object-with-name

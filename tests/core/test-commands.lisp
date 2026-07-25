@@ -7,7 +7,8 @@
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
     (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
-      (apeiron.core:world-add-character! world character)
+      (apeiron.core:create-object! world character)
+      (apeiron.core:place-character! world character)
       ;; The look command should work without crashing
       (apeiron.core:process-command world character "look")
       (is (not (null character))))))
@@ -17,7 +18,8 @@
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
     (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
-      (apeiron.core:world-add-character! world character)
+      (apeiron.core:create-object! world character)
+      (apeiron.core:place-character! world character)
       (apeiron.core:process-command world character "help")
       (is (not (null character))))))
 
@@ -26,7 +28,8 @@
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
     (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
-      (apeiron.core:world-add-character! world character)
+      (apeiron.core:create-object! world character)
+      (apeiron.core:place-character! world character)
       (apeiron.core:process-command world character "exits")
       (is (not (null character))))))
 
@@ -35,7 +38,8 @@
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
     (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
-      (apeiron.core:world-add-character! world character)
+      (apeiron.core:create-object! world character)
+      (apeiron.core:place-character! world character)
       (apeiron.core:process-command world character "inventory")
       (is (not (null character))))))
 
@@ -44,7 +48,8 @@
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
     (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
-      (apeiron.core:world-add-character! world character)
+      (apeiron.core:create-object! world character)
+      (apeiron.core:place-character! world character)
       (let ((start-room (apeiron.core:object-location character)))
         ;; Try to go north (should work from starting room)
         (apeiron.core:process-command world character "go north")
@@ -56,7 +61,8 @@
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
     (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
-      (apeiron.core:world-add-character! world character)
+      (apeiron.core:create-object! world character)
+      (apeiron.core:place-character! world character)
       (let ((start-room (apeiron.core:object-location character)))
         ;; "n" should go north (same as "go north")
         (apeiron.core:process-command world character "n")
@@ -77,7 +83,8 @@
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
     (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
-      (apeiron.core:world-add-character! world character)
+      (apeiron.core:create-object! world character)
+      (apeiron.core:place-character! world character)
       ;; Unknown command should not crash
       (apeiron.core:process-command world character "blahblah")
       (is (not (null character))))))
@@ -88,7 +95,8 @@
     (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream))))
           (captured-messages '()))
-      (apeiron.core:world-add-character! world character)
+      (apeiron.core:create-object! world character)
+      (apeiron.core:place-character! world character)
       (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
         (unwind-protect
              (progn
@@ -125,8 +133,10 @@
                                                                      :use-colors nil)))
           (messages1 '())
           (messages2 '()))
-      (apeiron.core:world-add-character! world character1)
-      (apeiron.core:world-add-character! world character2)
+      (apeiron.core:create-object! world character1)
+      (apeiron.core:place-character! world character1)
+      (apeiron.core:create-object! world character2)
+      (apeiron.core:place-character! world character2)
       (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
         (unwind-protect
              (progn
@@ -160,7 +170,8 @@
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)))
           (captured '()))
-      (apeiron.core:world-add-character! world character)
+      (apeiron.core:create-object! world character)
+      (apeiron.core:place-character! world character)
       (let* ((room (apeiron.core:object-location character))
              (sword (make-instance 'apeiron.core:mud-object
                                    :name "Rusty Sword"
@@ -211,7 +222,8 @@
                (let ((bob (apeiron.core:new-character "Bob" (make-instance 'apeiron.core:stream-session
                                                                              :stream (make-string-output-stream)
                                                                              :use-colors nil))))
-                 (apeiron.core:world-add-character! world bob)
+                 (apeiron.core:create-object! world bob)
+      (apeiron.core:place-character! world bob)
                  (apeiron.core:object-move bob room)
                  (apeiron.core:process-command world character "examine bob")
                  (is (= 1 (length captured)))
@@ -229,8 +241,10 @@
                                                                  :use-colors nil)))
           (msgs-alice '())
           (msgs-bob '()))
-      (apeiron.core:world-add-character! world alice)
-      (apeiron.core:world-add-character! world bob)
+      (apeiron.core:create-object! world alice)
+      (apeiron.core:place-character! world alice)
+      (apeiron.core:create-object! world bob)
+      (apeiron.core:place-character! world bob)
       (let* ((room (apeiron.core:object-location alice))
              (goblin (make-instance 'apeiron.core:mud-npc
                                     :name "Goblin"
@@ -311,7 +325,8 @@
                                                                        :stream io
                                                                        :use-colors nil))))
       (apeiron.core:world-add-object! world character)
-      (apeiron.core:world-add-character! world character)
+      (apeiron.core:create-object! world character)
+      (apeiron.core:place-character! world character)
       (apeiron.core:container-add-object room guestbook)
       ;; Write a message via process-command
       (apeiron.core:process-command world character "write guestbook")
@@ -455,7 +470,8 @@
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)))
           (captured '()))
-      (apeiron.core:world-add-character! world character)
+      (apeiron.core:create-object! world character)
+      (apeiron.core:place-character! world character)
       (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
         (unwind-protect
              (progn
@@ -467,7 +483,7 @@
                (apeiron.core:process-command world character "eval (d (me))")
                (is (= 1 (length captured)))
                (is (search "TestCharacter" (first captured)))
-               (is (search "MUD-CHARACTER" (first captured))))
+               (is (search "PERSISTENT-CHARACTER" (first captured))))
           (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))
 
 (test command-processing-eval-slots-of
@@ -477,7 +493,8 @@
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)))
           (captured '()))
-      (apeiron.core:world-add-character! world character)
+      (apeiron.core:create-object! world character)
+      (apeiron.core:place-character! world character)
       (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
         (unwind-protect
              (progn
@@ -498,7 +515,8 @@
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)))
           (captured '()))
-      (apeiron.core:world-add-character! world character)
+      (apeiron.core:create-object! world character)
+      (apeiron.core:place-character! world character)
       (let* ((room (apeiron.core:object-location character))
              (original-send-message (fdefinition 'apeiron.core:character-send-message)))
         ;; Set a property on the character so props output has something to show
@@ -524,7 +542,8 @@
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)))
           (captured '()))
-      (apeiron.core:world-add-character! world character)
+      (apeiron.core:create-object! world character)
+      (apeiron.core:place-character! world character)
       (let* ((room (apeiron.core:object-location character))
              (sword (make-instance 'apeiron.core:mud-object
                                    :name "Rusty Sword"
@@ -551,7 +570,8 @@
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)))
           (captured '()))
-      (apeiron.core:world-add-character! world character)
+      (apeiron.core:create-object! world character)
+      (apeiron.core:place-character! world character)
       (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
         (unwind-protect
              (progn
@@ -563,7 +583,7 @@
                (apeiron.core:process-command world character "eval (loc (me))")
                (is (= 1 (length captured)))
                (is (search "TestCharacter" (first captured)))
-               (is (search "MUD-CHARACTER" (first captured))))
+               (is (search "PERSISTENT-CHARACTER" (first captured))))
           (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))
 
 (test command-processing-eval-obj-type
@@ -573,7 +593,8 @@
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)))
           (captured '()))
-      (apeiron.core:world-add-character! world character)
+      (apeiron.core:create-object! world character)
+      (apeiron.core:place-character! world character)
       (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
         (unwind-protect
              (progn
@@ -584,7 +605,7 @@
                (setf captured '())
                (apeiron.core:process-command world character "eval (obj-type (me))")
                (is (= 1 (length captured)))
-               (is (search "MUD-CHARACTER" (first captured))))
+               (is (search "PERSISTENT-CHARACTER" (first captured))))
           (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))
 
 (test command-processing-help-specific
@@ -594,7 +615,8 @@
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)))
           (captured '()))
-      (apeiron.core:world-add-character! world character)
+      (apeiron.core:create-object! world character)
+      (apeiron.core:place-character! world character)
       (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
         (unwind-protect
              (progn
@@ -628,7 +650,8 @@
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)))
           (captured '()))
-      (apeiron.core:world-add-character! world character)
+      (apeiron.core:create-object! world character)
+      (apeiron.core:place-character! world character)
       (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
         (unwind-protect
              (progn

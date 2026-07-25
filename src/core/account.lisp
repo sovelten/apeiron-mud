@@ -18,16 +18,14 @@
    (email :initarg :email
           :accessor account-email
           :initform nil
-          :documentation "Email address for password recovery.")
-   (character :initarg :character
-              :accessor account-character
-              :initform nil
-              :documentation "The mud-character currently associated with this account.
-Currently limited to one character; may become a list in the future."))
+          :documentation "Email address for password recovery."))
   (:documentation "A player account for the MUD.
 
 Accounts are independent of the BKNR persistence layer and are stored
-in a plain .dat file under *DATA-DIRECTORY*."))
+in a plain .dat file under *DATA-DIRECTORY*.
+
+Characters are NOT linked from the account — only the character carries
+an OWNER reference (a string matching the account name)."))
 
 (defmethod print-object ((account mud-account) stream)
   (print-unreadable-object (account stream :type t)

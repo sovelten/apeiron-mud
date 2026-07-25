@@ -10,21 +10,18 @@
    (owner :initarg :owner
           :accessor character-owner
           :initform nil
-          :documentation "The name of the mud-account that owns this character.
-NIL for guest characters."))
-  (:documentation "A character character in the MUD"))
+          :documentation "The name (string) of the mud-account that owns this character.
+NIL for guest characters.  Stored as a plain string so it survives
+BKNR restarts without needing an object reference."))
+  (:documentation "A character in the MUD"))
 
 (defun new-character (name session &key owner)
   (let ((character (make-instance 'mud-character
-                                  :id (make-id)
                                   :name name
                                   :session session
                                   :owner owner)))
-    ;; Link character to session
+    ;; Link character to session (one-way: session knows its character)
     (setf (session-character session) character)
-    ;; Link account to character (bidirectional)
-    (when owner
-      (setf (account-character owner) character))
     character))
 
 (defun character-send-message (character message &key (newline t))
