@@ -32,10 +32,10 @@ The default method is a no-op."))
        :initform (make-id)
        :accessor session-id
        :documentation "Unique identifier for this object")
-   (character :initarg :player
+   (character :initarg :character
               :accessor session-character
               :initform nil
-              :documentation "Player controlled by this session")
+              :documentation "Character controlled by this session")
    (use-colors :initarg :use-colors
                :accessor session-use-colors
                :initform t
@@ -62,7 +62,7 @@ call CALL-NEXT-METHOD to clear the character link."
     (setf (session-character session) nil)))
 
 (defgeneric session-send-prompt (session)
-  (:documentation "Send a prompt to the player on the same line (no newline).
+  (:documentation "Send a prompt to the character on the same line (no newline).
 The default method sends \"> \" and returns.
 Subclasses (e.g. telnet-session) may override to add protocol-specific
 signalling (e.g. EOR for prompt detection)."))
@@ -183,10 +183,10 @@ for each typed character."
                          (session-id obj) e))))))))
 
 (defmethod mud-write :after ((session mud-session) message &key (newline t))
-  "After every mud-write, issue a player-output-event so loggers can capture it."
+  "After every mud-write, issue a character-output-event so loggers can capture it."
   (declare (ignore newline))
   (let ((char (session-character session)))
-    (issue-player-output-event (session-id session)
+    (issue-character-output-event (session-id session)
                                (if char (object-name char) nil)
                                (etypecase message
                                  (string message)

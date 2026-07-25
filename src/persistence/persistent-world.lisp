@@ -23,7 +23,7 @@
 
 (defwrapping-persistent-class persistent-wordle (mud-wordle-puzzle persistent-object)
   ()
-  (:transient-slots player-guesses))
+  (:transient-slots character-guesses))
 
 (defwrapping-persistent-class persistent-connection (mud-connection persistent-object)
   ())

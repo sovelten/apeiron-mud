@@ -5,163 +5,163 @@
 (test command-processing-look
   "Test the look command"
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
-    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
-      (apeiron.core:world-add-character! world player)
+      (apeiron.core:world-add-character! world character)
       ;; The look command should work without crashing
-      (apeiron.core:process-command world player "look")
-      (is (not (null player))))))
+      (apeiron.core:process-command world character "look")
+      (is (not (null character))))))
 
 (test command-processing-help
   "Test the help command"
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
-    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
-      (apeiron.core:world-add-character! world player)
-      (apeiron.core:process-command world player "help")
-      (is (not (null player))))))
+      (apeiron.core:world-add-character! world character)
+      (apeiron.core:process-command world character "help")
+      (is (not (null character))))))
 
 (test command-processing-exits
   "Test the exits command"
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
-    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
-      (apeiron.core:world-add-character! world player)
-      (apeiron.core:process-command world player "exits")
-      (is (not (null player))))))
+      (apeiron.core:world-add-character! world character)
+      (apeiron.core:process-command world character "exits")
+      (is (not (null character))))))
 
 (test command-processing-inventory
   "Test the inventory command"
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
-    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
-      (apeiron.core:world-add-character! world player)
-      (apeiron.core:process-command world player "inventory")
-      (is (not (null player))))))
+      (apeiron.core:world-add-character! world character)
+      (apeiron.core:process-command world character "inventory")
+      (is (not (null character))))))
 
 (test command-processing-go
   "Test the go command"
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
-    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
-      (apeiron.core:world-add-character! world player)
-      (let ((start-room (apeiron.core:object-location player)))
+      (apeiron.core:world-add-character! world character)
+      (let ((start-room (apeiron.core:object-location character)))
         ;; Try to go north (should work from starting room)
-        (apeiron.core:process-command world player "go north")
-        ;; Player should have moved or stayed in same room
-        (is (not (null (apeiron.core:object-location player))))))))
+        (apeiron.core:process-command world character "go north")
+        ;; Character should have moved or stayed in same room
+        (is (not (null (apeiron.core:object-location character))))))))
 
 (test command-processing-direction-shorthands
   "Test n/s/e/w direction shorthand commands"
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
-    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
-      (apeiron.core:world-add-character! world player)
-      (let ((start-room (apeiron.core:object-location player)))
+      (apeiron.core:world-add-character! world character)
+      (let ((start-room (apeiron.core:object-location character)))
         ;; "n" should go north (same as "go north")
-        (apeiron.core:process-command world player "n")
-        (let ((after-north (apeiron.core:object-location player)))
-          ;; Player may have moved (north from Gathering goes to forest)
+        (apeiron.core:process-command world character "n")
+        (let ((after-north (apeiron.core:object-location character)))
+          ;; Character may have moved (north from Gathering goes to forest)
           (is (not (null after-north))))
         ;; Move back to start
-        (apeiron.core:process-command world player "s")
-        (let ((after-south (apeiron.core:object-location player)))
+        (apeiron.core:process-command world character "s")
+        (let ((after-south (apeiron.core:object-location character)))
           (is (not (null after-south))))
         ;; "e" should go east
-        (apeiron.core:process-command world player "e")
-        (let ((after-east (apeiron.core:object-location player)))
+        (apeiron.core:process-command world character "e")
+        (let ((after-east (apeiron.core:object-location character)))
           (is (not (null after-east))))))))
 
 (test command-processing-unknown
   "Test unknown command handling"
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
-    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
-      (apeiron.core:world-add-character! world player)
+      (apeiron.core:world-add-character! world character)
       ;; Unknown command should not crash
-      (apeiron.core:process-command world player "blahblah")
-      (is (not (null player))))))
+      (apeiron.core:process-command world character "blahblah")
+      (is (not (null character))))))
 
 (test command-processing-eval
   "Test the eval command"
   (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
-    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream))))
           (captured-messages '()))
-      (apeiron.core:world-add-character! world player)
-      (let ((original-send-message (fdefinition 'apeiron.core:player-send-message)))
+      (apeiron.core:world-add-character! world character)
+      (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
         (unwind-protect
              (progn
-               (setf (fdefinition 'apeiron.core:player-send-message)
+               (setf (fdefinition 'apeiron.core:character-send-message)
                      (lambda (p msg &key newline)
                        (declare (ignore p newline))
                        (push msg captured-messages)))
                
                ;; Test 1: No arguments
                (setf captured-messages '())
-               (apeiron.core:process-command world player "eval")
+               (apeiron.core:process-command world character "eval")
                (is (equal '("Eval what? Usage: eval <code>") captured-messages))
                
                ;; Test 2: Simple sum
                (setf captured-messages '())
-               (apeiron.core:process-command world player "eval (+ 3 4)")
+               (apeiron.core:process-command world character "eval (+ 3 4)")
                (is (equal '("7") captured-messages))
                
                ;; Test 3: Error handling
                (setf captured-messages '())
-               (apeiron.core:process-command world player "eval (/ 1 0)")
+               (apeiron.core:process-command world character "eval (/ 1 0)")
                (is (= 1 (length captured-messages)))
                (is (search "Error" (car captured-messages))))
-                         (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+                         (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))
 
 (test command-processing-shout
   "Test the shout command — broadcasts to all characters."
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
-    (let ((player1 (apeiron.core:new-character "Alice" (make-instance 'apeiron.core:stream-session
+    (let ((character1 (apeiron.core:new-character "Alice" (make-instance 'apeiron.core:stream-session
                                                                        :stream (make-string-output-stream)
                                                                        :use-colors nil)))
-          (player2 (apeiron.core:new-character "Bob" (make-instance 'apeiron.core:stream-session
+          (character2 (apeiron.core:new-character "Bob" (make-instance 'apeiron.core:stream-session
                                                                      :stream (make-string-output-stream)
                                                                      :use-colors nil)))
           (messages1 '())
           (messages2 '()))
-      (apeiron.core:world-add-character! world player1)
-      (apeiron.core:world-add-character! world player2)
-      (let ((original-send-message (fdefinition 'apeiron.core:player-send-message)))
+      (apeiron.core:world-add-character! world character1)
+      (apeiron.core:world-add-character! world character2)
+      (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
         (unwind-protect
              (progn
-               (setf (fdefinition 'apeiron.core:player-send-message)
+               (setf (fdefinition 'apeiron.core:character-send-message)
                      (lambda (p msg &key newline)
                        (declare (ignore newline))
                        (cond
-                         ((eq p player1) (push msg messages1))
-                         ((eq p player2) (push msg messages2))
+                         ((eq p character1) (push msg messages1))
+                         ((eq p character2) (push msg messages2))
                          (t (push msg messages1)))))
                
                ;; Test 1: no message shows usage
                (setf messages1 '() messages2 '())
-               (apeiron.core:process-command world player1 "shout")
+               (apeiron.core:process-command world character1 "shout")
                (is (equal '("Shout what? Usage: shout <message>") messages1))
                (is (null messages2))
                
                ;; Test 2: shout is broadcast to everyone except the shouter
                (setf messages1 '() messages2 '())
-               (apeiron.core:process-command world player1 "shout Hello everyone!")
-               ;; Player1 gets the "You shout" confirmation
+               (apeiron.core:process-command world character1 "shout Hello everyone!")
+               ;; Character1 gets the "You shout" confirmation
                (is (search "You shout" (car messages1)))
-               ;; Player2 gets the broadcast
+               ;; Character2 gets the broadcast
                (is (search "Alice shouts: Hello everyone!" (car messages2))))
-          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+          (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))
 
 (test command-processing-examine
   "Test the examine command"
   (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
-    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)))
           (captured '()))
-      (apeiron.core:world-add-character! world player)
-      (let* ((room (apeiron.core:object-location player))
+      (apeiron.core:world-add-character! world character)
+      (let* ((room (apeiron.core:object-location character))
              (sword (make-instance 'apeiron.core:mud-object
                                    :name "Rusty Sword"
                                    :id 100
@@ -173,50 +173,50 @@
                                  :description "A smelly goblin."
                                  :hp 10
                                  :max-hp 10))
-             (original-send-message (fdefinition 'apeiron.core:player-send-message)))
+             (original-send-message (fdefinition 'apeiron.core:character-send-message)))
         (apeiron.core:container-add-object room sword)
         (apeiron.core:container-add-object room npc)
         (unwind-protect
              (progn
-               (setf (fdefinition 'apeiron.core:player-send-message)
+               (setf (fdefinition 'apeiron.core:character-send-message)
                      (lambda (p msg &key newline)
                        (declare (ignore p newline))
                        (push msg captured)))
                
                ;; Test 1: No arguments
                (setf captured '())
-               (apeiron.core:process-command world player "examine")
+               (apeiron.core:process-command world character "examine")
                (is (search "Examine what?" (first captured)))
                
                ;; Test 2: Examine a generic object
                (setf captured '())
-               (apeiron.core:process-command world player "examine sword")
+               (apeiron.core:process-command world character "examine sword")
                (is (= 1 (length captured)))
                (is (search "Rusty Sword" (first captured)))
                
                ;; Test 3: Examine an NPC (should include HP)
                (setf captured '())
-               (apeiron.core:process-command world player "examine goblin")
+               (apeiron.core:process-command world character "examine goblin")
                (is (= 1 (length captured)))
                (is (search "Goblin" (first captured)))
                (is (search "HP" (first captured)))
                
                ;; Test 4: Examine something not present
                (setf captured '())
-               (apeiron.core:process-command world player "examine dragon")
+               (apeiron.core:process-command world character "examine dragon")
                (is (search "don't see that" (first captured)))
                
-               ;; Test 5: Examine another player in the room
+               ;; Test 5: Examine another character in the room
                (setf captured '())
                (let ((bob (apeiron.core:new-character "Bob" (make-instance 'apeiron.core:stream-session
                                                                              :stream (make-string-output-stream)
                                                                              :use-colors nil))))
                  (apeiron.core:world-add-character! world bob)
                  (apeiron.core:object-move bob room)
-                 (apeiron.core:process-command world player "examine bob")
+                 (apeiron.core:process-command world character "examine bob")
                  (is (= 1 (length captured)))
                  (is (search "Bob" (first captured)))))
-          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+          (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))
 
 (test command-processing-tell
   "Test the tell command — private messages between characters and objects."
@@ -238,12 +238,12 @@
                                     :description "A smelly goblin."
                                     :hp 10
                                     :max-hp 10))
-             (original-send-message (fdefinition 'apeiron.core:player-send-message)))
+             (original-send-message (fdefinition 'apeiron.core:character-send-message)))
         (apeiron.core:object-move bob room)
         (apeiron.core:container-add-object room goblin)
         (unwind-protect
              (progn
-               (setf (fdefinition 'apeiron.core:player-send-message)
+               (setf (fdefinition 'apeiron.core:character-send-message)
                      (lambda (p msg &key newline)
                        (declare (ignore newline))
                        (cond
@@ -269,7 +269,7 @@
                (is (search "here to tell that to" (first msgs-alice)))
                (is (null msgs-bob))
 
-               ;; Test 4: Tell another player
+               ;; Test 4: Tell another character
                (setf msgs-alice '() msgs-bob '())
                (apeiron.core:process-command world alice "tell bob Hello there!")
                ;; Alice sees "You tell Bob: Hello there!"
@@ -294,7 +294,7 @@
                ;; Bob sees nothing
                (is (null msgs-bob)))
 
-          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+          (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))
 
 (test guestbook-read-write-via-commands
   "Test writing to and reading from a guestbook via process-command"
@@ -307,21 +307,21 @@
     (apeiron.core:world-add-object! world room)
     (apeiron.core:world-add-object! world guestbook)
     (apeiron.core:world-set-starting-room! world room)
-    (let ((player (apeiron.core:new-character "Alice" (make-instance 'apeiron.core:stream-session
+    (let ((character (apeiron.core:new-character "Alice" (make-instance 'apeiron.core:stream-session
                                                                        :stream io
                                                                        :use-colors nil))))
-      (apeiron.core:world-add-object! world player)
-      (apeiron.core:world-add-character! world player)
+      (apeiron.core:world-add-object! world character)
+      (apeiron.core:world-add-character! world character)
       (apeiron.core:container-add-object room guestbook)
       ;; Write a message via process-command
-      (apeiron.core:process-command world player "write guestbook")
+      (apeiron.core:process-command world character "write guestbook")
       ;; Verify entry was recorded
       (let ((entries (apeiron.core:guestbook-entries guestbook)))
         (is (= 1 (length entries)))
         (is (equal "Alice" (getf (first entries) :author)))
         (is (equal "Hello MUD!" (getf (first entries) :message))))
       ;; Read back via process-command
-      (apeiron.core:process-command world player "read guestbook")
+      (apeiron.core:process-command world character "read guestbook")
       (let ((text (get-output-stream-string output)))
         (is (search "Hello MUD!" text))
         (is (search "Alice" text))))))
@@ -451,195 +451,195 @@
 (test command-processing-eval-d
   "Test the eval d helper — describe object returning a string"
   (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
-    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)))
           (captured '()))
-      (apeiron.core:world-add-character! world player)
-      (let ((original-send-message (fdefinition 'apeiron.core:player-send-message)))
+      (apeiron.core:world-add-character! world character)
+      (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
         (unwind-protect
              (progn
-               (setf (fdefinition 'apeiron.core:player-send-message)
+               (setf (fdefinition 'apeiron.core:character-send-message)
                      (lambda (p msg &key newline)
                        (declare (ignore p newline))
                        (push msg captured)))
                (setf captured '())
-               (apeiron.core:process-command world player "eval (d (me))")
+               (apeiron.core:process-command world character "eval (d (me))")
                (is (= 1 (length captured)))
-               (is (search "TestPlayer" (first captured)))
+               (is (search "TestCharacter" (first captured)))
                (is (search "MUD-CHARACTER" (first captured))))
-          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+          (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))
 
 (test command-processing-eval-slots-of
   "Test the eval slots-of helper — describe slots returning a string"
   (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
-    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)))
           (captured '()))
-      (apeiron.core:world-add-character! world player)
-      (let ((original-send-message (fdefinition 'apeiron.core:player-send-message)))
+      (apeiron.core:world-add-character! world character)
+      (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
         (unwind-protect
              (progn
-               (setf (fdefinition 'apeiron.core:player-send-message)
+               (setf (fdefinition 'apeiron.core:character-send-message)
                      (lambda (p msg &key newline)
                        (declare (ignore p newline))
                        (push msg captured)))
                (setf captured '())
-               (apeiron.core:process-command world player "eval (slots-of (me))")
+               (apeiron.core:process-command world character "eval (slots-of (me))")
                (is (= 1 (length captured)))
-               (is (search "TestPlayer" (first captured))))
-          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+               (is (search "TestCharacter" (first captured))))
+          (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))
 
 (test command-processing-eval-props
   "Test the eval props helper — show object properties returning a string"
   (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
-    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)))
           (captured '()))
-      (apeiron.core:world-add-character! world player)
-      (let* ((room (apeiron.core:object-location player))
-             (original-send-message (fdefinition 'apeiron.core:player-send-message)))
-        ;; Set a property on the player so props output has something to show
-        (apeiron.core:object-set-property player "test-key" "test-value")
+      (apeiron.core:world-add-character! world character)
+      (let* ((room (apeiron.core:object-location character))
+             (original-send-message (fdefinition 'apeiron.core:character-send-message)))
+        ;; Set a property on the character so props output has something to show
+        (apeiron.core:object-set-property character "test-key" "test-value")
         (unwind-protect
              (progn
-               (setf (fdefinition 'apeiron.core:player-send-message)
+               (setf (fdefinition 'apeiron.core:character-send-message)
                      (lambda (p msg &key newline)
                        (declare (ignore p newline))
                        (push msg captured)))
                (setf captured '())
-               (apeiron.core:process-command world player
+               (apeiron.core:process-command world character
                                              "eval (props (me))")
                (is (= 1 (length captured)))
                (is (search "test-key" (first captured)))
                (is (search "test-value" (first captured))))
-          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+          (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))
 
 (test command-processing-eval-inv
   "Test the eval inv helper — show container contents returning a string"
   (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
-    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)))
           (captured '()))
-      (apeiron.core:world-add-character! world player)
-      (let* ((room (apeiron.core:object-location player))
+      (apeiron.core:world-add-character! world character)
+      (let* ((room (apeiron.core:object-location character))
              (sword (make-instance 'apeiron.core:mud-object
                                    :name "Rusty Sword"
                                    :id 9002
                                    :description "A rusty old blade."))
-             (original-send-message (fdefinition 'apeiron.core:player-send-message)))
+             (original-send-message (fdefinition 'apeiron.core:character-send-message)))
         (apeiron.core:container-add-object room sword)
         (unwind-protect
              (progn
-               (setf (fdefinition 'apeiron.core:player-send-message)
+               (setf (fdefinition 'apeiron.core:character-send-message)
                      (lambda (p msg &key newline)
                        (declare (ignore p newline))
                        (push msg captured)))
                (setf captured '())
-               (apeiron.core:process-command world player "eval (inv (here))")
+               (apeiron.core:process-command world character "eval (inv (here))")
                (is (= 1 (length captured)))
                (is (search "Rusty Sword" (first captured))))
-          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+          (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))
 
 (test command-processing-eval-loc
   "Test the eval loc helper — show location chain returning a string"
   (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
-    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)))
           (captured '()))
-      (apeiron.core:world-add-character! world player)
-      (let ((original-send-message (fdefinition 'apeiron.core:player-send-message)))
+      (apeiron.core:world-add-character! world character)
+      (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
         (unwind-protect
              (progn
-               (setf (fdefinition 'apeiron.core:player-send-message)
+               (setf (fdefinition 'apeiron.core:character-send-message)
                      (lambda (p msg &key newline)
                        (declare (ignore p newline))
                        (push msg captured)))
                (setf captured '())
-               (apeiron.core:process-command world player "eval (loc (me))")
+               (apeiron.core:process-command world character "eval (loc (me))")
                (is (= 1 (length captured)))
-               (is (search "TestPlayer" (first captured)))
+               (is (search "TestCharacter" (first captured)))
                (is (search "MUD-CHARACTER" (first captured))))
-          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+          (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))
 
 (test command-processing-eval-obj-type
   "Test the eval obj-type helper — show type name returning a string"
   (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
-    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)))
           (captured '()))
-      (apeiron.core:world-add-character! world player)
-      (let ((original-send-message (fdefinition 'apeiron.core:player-send-message)))
+      (apeiron.core:world-add-character! world character)
+      (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
         (unwind-protect
              (progn
-               (setf (fdefinition 'apeiron.core:player-send-message)
+               (setf (fdefinition 'apeiron.core:character-send-message)
                      (lambda (p msg &key newline)
                        (declare (ignore p newline))
                        (push msg captured)))
                (setf captured '())
-               (apeiron.core:process-command world player "eval (obj-type (me))")
+               (apeiron.core:process-command world character "eval (obj-type (me))")
                (is (= 1 (length captured)))
                (is (search "MUD-CHARACTER" (first captured))))
-          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+          (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))
 
 (test command-processing-help-specific
   "Test 'help <command>' shows the specific command's docstring"
   (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
-    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)))
           (captured '()))
-      (apeiron.core:world-add-character! world player)
-      (let ((original-send-message (fdefinition 'apeiron.core:player-send-message)))
+      (apeiron.core:world-add-character! world character)
+      (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
         (unwind-protect
              (progn
-               (setf (fdefinition 'apeiron.core:player-send-message)
+               (setf (fdefinition 'apeiron.core:character-send-message)
                      (lambda (p msg &key newline)
                        (declare (ignore p newline))
                        (push msg captured)))
                ;; Test help for a specific command
                (setf captured '())
-               (apeiron.core:process-command world player "help look")
+               (apeiron.core:process-command world character "help look")
                (is (= 1 (length captured)))
                (is (search "Help for" (first captured)))
                (is (search "look" (first captured)))
                (is (search "Look around" (first captured)))
                ;; Test help for unknown command
                (setf captured '())
-               (apeiron.core:process-command world player "help nonexistent")
+               (apeiron.core:process-command world character "help nonexistent")
                (is (= 1 (length captured)))
                (is (search "Unknown command" (first captured)))
                ;; Test help with no arguments shows the command list
                (setf captured '())
-               (apeiron.core:process-command world player "help")
+               (apeiron.core:process-command world character "help")
                (is (= 1 (length captured)))
                (is (search "Available commands" (first captured))))
-          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+          (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))
 
 (test command-processing-help-for-help
   "Test 'help help' shows help's own docstring"
   (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
-    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)))
           (captured '()))
-      (apeiron.core:world-add-character! world player)
-      (let ((original-send-message (fdefinition 'apeiron.core:player-send-message)))
+      (apeiron.core:world-add-character! world character)
+      (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
         (unwind-protect
              (progn
-               (setf (fdefinition 'apeiron.core:player-send-message)
+               (setf (fdefinition 'apeiron.core:character-send-message)
                      (lambda (p msg &key newline)
                        (declare (ignore p newline))
                        (push msg captured)))
                (setf captured '())
-               (apeiron.core:process-command world player "help help")
+               (apeiron.core:process-command world character "help help")
                (is (= 1 (length captured)))
                (is (search "help" (first captured)))
                (is (search "Help for" (first captured)))
                (is (search "show help" (first captured))))
-          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
+          (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))

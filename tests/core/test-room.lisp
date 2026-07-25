@@ -72,7 +72,7 @@
             (is (null (connection-exit-blocked-message room1 "north"))))))
       
       (test connection-regular-block-blocks-all-characters
-        "A regularly blocked connection blocks every player regardless of flags."
+        "A regularly blocked connection blocks every character regardless of flags."
         (let* ((world (new-world))
                (room1 (new-room :name "Hall"))
                (room2 (new-room :name "Vault"))

@@ -65,14 +65,14 @@
   "Test adding a character places them in the world's starting room"
   (let ((world (apeiron.core:new-world))
         (room (apeiron.core:new-room :name "Spawn"))
-        (player (apeiron.core:new-character "Alice" (make-instance 'apeiron.core:stream-session
+        (character (apeiron.core:new-character "Alice" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
     (apeiron.core:world-add-object! world room)
     (apeiron.core:world-set-starting-room! world room)
-    (apeiron.core:world-add-object! world player)
-    (apeiron.core:world-add-character! world player)
-    (is (eq room (apeiron.core:object-location player)))
-    (is (eq player (apeiron.core:character-by-id world (apeiron.core:object-id player))))))
+    (apeiron.core:world-add-object! world character)
+    (apeiron.core:world-add-character! world character)
+    (is (eq room (apeiron.core:object-location character)))
+    (is (eq character (apeiron.core:character-by-id world (apeiron.core:object-id character))))))
 
 (test world-total-characters
   "Test world-total-characters counts active characters"
@@ -98,14 +98,14 @@
         (room (apeiron.core:new-room :name "Spawn")))
     (apeiron.core:world-add-object! world room)
     (apeiron.core:world-set-starting-room! world room)
-    (let ((player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
-      (apeiron.core:world-add-object! world player)
-      (apeiron.core:world-add-character! world player)
+      (apeiron.core:world-add-object! world character)
+      (apeiron.core:world-add-character! world character)
       (is (= 1 (apeiron.core:world-total-characters world)))
-      (apeiron.core:world-remove-character! world player)
+      (apeiron.core:world-remove-character! world character)
       (is (= 0 (apeiron.core:world-total-characters world)))
-      (is (null (apeiron.core:character-by-id world (apeiron.core:object-id player)))))))
+      (is (null (apeiron.core:character-by-id world (apeiron.core:object-id character)))))))
 
 (test character-by-id-unknown
   "Test character-by-id returns nil for unknown ID"
@@ -144,7 +144,7 @@
                                      :stream (make-string-output-stream))))
           (bob   (apeiron.core:new-character "Bob"   (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
-      ;; Capture messages addressed to each player's session via :after method
+      ;; Capture messages addressed to each character's session via :after method
       (defmethod apeiron.core:mud-write :after ((session (eql (apeiron.core:character-session alice))) msg &key newline)
         (declare (ignore newline))
         (vector-push-extend msg msgs-a))
@@ -162,7 +162,7 @@
       (is (equal "Hello everyone!" (aref msgs-b 0))))))
 
 (test world-broadcast-exclude
-  "Test broadcasting excludes the specified player"
+  "Test broadcasting excludes the specified character"
   (let ((world (apeiron.core:new-world))
         (room (apeiron.core:new-room :name "Spawn"))
         (msgs-a (make-array 0 :adjustable t :fill-pointer t))
@@ -187,7 +187,7 @@
       (is (= 1 (length msgs-a)))
       (is (equal "Secret" (aref msgs-a 0)))
       (is (= 0 (length msgs-b))
-          "Bob (the exclude-player) should not receive the message"))))
+          "Bob (the exclude-character) should not receive the message"))))
 
 (test world-object-by-id
   "Test looking up an object by its world-level ID"

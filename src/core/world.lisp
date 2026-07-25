@@ -115,7 +115,7 @@ Synonyms: \"e\" from west-room, \"w\" from east-room."
   (hash-table-count (world-characters world)))
 
 (defun world-remove-character! (world character)
-  "Remove a player from the world."
+  "Remove a character from the world."
   (let ((room (object-location character)))
     ;; Remove from room
     (when (typep room 'mud-room)
@@ -125,19 +125,19 @@ Synonyms: \"e\" from west-room, \"w\" from east-room."
     (log-message "~A removed from world" (object-name character))))
 
 (defun character-by-id (world char-id)
-  "Get a player by ID."
+  "Get a character by ID."
   (gethash char-id (world-characters world)))
 
 (defun characters (world)
   "Get all active characters."
-  (loop for player being the hash-values of (world-characters world)
-        collect player))
+  (loop for character being the hash-values of (world-characters world)
+        collect character))
 
-(defun world-broadcast (world message &optional exclude-player)
+(defun world-broadcast (world message &optional exclude-character)
   "Broadcast a message to all characters (optionally excluding one)."
-  (dolist (player (characters world))
-    (unless (and exclude-player (eq (object-id player) (object-id exclude-player)))
-      (player-send-message player message))))
+  (dolist (character (characters world))
+    (unless (and exclude-character (eq (object-id character) (object-id exclude-character)))
+      (character-send-message character message))))
 
 ;; ─── World-level object/room queries ─────────────────────────────────────
 

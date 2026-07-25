@@ -136,7 +136,7 @@ that is returned; otherwise a generic \"X is blocked\" message is used."
 (defun connection-set-challenge (connection question answer flag)
   "Set a challenge (riddle/password) on a CONNECTION.
 
-A player who answers correctly with ANSWER sets the FLAG on themselves,
+A character who answers correctly with ANSWER sets the FLAG on themselves,
 which allows them to pass.  Characters without the flag see the QUESTION
 as a blocking message.  This is independent of regular connection
 blocking (CONNECTION-BLOCKED-P)."

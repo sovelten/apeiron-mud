@@ -8,11 +8,11 @@
       (progn
         (let ((session (make-instance 'apeiron.core:stream-session
                                       :stream (make-string-output-stream)))
-              (player (apeiron.core:new-character "TestPlayer" (make-instance 'apeiron.core:stream-session
+              (character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                               :stream (make-string-output-stream)))))
-          ;; Sending message to player with nil socket should not crash
-          (apeiron.core:player-send-message player "Test message")
-          (is (not (null player)))))
+          ;; Sending message to character with nil socket should not crash
+          (apeiron.core:character-send-message character "Test message")
+          (is (not (null character)))))
     (error (e)
       ;; Error is expected, just check it doesn't crash the test
       (is (not (null e))))))
@@ -57,8 +57,8 @@ session-id, mirroring the *player-threads* pattern in network.lisp."
     (is (eq (gethash (apeiron.core:session-id session-2) table) :thread-b)
         "Other entries survive removal")))
 
-(test player-message-with-mock-socket
-  "Test sending messages to a player with a real socket"
+(test character-message-with-mock-socket
+  "Test sending messages to a character with a real socket"
   (handler-case
       (let* ((server-socket (usocket:socket-listen "127.0.0.1" 0 :reuseaddress t))
              (port (usocket:get-local-port server-socket))
@@ -69,10 +69,10 @@ session-id, mirroring the *player-threads* pattern in network.lisp."
         (unwind-protect
              (progn
                (apeiron.persistence:world-restore-or-initialize)
-               (let ((player (apeiron.core:new-character "TestPlayer" session)))
-                 (is (not (null player)))
-                 (apeiron.core:player-send-message player "Test message")
-                 (is (not (null player)))))
+               (let ((character (apeiron.core:new-character "TestCharacter" session)))
+                 (is (not (null character)))
+                 (apeiron.core:character-send-message character "Test message")
+                 (is (not (null character)))))
           (when client-socket (usocket:socket-close client-socket))
           (when accepted-socket (usocket:socket-close accepted-socket))
           (when server-socket (usocket:socket-close server-socket))))

@@ -43,48 +43,48 @@
       (is (not (null grunt))))))
 
 (test combat-attack-grunt
-  "Player can attack and defeat a grunt."
+  "Character can attack and defeat a grunt."
   (let* ((world (apeiron.persistence:world-restore-or-initialize
                  :force-new t
                  :initializer #'apeiron.worlds:new-default-world))
-         (player (apeiron.core:new-character "Fighter" (make-instance 'apeiron.core:stream-session
+         (character (apeiron.core:new-character "Fighter" (make-instance 'apeiron.core:stream-session
                                                                        :stream (make-string-output-stream))))
          (all-rooms (apeiron.core:world-all-rooms world))
          (grunt-room (find-if (lambda (r) (string= "Grunt Patrol Route" (apeiron.core:object-name r)))
                               all-rooms))
          (grunt (find-if (lambda (obj) (typep obj 'apeiron.core:mud-npc))
                           (apeiron.core:container-all-objects grunt-room))))
-    (apeiron.core:object-move player grunt-room)
+    (apeiron.core:object-move character grunt-room)
     (is (not (apeiron.core:npc-defeated-p grunt)))
     (loop repeat 20
           until (apeiron.core:npc-defeated-p grunt)
-          do (apeiron.core:combat-attack-npc world player grunt))
+          do (apeiron.core:combat-attack-npc world character grunt))
     (is (apeiron.core:npc-defeated-p grunt))
-    (is (apeiron.core:object-get-property player "beat-grunt-1"))))
+    (is (apeiron.core:object-get-property character "beat-grunt-1"))))
 
-(test player-defeated-respawns-at-cavern-mouth
-  "When a player is knocked out by an NPC, they respawn at the cavern mouth
+(test character-defeated-respawns-at-cavern-mouth
+  "When a character is knocked out by an NPC, they respawn at the cavern mouth
    without error — regression test: world-rooms returns a hash-table, not a list."
   (let* ((world (apeiron.persistence:world-restore-or-initialize
                  :force-new t
                  :initializer #'apeiron.worlds:new-default-world))
-         (player (apeiron.core:new-character "Fighter" (make-instance 'apeiron.core:stream-session
+         (character (apeiron.core:new-character "Fighter" (make-instance 'apeiron.core:stream-session
                                                                        :stream (make-string-output-stream))))
          (all-rooms (apeiron.core:world-all-rooms world))
          (grunt-room (find-if (lambda (r) (string= "Grunt Patrol Route" (apeiron.core:object-name r)))
                               all-rooms))
          (grunt (find-if (lambda (obj) (typep obj 'apeiron.core:mud-npc))
                           (apeiron.core:container-all-objects grunt-room))))
-    ;; Put the player in the grunt room
-    (apeiron.core:object-move player grunt-room)
-    ;; Crank the player's HP down so the very first counter-attack KOs them
-    (setf (apeiron.core:player-hp player) 1)
-    ;; This call triggers the respawn code path (player-defeated-p → world-rooms)
+    ;; Put the character in the grunt room
+    (apeiron.core:object-move character grunt-room)
+    ;; Crank the character's HP down so the very first counter-attack KOs them
+    (setf (apeiron.core:character-hp character) 1)
+    ;; This call triggers the respawn code path (character-defeated-p → world-rooms)
     ;; It should not signal a type-error
-    (is (listp (apeiron.core:combat-attack-npc world player grunt)))
-    ;; After defeat, player should be healed and not in the grunt room
-    (is (> (apeiron.core:player-hp player) 0))
-    (is (not (eq (apeiron.core:object-location player) grunt-room)))))
+    (is (listp (apeiron.core:combat-attack-npc world character grunt)))
+    ;; After defeat, character should be healed and not in the grunt room
+    (is (> (apeiron.core:character-hp character) 0))
+    (is (not (eq (apeiron.core:object-location character) grunt-room)))))
 
 (test challenge-answer-riddle
   "Answering a riddle correctly unblocks the connection via process-command."
@@ -92,18 +92,18 @@
                  :force-new t
                  :initializer #'apeiron.worlds:new-default-world))
          (stream (make-string-output-stream))
-         (player (apeiron.core:new-character "Solver" (make-instance 'apeiron.core:stream-session
+         (character (apeiron.core:new-character "Solver" (make-instance 'apeiron.core:stream-session
                                                                       :stream stream)))
          (all-rooms (apeiron.core:world-all-rooms world))
          (gallery (find-if (lambda (r) (string= "Riddle Gallery" (apeiron.core:object-name r)))
                            all-rooms)))
-    (apeiron.core:object-move player gallery)
+    (apeiron.core:object-move character gallery)
     ;; Exit should be blocked before answering
-    (is (not (null (apeiron.core:room-exit-blocked-p gallery player "east"))))
-    (is (search "feline" (apeiron.core:room-exit-blocked-p gallery player "east")))
-    ;; Player answers correctly via the command system
-    (apeiron.core:process-command world player "answer meowth")
+    (is (not (null (apeiron.core:room-exit-blocked-p gallery character "east"))))
+    (is (search "feline" (apeiron.core:room-exit-blocked-p gallery character "east")))
+    ;; Character answers correctly via the command system
+    (apeiron.core:process-command world character "answer meowth")
     ;; Exit should now be unblocked
-    (is (null (apeiron.core:room-exit-blocked-p gallery player "east")))
-    ;; Player's flag should be set
-    (is (apeiron.core:object-get-property player "solved-meowth-riddle"))))
+    (is (null (apeiron.core:room-exit-blocked-p gallery character "east")))
+    ;; Character's flag should be set
+    (is (apeiron.core:object-get-property character "solved-meowth-riddle"))))

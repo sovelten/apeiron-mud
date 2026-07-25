@@ -402,9 +402,9 @@ connection to TLS in-band."
 
       ;; Disconnect all characters
       (let ((world (get-persistent-world)))
-        (dolist (player (characters world))
-          (world-remove-character! world player)
-          (session-disconnect (character-session player))))
+        (dolist (character (characters world))
+          (world-remove-character! world character)
+          (session-disconnect (character-session character))))
 
       ;; Stop event logging
       (stop-event-logging)

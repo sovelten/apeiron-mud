@@ -1,44 +1,44 @@
-;;;; src/core/combat.lisp — Player combat system
+;;;; src/core/combat.lisp — Character combat system
 
 (in-package #:apeiron.core)
 
-(defconstant +player-default-hp+ 30)
-(defconstant +player-default-attack-min+ 4)
-(defconstant +player-default-attack-max+ 9)
+(defconstant +character-default-hp+ 30)
+(defconstant +character-default-attack-min+ 4)
+(defconstant +character-default-attack-max+ 9)
 
-(defun player-hp (player)
-  (or (object-get-property player "hp") +player-default-hp+))
+(defun character-hp (character)
+  (or (object-get-property character "hp") +character-default-hp+))
 
-(defun player-max-hp (player)
-  (or (object-get-property player "max-hp") +player-default-hp+))
+(defun character-max-hp (character)
+  (or (object-get-property character "max-hp") +character-default-hp+))
 
-(defun (setf player-hp) (value player)
-  (object-set-property player "hp" (max 0 value)))
+(defun (setf character-hp) (value character)
+  (object-set-property character "hp" (max 0 value)))
 
-(defun player-ensure-combat-stats (player)
-  (unless (object-get-property player "max-hp")
-    (object-set-property player "max-hp" +player-default-hp+))
-  (unless (object-get-property player "hp")
-    (object-set-property player "hp" (player-max-hp player))))
+(defun character-ensure-combat-stats (character)
+  (unless (object-get-property character "max-hp")
+    (object-set-property character "max-hp" +character-default-hp+))
+  (unless (object-get-property character "hp")
+    (object-set-property character "hp" (character-max-hp character))))
 
-(defun player-roll-attack (player)
-  (+ +player-default-attack-min+
-     (random (1+ (- +player-default-attack-max+ +player-default-attack-min+)))))
+(defun character-roll-attack (character)
+  (+ +character-default-attack-min+
+     (random (1+ (- +character-default-attack-max+ +character-default-attack-min+)))))
 
-(defun player-defeated-p (player)
-  (<= (player-hp player) 0))
+(defun character-defeated-p (character)
+  (<= (character-hp character) 0))
 
-(defun player-heal-full (player)
-  (setf (player-hp player) (player-max-hp player)))
+(defun character-heal-full (character)
+  (setf (character-hp character) (character-max-hp character)))
 
-(defun combat-attack-npc (world player npc)
-  "Player attacks an NPC. Returns messages to send to the player."
-  (player-ensure-combat-stats player)
+(defun combat-attack-npc (world character npc)
+  "Character attacks an NPC. Returns messages to send to the character."
+  (character-ensure-combat-stats character)
   (let ((messages (list)))
     (when (npc-defeated-p npc)
       (return-from combat-attack-npc
         (list (format nil "~A is already defeated." (bold-red (object-name npc))))))
-    (let ((damage (player-roll-attack player)))
+    (let ((damage (character-roll-attack character)))
       (setf (npc-hp npc) (- (npc-hp npc) damage))
       (push (format nil "~A ~A for ~A!"
                     (bold-green "You strike")
@@ -50,31 +50,31 @@
             (npc-defeat! npc)
             (push (bright-green (npc-defeat-message npc)) messages)
             (when (npc-victory-flag npc)
-              (object-set-property player (npc-victory-flag npc) t)
+              (object-set-property character (npc-victory-flag npc) t)
               (push (format nil "~A ~A." (bright-yellow "You earned a victory mark:")
                             (bright-cyan (npc-victory-flag npc)))
                     messages)))
           (let ((counter (npc-roll-attack npc)))
-            (setf (player-hp player) (- (player-hp player) counter))
+            (setf (character-hp character) (- (character-hp character) counter))
             (push (format nil "~A hits you for ~A! (Your HP: ~A)"
                           (bold-red (object-name npc))
                           (bold-red (format nil "~D damage" counter))
                           (let ((hp-text (format nil "~D/~D"
-                                                  (player-hp player)
-                                                  (player-max-hp player))))
-                            (if (<= (player-hp player) (/ (player-max-hp player) 4))
+                                                  (character-hp character)
+                                                  (character-max-hp character))))
+                            (if (<= (character-hp character) (/ (character-max-hp character) 4))
                                 (bold-red hp-text)
-                                (if (<= (player-hp player) (/ (player-max-hp player) 2))
+                                (if (<= (character-hp character) (/ (character-max-hp character) 2))
                                     (yellow hp-text)
                                     (bright-green hp-text)))))
                   messages)
-            (when (player-defeated-p player)
+            (when (character-defeated-p character)
               (push (bold-red "You black out and wake up at the cavern entrance, bruised but alive.")
                     messages)
-              (player-heal-full player)
+              (character-heal-full character)
               (let ((entrance (loop for r being the hash-values of (world-rooms world)
                                    when (search "Cavern Mouth" (object-name r))
                                    return r)))
                 (when entrance
-                  (object-move player entrance)))))))
+                  (object-move character entrance)))))))
     (nreverse messages)))
