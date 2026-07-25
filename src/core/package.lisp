@@ -207,10 +207,27 @@
    #:read-line-with-timeout-loop
    #:ask-input
 
+   ;; Account
+   #:mud-account
+   #:account-name
+   #:account-password-hash
+   #:account-email
+   #:account-character
+   #:find-account
+   #:account-exists-p
+   #:register-account
+   #:authenticate-account
+   #:hash-password
+   #:check-password
+   #:save-accounts
+   #:load-accounts
+   #:*accounts*
+
    ;; Character
    #:mud-character
    #:new-character
    #:character-session
+   #:character-owner
    #:container-contents
    #:container-add-object
    #:container-remove-object

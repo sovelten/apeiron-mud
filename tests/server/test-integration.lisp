@@ -18,7 +18,15 @@
            ;; Wait a moment for connection to establish and negotiation to complete
            (sleep 0.5)
            
-           ;; Server should ask for name (telnet-read-line strips IAC negotiation)
+           ;; Server should present login prompt
+           (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)
+             (is (not (null line)))
+             (is (search "Choose:" line)))
+           
+           ;; Choose guest
+           (telnet:telnet-write-string client-conn "g")
+           
+           ;; Server should ask for name
            (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)
              (is (not (null line)))
              (is (equal line "What is your name?")))
@@ -86,7 +94,15 @@
            ;; Wait a moment for connection to establish and negotiation to complete
            (sleep 0.5)
 
-           ;; Server should ask for name (telnet-read-line strips IAC negotiation)
+           ;; Server should present login prompt
+           (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)
+             (is (not (null line)))
+             (is (search "Choose:" line)))
+           
+           ;; Choose guest
+           (telnet:telnet-write-string client-conn "g")
+           
+           ;; Server should ask for name
            (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)
              (is (not (null line)))
              (is (equal line "What is your name?")))
@@ -162,6 +178,14 @@
            (setf client-conn (telnet:make-telnet-connection client-socket))
            
            (sleep 0.5)
+           
+           ;; Server should present login prompt
+           (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)
+             (is (not (null line)))
+             (is (search "Choose:" line)))
+           
+           ;; Choose guest
+           (telnet:telnet-write-string client-conn "g")
            
            ;; Server should ask for name
            (multiple-value-bind (line status) (telnet:telnet-read-line client-conn :timeout 5)

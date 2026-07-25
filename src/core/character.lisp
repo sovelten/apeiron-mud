@@ -6,17 +6,25 @@
   ((session :initarg :session
             :accessor character-session
             :initform nil
-            :documentation "The session controlling this character"))
+            :documentation "The session controlling this character")
+   (owner :initarg :owner
+          :accessor character-owner
+          :initform nil
+          :documentation "The mud-account that owns this character.
+NIL for guest characters."))
   (:documentation "A player character in the MUD"))
 
-(defun new-character (name session)
+(defun new-character (name session &key owner)
   (let ((character (make-instance 'mud-character
                                   :id (make-id)
                                   :name name
-                                  
-                                  :session session)))
+                                  :session session
+                                  :owner owner)))
     ;; Link player to session
     (setf (session-character session) character)
+    ;; Link account to character (bidirectional)
+    (when owner
+      (setf (account-character owner) character))
     character))
 
 (defun player-send-message (player message &key (newline t))
