@@ -104,8 +104,11 @@ Synonyms: \"e\" from west-room, \"w\" from east-room."
 (defun world-add-character! (world character)
   "Add a character to the world, placing them in the starting room."
   (let ((room (starting-room world)))
-    (setf (object-location character) room)
-    (container-add-object room character)
+    (if room
+        (progn
+          (setf (object-location character) room)
+          (container-add-object room character))
+        (log-error "No starting room set for world — cannot place ~A" (object-name character)))
     (setf (gethash (object-id character) (world-players world)) character)))
 
 (defun world-total-players (world)

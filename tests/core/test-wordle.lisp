@@ -230,20 +230,26 @@
       (is (search "2 guesses remaining" display)))))
 
 (test wordle-display-solved-message
-  "Display shows solved message"
+  "Display shows solved message with shareable result"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
     (wordle-guess puzzle "TestPlayer" "crane")
     (let ((display (wordle-display puzzle "TestPlayer")))
       (is (search "You solved it" display))
-      (is (search "CRANE" display)))))
+      (is (search "Shareable result" display))
+      ;; Should NOT reveal the word
+      (is (not (search "CRANE" display)))
+      ;; Should show green blocks (all correct = all 5 solved)
+      (is (search "█ █ █ █ █" display)))))
 
 (test wordle-display-failed-message
-  "Display shows failure message"
+  "Display shows failure message with shareable result"
   (let ((puzzle (make-test-puzzle :target-word "crane" :max-guesses 1)))
     (wordle-guess puzzle "TestPlayer" "dumpy")
     (let ((display (wordle-display puzzle "TestPlayer")))
       (is (search "Out of guesses" display))
-      (is (search "CRANE" display)))))
+      (is (search "Shareable result" display))
+      ;; Should NOT reveal the word
+      (is (not (search "CRANE" display))))))
 
 ;; ─── Reset
 
