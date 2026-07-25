@@ -9,10 +9,10 @@
            :accessor world-config
            :initform (make-hash-table :test #'eq)
            :documentation "Configuration hash table (keys are keywords).")
-   (players :initarg :players
-            :accessor world-players
+   (characters :initarg :characters
+            :accessor world-characters
             :initform (make-hash-table :test #'equal)
-            :documentation "Stores all online/active players in world")
+            :documentation "Stores all online/active characters in world")
    (objects :initarg :objects
             :accessor world-objects
             :initform (make-hash-table :test #'eql)
@@ -55,7 +55,7 @@ DIRECTION-B is the direction name from ROOM-B to ROOM-A (e.g. \"south\").
 SYNONYMS-A and SYNONYMS-B are lists of alternative names for each direction
 (e.g. '(\"n\") for \"north\").
 When BLOCKED is true the passage starts blocked and cannot be traversed.
-BLOCKED-MESSAGE is shown to players when they try to pass.
+BLOCKED-MESSAGE is shown to characters when they try to pass.
 
 The connection is linked into both rooms' CONNECTIONS lists and
 registered in the world.
@@ -109,10 +109,10 @@ Synonyms: \"e\" from west-room, \"w\" from east-room."
           (setf (object-location character) room)
           (container-add-object room character))
         (log-error "No starting room set for world — cannot place ~A" (object-name character)))
-    (setf (gethash (object-id character) (world-players world)) character)))
+    (setf (gethash (object-id character) (world-characters world)) character)))
 
-(defun world-total-players (world)
-  (hash-table-count (world-players world)))
+(defun world-total-characters (world)
+  (hash-table-count (world-characters world)))
 
 (defun world-remove-character! (world character)
   "Remove a player from the world."
@@ -121,20 +121,20 @@ Synonyms: \"e\" from west-room, \"w\" from east-room."
     (when (typep room 'mud-room)
       (container-remove-object room character))
     ;; Remove from world
-    (remhash (object-id character) (world-players world))
+    (remhash (object-id character) (world-characters world))
     (log-message "~A removed from world" (object-name character))))
 
 (defun character-by-id (world char-id)
   "Get a player by ID."
-  (gethash char-id (world-players world)))
+  (gethash char-id (world-characters world)))
 
 (defun characters (world)
-  "Get all active players."
-  (loop for player being the hash-values of (world-players world)
+  "Get all active characters."
+  (loop for player being the hash-values of (world-characters world)
         collect player))
 
 (defun world-broadcast (world message &optional exclude-player)
-  "Broadcast a message to all players (optionally excluding one)."
+  "Broadcast a message to all characters (optionally excluding one)."
   (dolist (player (characters world))
     (unless (and exclude-player (eq (object-id player) (object-id exclude-player)))
       (player-send-message player message))))

@@ -19,7 +19,7 @@
 
          ;; Simulate restart: close store and restore
          (bknr.datastore:close-store)
-         ;; players is a transient slot — auto-initialized on restore
+         ;; characters is a transient slot — auto-initialized on restore
 
          (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
                 (restored-ids (mapcar #'apeiron.core:object-id
@@ -112,7 +112,7 @@ in the room's connections list."
 
          ;; Simulate restart
          (bknr.datastore:close-store)
-         ;; players is a transient slot — auto-initialized on restore
+         ;; characters is a transient slot — auto-initialized on restore
          ;; Find the guestbook in the restored world
          (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
                 (reloaded-tavern (apeiron.core:starting-room new-world))

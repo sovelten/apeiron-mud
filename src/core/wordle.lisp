@@ -1,8 +1,8 @@
 ;;;; src/core/wordle.lisp - Wordle puzzle game objects
 ;;;;
-;;;; A Wordle-like puzzle that can be placed in a room for players to
+;;;; A Wordle-like puzzle that can be placed in a room for characters to
 ;;;; interact with.  Each puzzle has a 5-letter target word and tracks
-;;;; guesses per player independently.  Multiple players can play the
+;;;; guesses per player independently.  Multiple characters can play the
 ;;;; same puzzle simultaneously.
 
 (in-package #:apeiron.core)
@@ -147,7 +147,7 @@
   ((target-word :initarg :target-word
                 :accessor wordle-target-word
                 :initform "world"
-                :documentation "The 5-letter word players must guess.")
+                :documentation "The 5-letter word characters must guess.")
    (player-guesses :initarg :player-guesses
                    :accessor wordle-player-guesses
                    :initform (make-hash-table :test #'equal)
@@ -171,7 +171,7 @@
               :documentation "Integer date key (YYYYMMDD) of the current target-word."))
   (:documentation "A Wordle-like puzzle object for the MUD.
 
-Players interact with the puzzle by telling it words.  Each player's
+Characters interact with the puzzle by telling it words.  Each player's
 guesses are tracked independently.  When a new day arrives the puzzle
 automatically rotates to that day's word and resets all progress."))
 
@@ -438,7 +438,7 @@ where RESULT-CODE is one of:
 ;; ─── Reset ─────────────────────────────────────────────────────────────────
 
 (defun wordle-reset (puzzle &key new-word)
-  "Reset the puzzle for all players.  Optionally set a NEW-WORD.
+  "Reset the puzzle for all characters.  Optionally set a NEW-WORD.
   When NEW-WORD is given the WORD-DATE is updated to today."
   (clrhash (wordle-player-guesses puzzle))
   (when new-word

@@ -115,7 +115,7 @@
                          (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
 
 (test command-processing-shout
-  "Test the shout command — broadcasts to all players."
+  "Test the shout command — broadcasts to all characters."
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
     (let ((player1 (apeiron.core:new-character "Alice" (make-instance 'apeiron.core:stream-session
                                                                        :stream (make-string-output-stream)
@@ -219,7 +219,7 @@
           (setf (fdefinition 'apeiron.core:player-send-message) original-send-message))))))
 
 (test command-processing-tell
-  "Test the tell command — private messages between players and objects."
+  "Test the tell command — private messages between characters and objects."
   (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
     (let ((alice (apeiron.core:new-character "Alice" (make-instance 'apeiron.core:stream-session
                                                                      :stream (make-string-output-stream)

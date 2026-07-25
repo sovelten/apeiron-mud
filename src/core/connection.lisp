@@ -69,7 +69,7 @@ DIRECTION-B is the direction name from ROOM-B to ROOM-A (e.g. \"south\").
 SYNONYMS-A and SYNONYMS-B are lists of alternative names for each direction
 (e.g. '(\"n\") for \"north\").
 When BLOCKED is true the passage starts blocked.
-BLOCKED-MESSAGE is shown to players when they try to pass.
+BLOCKED-MESSAGE is shown to characters when they try to pass.
 
 The connection is NOT linked into any room's connections list or world;
 call CONNECT-ROOMS (in world.lisp) for that."
@@ -137,7 +137,7 @@ that is returned; otherwise a generic \"X is blocked\" message is used."
   "Set a challenge (riddle/password) on a CONNECTION.
 
 A player who answers correctly with ANSWER sets the FLAG on themselves,
-which allows them to pass.  Players without the flag see the QUESTION
+which allows them to pass.  Characters without the flag see the QUESTION
 as a blocking message.  This is independent of regular connection
 blocking (CONNECTION-BLOCKED-P)."
   (object-set-property connection "challenge-question" question)

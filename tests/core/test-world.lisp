@@ -16,7 +16,7 @@
   (let ((world (apeiron.core:new-world)))
     (is (typep world 'apeiron.core:mud-world))
     (is (= 0 (apeiron.core:world-id-counter world)))
-    (is (eql 0 (hash-table-count (apeiron.core:world-players world))))
+    (is (eql 0 (hash-table-count (apeiron.core:world-characters world))))
     (is (eql 0 (hash-table-count (apeiron.core:world-objects world))))
     (is (eql 0 (hash-table-count (apeiron.core:world-rooms world))))))
 
@@ -74,23 +74,23 @@
     (is (eq room (apeiron.core:object-location player)))
     (is (eq player (apeiron.core:character-by-id world (apeiron.core:object-id player))))))
 
-(test world-total-players
-  "Test world-total-players counts active players"
+(test world-total-characters
+  "Test world-total-characters counts active characters"
   (let ((world (apeiron.core:new-world))
         (room (apeiron.core:new-room :name "Spawn")))
     (apeiron.core:world-add-object! world room)
     (apeiron.core:world-set-starting-room! world room)
-    (is (= 0 (apeiron.core:world-total-players world)))
+    (is (= 0 (apeiron.core:world-total-characters world)))
     (let ((alice (apeiron.core:new-character "Alice" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream))))
           (bob   (apeiron.core:new-character "Bob"   (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
       (apeiron.core:world-add-object! world alice)
       (apeiron.core:world-add-character! world alice)
-      (is (= 1 (apeiron.core:world-total-players world)))
+      (is (= 1 (apeiron.core:world-total-characters world)))
       (apeiron.core:world-add-object! world bob)
       (apeiron.core:world-add-character! world bob)
-      (is (= 2 (apeiron.core:world-total-players world))))))
+      (is (= 2 (apeiron.core:world-total-characters world))))))
 
 (test world-remove-character!
   "Test removing a character from the world"
@@ -102,9 +102,9 @@
                                      :stream (make-string-output-stream)))))
       (apeiron.core:world-add-object! world player)
       (apeiron.core:world-add-character! world player)
-      (is (= 1 (apeiron.core:world-total-players world)))
+      (is (= 1 (apeiron.core:world-total-characters world)))
       (apeiron.core:world-remove-character! world player)
-      (is (= 0 (apeiron.core:world-total-players world)))
+      (is (= 0 (apeiron.core:world-total-characters world)))
       (is (null (apeiron.core:character-by-id world (apeiron.core:object-id player)))))))
 
 (test character-by-id-unknown
@@ -113,7 +113,7 @@
     (is (null (apeiron.core:character-by-id world 999)))))
 
 (test characters
-  "Test characters returns the list of all active players"
+  "Test characters returns the list of all active characters"
   (let ((world (apeiron.core:new-world))
         (room (apeiron.core:new-room :name "Spawn")))
     (apeiron.core:world-add-object! world room)
@@ -133,7 +133,7 @@
         (is (member bob chars))))))
 
 (test world-broadcast
-  "Test broadcasting a message to all players"
+  "Test broadcasting a message to all characters"
   (let ((world (apeiron.core:new-world))
         (room (apeiron.core:new-room :name "Spawn"))
         (msgs-a (make-array 0 :adjustable t :fill-pointer t))

@@ -275,7 +275,7 @@ Debug helpers that return strings: (d obj), (slots-of obj), (props obj), (inv ob
                                           (bright-green (format nil "~A says" (object-name player))) message))))))))
 
 (define-command "shout" (world player args)
-  "Shout a message that is heard by all players in all rooms, e.g. 'shout Help!'."
+  "Shout a message that is heard by all characters in all rooms, e.g. 'shout Help!'."
   (let ((message args))
     (if (zerop (length message))
         (player-send-message player "Shout what? Usage: shout <message>")

@@ -55,7 +55,7 @@
            
            ;; Verify player exists in the world
            (let* ((world (apeiron.persistence:get-persistent-world))
-                  (player (loop for p being the hash-values of (apeiron.core:world-players world)
+                  (player (loop for p being the hash-values of (apeiron.core:world-characters world)
                                when (equal (apeiron.core:object-name p) "QuitTestPlayer")
                                  return p)))
              (is (not (null player)))
@@ -72,7 +72,7 @@
              (sleep 0.5)
              
              ;; Verify player is removed from the world
-             (is (not (gethash (apeiron.core:object-id player) (apeiron.core:world-players world))))))
+             (is (not (gethash (apeiron.core:object-id player) (apeiron.core:world-characters world))))))
       ;; Cleanup
       (when client-conn (telnet:telnet-connection-close client-conn))
       (when client-socket (usocket:socket-close client-socket))
@@ -131,7 +131,7 @@
 
            ;; Verify player interactions
            (let* ((world (apeiron.persistence:get-persistent-world))
-                  (player (loop for p being the hash-values of (apeiron.core:world-players world)
+                  (player (loop for p being the hash-values of (apeiron.core:world-characters world)
                                 when (equal (apeiron.core:object-name p) "TestPlayer")
                                   return p)))
              (is (not (null player)))
@@ -199,7 +199,7 @@
            
            ;; Verify player is in world
            (let* ((world (apeiron.persistence:get-persistent-world))
-                  (player (loop for p being the hash-values of (apeiron.core:world-players world)
+                  (player (loop for p being the hash-values of (apeiron.core:world-characters world)
                                 when (equal (apeiron.core:object-name p) "AbruptPlayer")
                                   return p)))
              (is (not (null player)))
@@ -214,7 +214,7 @@
              (sleep 0.5)
              
              ;; Verify player is cleaned up from the world
-             (is (not (gethash (apeiron.core:object-id player) (apeiron.core:world-players world))))))
+             (is (not (gethash (apeiron.core:object-id player) (apeiron.core:world-characters world))))))
       ;; Cleanup
       (when client-conn (telnet:telnet-connection-close client-conn))
       (when client-socket (usocket:socket-close client-socket))

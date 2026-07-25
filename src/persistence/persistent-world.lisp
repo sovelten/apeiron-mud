@@ -62,7 +62,7 @@ Usage from the MUD: eval (refresh-guestbooks)"
 
 (defwrapping-persistent-class persistent-world (mud-world)
   ()
-  (:transient-slots players objects rooms))
+  (:transient-slots characters objects rooms))
 
 (defmethod object-set-property ((obj persistent-object) property-name value)
   "Set a property on a persistent object, ensuring BKNR tracks the change.
@@ -187,7 +187,7 @@ world itself are converted to their persistent counterparts via
 CHANGE-CLASS + INITIALIZE-INSTANCE.  Because object identity is preserved,
 all cross-references remain valid without any fixup pass.
 
-Characters (players) are excluded -- they are transient by nature and
+Characters (characters) are excluded -- they are transient by nature and
 never stored in the datastore.
 
 Returns TRANSIENT-WORLD (now a persistent-world)."

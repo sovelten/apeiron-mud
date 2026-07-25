@@ -71,7 +71,7 @@
       (is-false (connection-blocked-p conn))
             (is (null (connection-exit-blocked-message room1 "north"))))))
       
-      (test connection-regular-block-blocks-all-players
+      (test connection-regular-block-blocks-all-characters
         "A regularly blocked connection blocks every player regardless of flags."
         (let* ((world (new-world))
                (room1 (new-room :name "Hall"))
@@ -91,8 +91,8 @@
             (is (null (room-exit-blocked-p room1 alice "north")))
             (is (null (room-exit-blocked-p room1 bob "north"))))))
       
-      (test connection-challenge-only-blocks-players-without-flag
-        "A challenge-gated connection blocks only players who lack the flag."
+      (test connection-challenge-only-blocks-characters-without-flag
+        "A challenge-gated connection blocks only characters who lack the flag."
         (let* ((world (new-world))
                (room1 (new-room :name "Library"))
                (room2 (new-room :name "Archive"))

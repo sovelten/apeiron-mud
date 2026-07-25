@@ -245,7 +245,7 @@
    #:connect-west-east!
    #:world-id-counter
    #:world-config
-   #:world-players
+   #:world-characters
    #:world-objects
    #:world-rooms
    #:get-config-key
@@ -254,7 +254,7 @@
    #:world-set-starting-room!
    #:starting-room
    #:world-add-character!
-   #:world-total-players
+   #:world-total-characters
    #:world-remove-character!
    #:character-by-id
    #:characters

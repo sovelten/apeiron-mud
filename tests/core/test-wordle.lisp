@@ -194,7 +194,7 @@
 ;; ─── Per-player state
 
 (test wordle-per-player-independent
-  "Two players' guesses are tracked independently"
+  "Two characters' guesses are tracked independently"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
     (wordle-guess puzzle "Alice" "train")
     (wordle-guess puzzle "Bob" "crane")
@@ -252,7 +252,7 @@
 ;; ─── Reset
 
 (test wordle-reset-all
-  "Reset clears all players and optionally sets a new word"
+  "Reset clears all characters and optionally sets a new word"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
     (wordle-guess puzzle "Alice" "crane")
     (wordle-guess puzzle "Bob" "train")

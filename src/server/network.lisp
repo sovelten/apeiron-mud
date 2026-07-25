@@ -22,11 +22,11 @@
 for the given WORLD: NAME, PLAYERS, and UPTIME."
   (lambda ()
     (let ((vars (list (cons "NAME" *mud-name*)
-                      (cons "PLAYERS" (princ-to-string (world-total-players world)))
+                      (cons "PLAYERS" (princ-to-string (world-total-characters world)))
                       (cons "UPTIME" (princ-to-string (floor (- (get-universal-time)
                                                                 *server-start-time*)))))))
       (log-message "[MSSP] mssp-info-fn called: returning ~D vars (NAME=~S PLAYERS=~S UPTIME=~S)"
-                   (length vars) *mud-name* (world-total-players world)
+                   (length vars) *mud-name* (world-total-characters world)
                    (floor (- (get-universal-time) *server-start-time*)))
       vars)))
 
@@ -400,7 +400,7 @@ connection to TLS in-band."
             (log-error "Error joining acceptance thread: ~A" e)))
         (setf *acceptance-thread* nil))
 
-      ;; Disconnect all players
+      ;; Disconnect all characters
       (let ((world (get-persistent-world)))
         (dolist (player (characters world))
           (world-remove-character! world player)
@@ -414,8 +414,8 @@ connection to TLS in-band."
 (defun get-server-status ()
   "Get the current status of the server."
   (let ((world (get-persistent-world)))
-    (format nil "Server running: ~A~%Players online: ~D~%Rooms in world: ~D~%"
+    (format nil "Server running: ~A~%Characters online: ~D~%Rooms in world: ~D~%"
             (if *server-running*
                 "Yes"
                 "No")
-            (world-total-players world) (world-total-rooms world))))
+            (world-total-characters world) (world-total-rooms world))))
