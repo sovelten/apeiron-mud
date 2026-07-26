@@ -26,10 +26,12 @@ BKNR restarts without needing an object reference."))
 
 (defun character-send-message (character message &key (newline t))
   "Send a message to a character. If NEWLINE is nil, don't add a trailing newline.
-Honors the session's color preference by binding *COLORIZE* around the write."
+Honors the session's color preference by binding *COLORIZE* around the write.
+If the character has no session (e.g. disconnected), the message is silently dropped."
   (let ((session (character-session character)))
-    (let ((*colorize* (session-use-colors session)))
-      (mud-write session message :newline newline))))
+    (when session
+      (let ((*colorize* (session-use-colors session)))
+        (mud-write session message :newline newline)))))
 
 (defmethod object-describe ((obj mud-character))
   "Bright green for character characters."
