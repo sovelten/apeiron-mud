@@ -666,3 +666,47 @@
                (is (search "Help for" (first captured)))
                (is (search "show help" (first captured))))
           (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))
+
+(test command-processing-say-with-sessionless-character
+  "Reproduces the bug: when a mud-character with NIL session is in the room
+(e.g. after a reconnect race where the old session's cleanup wipes
+character-session before displace-character! can run), the say command
+would crash because character-send-message calls session-use-colors on NIL.
+
+After the fix, character-send-message gracefully drops messages for
+sessionless characters instead of crashing."
+  (let* ((world (apeiron.core:new-world))
+         (room (apeiron.core:new-room :name "Test Room"))
+         (output (make-string-output-stream))
+         (alice-session (make-instance 'apeiron.core:stream-session
+                                       :stream output
+                                       :use-colors nil))
+         (alice (apeiron.core:new-character "Alice" alice-session))
+         ;; Bob is a mud-character with NIL session — simulating the
+         ;; state after a reconnect race where the old thread's cleanup
+         ;; wiped character-session before world-remove-character! ran.
+         (bob (make-instance 'apeiron.core:mud-character
+                             :name "Bob"
+                             :id 9999
+                             :owner "bob-account"
+                             :session nil)))
+    ;; Set up the world
+    (apeiron.core:world-add-object! world room)
+    (apeiron.core:world-add-object! world alice)
+    (apeiron.core:world-add-object! world bob)
+    (apeiron.core:world-set-starting-room! world room)
+    (apeiron.core:place-character! world alice)
+    ;; Place Bob directly in the room with NIL session — mimics the
+    ;; state after old cleanup sets (character-session bob) = nil but
+    ;; before/without displace-character! removing him from the room.
+    (setf (apeiron.core:object-location bob) room)
+    (apeiron.core:container-add-object room bob)
+
+    ;; This used to signal:
+    ;;   There is no applicable method for SESSION-USE-COLORS when
+    ;;   called with arguments (NIL)
+    ;; After the fix it completes without error.
+    (apeiron.core:process-command world alice "say Hello!")
+    (let ((text (get-output-stream-string output)))
+      (is (search "You say" text))
+      (is (search "Hello!" text)))))

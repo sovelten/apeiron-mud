@@ -88,6 +88,15 @@ Returns (values character account)."
           (if existing-char
               (progn
                 (mud-write session (format nil "Reconnecting to your character, ~A." (bright-green (object-name existing-char))))
+                ;; Clear the OLD session's back-reference BEFORE linking the new
+                ;; session.  This prevents a race where the old thread's cleanup
+                ;; (in handle-client) would see (session-character old-session)
+                ;; still pointing to existing-char, then wipe (character-session
+                ;; existing-char) = nil and call world-remove-character! on the
+                ;; character — leaving it in the room with NIL session.
+                (let ((old-session (character-session existing-char)))
+                  (when old-session
+                    (setf (session-character old-session) nil)))
                 ;; Re-link session to existing character
                 (setf (character-session existing-char) session
                       (session-character session) existing-char)
