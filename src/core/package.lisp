@@ -254,6 +254,7 @@
    #:world-set-starting-room!
    #:starting-room
    #:place-character!
+   #:displace-character!
    #:world-total-characters
    #:world-remove-character!
    #:character-by-id
