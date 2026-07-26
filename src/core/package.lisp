@@ -309,6 +309,9 @@
    #:handle-read
    #:handle-write
 
+   ;; Hot reload
+   #:reload-apeiron
+
    ;; Eval debug helpers
    #:d
    #:slots-of

@@ -148,6 +148,21 @@ CHARACTER is the character, ARGS is a raw string that the handler can parse as n
         (use-package '#:apeiron.core p)
         p)))
 
+(defun reload-apeiron ()
+  "Reload the APEIRON system and re-establish the eval context.
+Call this from the MUD via 'eval (reload-apeiron)' after modifying
+source files to pick up changes without restarting the server.
+
+After reloading, re-establishes the :use of APEIRON.CORE in the
+APEIRON.EVAL package in case quickload recreated the package."
+  (ql:quickload :apeiron :force t)
+  ;; Re-establish :use of apeiron.core in the eval context package,
+  ;; in case quickload recreated apeiron.core (new package object).
+  (let ((p (find-package '#:apeiron.eval)))
+    (when p
+      (ignore-errors (use-package '#:apeiron.core p))))
+  (values))
+
 ;; ─── Eval debug helper functions ────────────────────────────────────────────
 ;; These are available in the eval context (apeiron.eval package) and are
 ;; designed to help debug/inspect objects from within the game.
