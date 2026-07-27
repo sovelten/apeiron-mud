@@ -1,5 +1,7 @@
 # Apeiron MUD - A Common Lisp MUD Server
 
+[![CI](https://github.com/sovelten/apeiron-mud/actions/workflows/test.yml/badge.svg)](https://github.com/sovelten/apeiron-mud/actions/workflows/test.yml)
+
 A MUD (Multi-User Dungeon) server written in Common Lisp, inspired by Dworkin's Game Driver (DGD) and LMUD, with the added reckless capability of running lisp code at your own risk and peril (don't start a real server with this on the internet).
 
 Very simple and raw at the moment, but the fact that it runs on lisp gives it some super powers, such as the ability to update the running image within the session.
