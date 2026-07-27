@@ -93,34 +93,78 @@
                 :defeat-message "Boss G crumples. 'This isn't over... I'll be back... with a better evil plan!' The cavern rumbles as secret exits open."
                 :victory-flag "beat-boss-g")))
     ;; Maze layout
+    ;; Layout (north=up, south=down, east=right, west=left):
+    ;;
+    ;;               entrance
+    ;;                  │
+    ;;          west    │
+    ;;    mirror-maze ──┼
+    ;;                  │
+    ;;           ┌──────┴──────┐
+    ;;           │  Crossroads │──── east ────▶ riddle-gallery ── south ──▶ cat-alley
+    ;;           └──────┬──────┘                                     (meowth riddle)  (Meowth statue)
+    ;;                  │ south
+    ;;           ┌──────┴──────┐
+    ;;           │    Grunt    │
+    ;;           │   Patrol    │
+    ;;           └──────┬──────┘
+    ;;                  │ south (beat-grunt-1)
+    ;;           ┌──────┴──────┐
+    ;;           │    Elite    │
+    ;;           │   Patrol    │
+    ;;           └──────┬──────┘
+    ;;                  │ south (beat-elite)
+    ;;           ┌──────┴──────┐
+    ;;           │  Password   │
+    ;;           │    Gate     │
+    ;;           └──────┬──────┘
+    ;;                  │ south (org password)
+    ;;           ┌──────┴──────┐
+    ;;           │  Boss G's   │
+    ;;           │   Chamber   │
+    ;;           └──────┬──────┘
+    ;;                  │ south (beat-boss-g)
+    ;;           ┌──────┴──────┐
+    ;;           │  Treasure   │
+    ;;           │   Vault     │
+    ;;           └─────────────┘
+    ;; entrance
     (connect-north-south! world entrance crossroads)
-    (connect-north-south! world crossroads grunt-patrol)
-    (connect-west-east! world crossroads riddle-gallery)
+    ;; go west to mirror-maze
     (connect-west-east! world mirror-maze crossroads)
-    (connect-north-south! world riddle-gallery cat-alley)
-    (connect-north-south! world grunt-patrol elite-patrol)
-    (connect-west-east! world riddle-gallery password-gate)
+    ;; go west from mirror-maze to hidden-lab
     (connect-west-east! world hidden-lab mirror-maze)
+    ;; go south from crossroads to grunt-patrol
+    (connect-north-south! world crossroads grunt-patrol)
+    ;; go south from grunt-patrol to elite-patrol
+    (connect-north-south! world grunt-patrol elite-patrol)
+    ;; go east from crossroads to riddle-gallery
+    (connect-west-east! world crossroads riddle-gallery)
+    ;; go south from riddle-gallery to cat-alley
+    (connect-north-south! world riddle-gallery cat-alley)
+    ;; go south from elite-patrol to password-gate
     (connect-north-south! world elite-patrol password-gate)
+    ;; go south from password-gate to boss-chamber
     (connect-north-south! world password-gate boss-chamber)
+    ;; go south from boss-chamber to treasure
     (connect-north-south! world boss-chamber treasure)
 
     ;; Challenges
-    (connection-set-challenge (connection-find riddle-gallery "east")
+    (connection-set-challenge (connection-find riddle-gallery "south")
                         "A voice echoes: 'What feline crook loves coins above all else?' Try: answer <name>"
                         "meowth"
                         "solved-meowth-riddle")
-    (connection-set-challenge (connection-find password-gate "north")
+    (connection-set-challenge (connection-find password-gate "south")
                         "The keypad demands: 'Enter the organization password.' Try: answer <password>"
                         "rocket"
                         "solved-rocket-password")
 
     ;; Fight gates
-    (set-flag-gate grunt-patrol "north" "beat-grunt-1"
-                   "The grunt blocks the north tunnel. Defeat them first! Try: attack grunt")
-    (set-flag-gate elite-patrol "north" "beat-elite"
+    (set-flag-gate grunt-patrol "south" "beat-grunt-1"
+                   "The grunt blocks the south tunnel. Defeat them first! Try: attack grunt")
+    (set-flag-gate elite-patrol "south" "beat-elite"
                    "The elite agent stands firm. Try: attack agent")
-    (set-flag-gate boss-chamber "north" "beat-boss-g"
+    (set-flag-gate boss-chamber "south" "beat-boss-g"
                    "Boss G laughs. 'Defeat me first, child!' Try: attack boss")
 
     ;; NPC placement
