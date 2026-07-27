@@ -224,10 +224,24 @@ Useful when ~S printing is too verbose.
 Example: (obj-type (me))"
   (format nil "~A" (type-of object)))
 
+(defun obj-find (spec)
+  "Find a single object in the current eval world by ID or partial name match.
+
+If SPEC is an integer, looks up the object by world-level ID via WORLD-OBJECT-BY-ID.
+If SPEC is a string, returns the first object whose name partially matches
+(via WORLD-OBJECTS-MATCHING), or NIL if none match.
+
+Examples:
+  (obj-find 42)       ; Find object with world ID 42
+  (obj-find \"guard\") ; Find first object matching \"guard\""
+  (etypecase spec
+    (integer (world-object-by-id *eval-world* spec))
+    (string  (first (world-objects-matching *eval-world* spec)))))
+
 (define-command "eval" (world character args)
   "Evaluate Lisp code and send output to the character.
 Use (me) for the current character, (here) for current room, (world) for the world.
-Debug helpers that return strings: (d obj), (slots-of obj), (props obj), (inv obj), (loc obj), (obj-type obj)"
+Debug helpers: (d obj), (slots-of obj), (props obj), (inv obj), (loc obj), (obj-type obj), (obj-find name-or-id)"
   (declare (ignore world))
   (let ((code-str args))
     (if (zerop (length code-str))

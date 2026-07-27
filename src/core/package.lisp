@@ -264,6 +264,7 @@
    #:world-broadcast
    #:world-object-by-id
    #:world-object-with-name
+   #:world-objects-matching
    #:world-all-objects
    #:world-all-rooms
    #:world-room-by-id
@@ -319,4 +320,5 @@
    #:props
    #:inv
    #:loc
+   #:obj-find
    #:obj-type))

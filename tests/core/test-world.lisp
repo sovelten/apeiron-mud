@@ -241,3 +241,30 @@
       (is (= 1 (apeiron.core:world-total-rooms world)))
       (apeiron.core:world-add-object! world r2)
       (is (= 2 (apeiron.core:world-total-rooms world))))))
+
+(test world-objects-matching
+  "Test finding all objects matching by name, words, or aliases"
+  (let ((world (apeiron.core:new-world)))
+    (let ((guard   (apeiron.core:new-object :name "Guard"))
+          (old-man (apeiron.core:new-object :name "Old Man"))
+          (sword   (apeiron.core:new-object :name "Rusty Sword")))
+      (setf (apeiron.core:object-aliases old-man) '("elder"))
+      (apeiron.core:world-add-object! world guard)
+      (apeiron.core:world-add-object! world old-man)
+      (apeiron.core:world-add-object! world sword)
+      ;; Exact name match
+      (is (= 1 (length (apeiron.core:world-objects-matching world "Guard"))))
+      (is (eq guard (first (apeiron.core:world-objects-matching world "Guard"))))
+      ;; Case-insensitive exact match
+      (is (= 1 (length (apeiron.core:world-objects-matching world "guard"))))
+      ;; Whole-word match (Sword matches "Rusty Sword" via the word "Sword")
+      (is (= 1 (length (apeiron.core:world-objects-matching world "Sword"))))
+      (is (eq sword (first (apeiron.core:world-objects-matching world "Sword"))))
+      ;; Whole-word match (Rusty matches "Rusty Sword" via the word "Rusty")
+      (is (= 1 (length (apeiron.core:world-objects-matching world "Rusty"))))
+      ;; Alias match
+      (is (= 1 (length (apeiron.core:world-objects-matching world "elder"))))
+      (is (eq old-man (first (apeiron.core:world-objects-matching world "elder"))))
+      ;; No match returns empty list
+      (is (null (apeiron.core:world-objects-matching world "Axe")))
+      (is (null (apeiron.core:world-objects-matching world ""))))))

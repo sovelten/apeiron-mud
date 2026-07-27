@@ -194,6 +194,14 @@ removed"
         when (string-equal (object-name obj) name)
         return obj))
 
+(defun world-objects-matching (world name)
+  "Return a list of all objects in WORLD whose name or aliases match NAME.
+Matching is done via OBJECT-NAME-MATCHES (case-insensitive, whole-word, and alias checks).
+Returns an empty list when no objects match."
+  (loop for obj being the hash-values of (world-objects world)
+        when (object-name-matches obj name)
+        collect obj))
+
 (defun world-all-objects (world)
   "Return all objects registered in the world."
   (loop for obj being the hash-values of (world-objects world)
