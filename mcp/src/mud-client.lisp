@@ -452,24 +452,34 @@ to wait for and react to in-game events."
         ;; connection while send-command (called from a POST handler)
         ;; is sending a command and reading its response.  The lock is
         ;; released after each iteration so POST handlers don't starve.
-        (bordeaux-threads:with-lock-held (*mud-connection-lock*)
-          (multiple-value-bind (text status)
-              (%read-until-prompt conn :total-timeout (min idle-timeout remaining))
-            (case status
-              (:disconnected
-               (setf (%mud-conn) nil)
-               (if callback
-                   (funcall callback "Connection to MUD was lost." :disconnected)
-                   (return-from listen-for-activity
-                     (values text nil :disconnected))))
-              (:ok
-               (let ((trimmed (string-trim '(#\Space #\Newline #\Return #\Tab) text)))
-                 (when (> (length trimmed) 0)
-                   (if callback
-                       (let ((result (funcall callback trimmed nil)))
-                         (when (eq result :stop)
-                           (return-from listen-for-activity :stopped)))
-                       (return-from listen-for-activity
-                         (values text nil :ok))))))
-              ;; :timeout means no output — just loop and try again
-              (:timeout nil))))))))
+        ;;
+        ;; IMPORTANT: the callback is called OUTSIDE the lock to prevent
+        ;; a blocking SSE write from starving send-command.
+        (let ((cb-result nil)
+              (cb-args nil))
+          (bordeaux-threads:with-lock-held (*mud-connection-lock*)
+            (multiple-value-bind (text status)
+                (%read-until-prompt conn :total-timeout (min idle-timeout remaining))
+              (case status
+                (:disconnected
+                 (setf (%mud-conn) nil)
+                 (setf cb-args (list "Connection to MUD was lost." :disconnected)))
+                (:ok
+                 (let ((trimmed (string-trim '(#\Space #\Newline #\Return #\Tab) text)))
+                   (when (> (length trimmed) 0)
+                     (setf cb-args (list trimmed nil)))))
+                (:timeout nil))))
+          ;; Call the callback OUTSIDE the lock
+          (when cb-args
+            (if callback
+                (progn
+                  (setf cb-result (apply callback cb-args))
+                  (when (eq cb-result :stop)
+                    (return-from listen-for-activity :stopped)))
+                (destructuring-bind (text status) cb-args
+                  (return-from listen-for-activity
+                    (values text nil (if (eq status :disconnected) :disconnected :ok))))))
+          ;; Yield briefly so POST handlers (send-command) can grab the lock.
+          ;; Without this, the SSE loop re-acquires the lock so fast after
+          ;; %read-until-prompt times out that send-command starves.
+          (sleep 0.05))))))

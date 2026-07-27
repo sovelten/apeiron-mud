@@ -93,11 +93,11 @@
                 :defeat-message "Boss G crumples. 'This isn't over... I'll be back... with a better evil plan!' The cavern rumbles as secret exits open."
                 :victory-flag "beat-boss-g")))
     ;; Maze layout
-    (connect-north-south! world entrance crossroads)
-    (connect-north-south! world crossroads grunt-patrol)
+    (connect-rooms! world crossroads "mouth" entrance "north")
+    (connect-north-south! world grunt-patrol crossroads)
     (connect-west-east! world crossroads riddle-gallery)
     (connect-west-east! world mirror-maze crossroads)
-    (connect-north-south! world cat-alley riddle-gallery)
+    (connect-north-south! world crossroads cat-alley)
     (connect-north-south! world grunt-patrol elite-patrol)
     (connect-west-east! world riddle-gallery password-gate)
     (connect-west-east! world hidden-lab mirror-maze)
