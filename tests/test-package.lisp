@@ -111,5 +111,7 @@
                (t (incf passed))))
            (format t "~%=== Results: ~D passed, ~D failed, ~D pending ===~%"
                    passed failed pending)
+           (when (plusp failed)
+             (error "~D test~:P failed" failed))
            (values passed failed pending)))
     (teardown-test-environment)))
