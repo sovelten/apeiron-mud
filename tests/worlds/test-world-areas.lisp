@@ -99,8 +99,8 @@
                            all-rooms)))
     (apeiron.core:object-move character gallery)
     ;; Exit should be blocked before answering
-    (is (not (null (apeiron.core:room-exit-blocked-p gallery character "east"))))
-    (is (search "feline" (apeiron.core:room-exit-blocked-p gallery character "east")))
+    (is (not (null (apeiron.core:room-exit-blocked-p gallery character "south"))))
+    (is (search "feline" (apeiron.core:room-exit-blocked-p gallery character "south")))
     ;; Character answers correctly via the command system
     (apeiron.core:process-command world character "answer meowth")
     ;; Exit should now be unblocked

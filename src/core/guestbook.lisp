@@ -78,7 +78,9 @@
   (let ((entry (list :author author :message message :timestamp (get-universal-time))))
     (setf (guestbook-entries guestbook)
           (append (guestbook-entries guestbook) (list entry)))
-    (guestbook-append-entry-to-csv entry (guestbook-filepath guestbook))))
+    (let ((filepath (guestbook-filepath guestbook)))
+      (when filepath
+        (guestbook-append-entry-to-csv entry filepath)))))
 
 (defun guestbook-format-entries (guestbook)
   "Format the guestbook entries as a readable string."

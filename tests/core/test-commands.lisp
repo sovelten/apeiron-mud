@@ -58,7 +58,7 @@
 
 (test command-processing-direction-shorthands
   "Test n/s/e/w direction shorthand commands"
-  (let ((world (apeiron.persistence:world-restore-or-initialize)))
+  (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
     (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                      :stream (make-string-output-stream)))))
       (apeiron.core:create-object! world character)
