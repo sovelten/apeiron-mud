@@ -117,7 +117,6 @@ so the SSE handler can safely write event data."
 Returns the previous value so the caller can restore it."
   (let ((old (%mud-conn))
         (session-conn (gethash :mud-conn state)))
-    (apeiron-mcp/src/package::%log "session-restore: old=~A session-conn=~A" old session-conn)
     (when session-conn
       (setf (%mud-conn) session-conn))
     old))
@@ -125,7 +124,6 @@ Returns the previous value so the caller can restore it."
 (defun %session-save-connection (state)
   "Save the current *MUD-CONNECTION* into STATE."
   (let ((conn (%mud-conn)))
-    (apeiron-mcp/src/package::%log "session-save: conn=~A" conn)
     (setf (gethash :mud-conn state) conn)))
 
 (defun mcp-handler ()
@@ -188,7 +186,6 @@ Routes based on HTTP method:
                                  (format nil "Session ~A not found or expired"
                                          session-id)
                                  :status 404)))
-                (apeiron-mcp/src/package::%log "POST: session=~A method=~A" (subseq session-id 0 8) (gethash "method" parsed))
                 ;; Restore this session's MUD connection
                 (let ((old-conn (%session-restore-connection state)))
                   (unwind-protect
@@ -259,6 +256,7 @@ Routes based on HTTP method:
                                             "method" "notifications/message"
                                             "params" (%make-ht "level" "info"
                                                                "data" text)))))
+                                    (apeiron-mcp/src/package::%log "SSE: sending event len=~D" (length text))
                                     (%sse-write stream
                                                 (format nil "data: ~A~%~%" notification))
                                     nil)))

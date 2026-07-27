@@ -58,10 +58,8 @@ POST tool calls (which send commands and read responses).")
 (defun mud-connected-p ()
   "Return true when we have an active connection to the MUD."
   (let ((conn (%mud-conn)))
-    (prog1 (and conn (telnet:telnet-connection-alive-p conn))
-      (%log "mud-connected-p: conn=~A alive=~A => ~A"
-            conn (and conn (ignore-errors (telnet:telnet-connection-alive-p conn)))
-            (and conn (telnet:telnet-connection-alive-p conn))))))
+    (and conn
+         (telnet:telnet-connection-alive-p conn))))
 
 ;; ─── Internal: ANSI escape code stripping ──────────────────────────
 
@@ -244,6 +242,10 @@ Note: does NOT disconnect existing connections — the HTTP session
 layer is responsible for saving/restoring per-session connections."
 
   (%log "connect-to-mud: connecting to ~A:~D as ~S" host port player-name)
+  ;; Clean up any previous connection
+  (when (mud-connected-p)
+    (%log "connect-to-mud: closing previous connection")
+    (ignore-errors (disconnect-from-mud)))
   (handler-case
       (let* ((usocket (usocket:socket-connect host port
                                               :element-type 'character))
@@ -383,9 +385,11 @@ Sends the 'quit' command and closes the telnet connection.
 Returns two values: (message nil) on success, (nil error) on failure."
   (unless (mud-connected-p)
     (setf (%mud-conn) nil)
+    (%log "disconnect: already disconnected")
     (return-from disconnect-from-mud
       (values "Not connected" nil)))
 
+  (%log "disconnect: sending quit")
   (handler-case
       (let ((conn (%mud-conn)))
         ;; Try to send quit gracefully

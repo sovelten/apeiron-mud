@@ -34,7 +34,7 @@
          (crossroads (new-room
                       :name "Cavern Crossroads"
                       :description
-                      "Three tunnels branch off here. Faint footprints and discarded candy wrappers mark the paths. A scratched sign reads: 'Trespassers will be recruited!'."))
+                      "Three tunnels branch south, east, and west from this intersection. The rough-hewn passage you entered from lies to the north. Faint footprints and discarded candy wrappers mark the paths. A scratched sign reads: 'Trespassers will be recruited!'."))
          (grunt-patrol (new-room
                         :name "Grunt Patrol Route"
                         :description
@@ -93,11 +93,11 @@
                 :defeat-message "Boss G crumples. 'This isn't over... I'll be back... with a better evil plan!' The cavern rumbles as secret exits open."
                 :victory-flag "beat-boss-g")))
     ;; Maze layout
-    (connect-rooms! world crossroads "mouth" entrance "north")
-    (connect-north-south! world grunt-patrol crossroads)
+    (connect-north-south! world entrance crossroads)
+    (connect-north-south! world crossroads grunt-patrol)
     (connect-west-east! world crossroads riddle-gallery)
     (connect-west-east! world mirror-maze crossroads)
-    (connect-north-south! world crossroads cat-alley)
+    (connect-north-south! world riddle-gallery cat-alley)
     (connect-north-south! world grunt-patrol elite-patrol)
     (connect-west-east! world riddle-gallery password-gate)
     (connect-west-east! world hidden-lab mirror-maze)
