@@ -185,6 +185,9 @@
    #:wordle-date-key
    #:wordle-ensure-fresh-word!
    #:wordle-word-date
+   #:wordle-leaderboard
+   #:wordle-leaderboard-record!
+   #:wordle-format-leaderboard
 
    ;; Session protocols / base
    #:mud-read-line
@@ -290,6 +293,7 @@
    #:character-output-event
    #:session-id
    #:character-name
+   #:guest?
    #:input
    #:output
 

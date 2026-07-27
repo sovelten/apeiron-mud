@@ -505,3 +505,316 @@
     (let ((desc (object-describe puzzle)))
       (is (search "a test wordle board" desc))
       (is (search (write-to-string (object-id puzzle)) desc)))))
+
+;; ─── Leaderboard
+
+(test wordle-leaderboard-slot-initialized
+  "Leaderboard slot starts as an empty list"
+  (let ((puzzle (make-test-puzzle :target-word "crane")))
+    (is (equal '() (wordle-leaderboard puzzle)))
+    (is (listp (wordle-leaderboard puzzle)))))
+
+(test wordle-leaderboard-record-first-solved
+  "Recording a solved game creates entry with 1 play, 1 correct"
+  (let ((puzzle (make-test-puzzle :target-word "crane")))
+    (wordle-leaderboard-record! puzzle "Alice" :solved)
+    (let ((entries (wordle-leaderboard puzzle)))
+      (is (= 1 (length entries)))
+      (destructuring-bind (name plays correct) (first entries)
+        (is (string= "alice" name))
+        (is (= 1 plays))
+        (is (= 1 correct))))))
+
+(test wordle-leaderboard-record-first-failed
+  "Recording a failed game creates entry with 1 play, 0 correct"
+  (let ((puzzle (make-test-puzzle :target-word "crane")))
+    (wordle-leaderboard-record! puzzle "Bob" :failed)
+    (let ((entries (wordle-leaderboard puzzle)))
+      (is (= 1 (length entries)))
+      (destructuring-bind (name plays correct) (first entries)
+        (is (string= "bob" name))
+        (is (= 1 plays))
+        (is (= 0 correct))))))
+
+(test wordle-leaderboard-record-increment-plays-and-correct
+  "Recording a second solved game increments both plays and correct"
+  (let ((puzzle (make-test-puzzle :target-word "crane")))
+    (wordle-leaderboard-record! puzzle "Alice" :solved)
+    (wordle-leaderboard-record! puzzle "Alice" :solved)
+    (let ((entries (wordle-leaderboard puzzle)))
+      (is (= 1 (length entries)))
+      (destructuring-bind (name plays correct) (first entries)
+        (is (= 2 plays))
+        (is (= 2 correct))))))
+
+(test wordle-leaderboard-record-increment-plays-only
+  "Recording a second failed game increments only plays, not correct"
+  (let ((puzzle (make-test-puzzle :target-word "crane")))
+    (wordle-leaderboard-record! puzzle "Alice" :solved)
+    (wordle-leaderboard-record! puzzle "Alice" :failed)
+    (let ((entries (wordle-leaderboard puzzle)))
+      (is (= 1 (length entries)))
+      (destructuring-bind (name plays correct) (first entries)
+        (is (= 2 plays))
+        (is (= 1 correct))))))
+
+(test wordle-leaderboard-record-multiple-accounts
+  "Multiple accounts are tracked independently"
+  (let ((puzzle (make-test-puzzle :target-word "crane")))
+    (wordle-leaderboard-record! puzzle "Alice" :solved)
+    (wordle-leaderboard-record! puzzle "Bob" :solved)
+    (wordle-leaderboard-record! puzzle "Charlie" :failed)
+    (let ((entries (wordle-leaderboard puzzle)))
+      (is (= 3 (length entries)))
+      (let ((alice (assoc "alice" entries :test #'string=))
+            (bob (assoc "bob" entries :test #'string=))
+            (charlie (assoc "charlie" entries :test #'string=)))
+        (is-true alice)
+        (is (= 1 (second alice)))
+        (is (= 1 (third alice)))
+        (is-true bob)
+        (is (= 1 (second bob)))
+        (is (= 1 (third bob)))
+        (is-true charlie)
+        (is (= 1 (second charlie)))
+        (is (= 0 (third charlie)))))))
+
+(test wordle-leaderboard-record-case-insensitive
+  "Account names are handled case-insensitively"
+  (let ((puzzle (make-test-puzzle :target-word "crane")))
+    (wordle-leaderboard-record! puzzle "Alice" :solved)
+    (wordle-leaderboard-record! puzzle "alice" :failed)
+    (let ((entries (wordle-leaderboard puzzle)))
+      (is (= 1 (length entries)))
+      (destructuring-bind (name plays correct) (first entries)
+        (is (string= "alice" name))
+        (is (= 2 plays))
+        (is (= 1 correct))))))
+
+(test wordle-leaderboard-record-trims-whitespace
+  "Account names are trimmed of whitespace"
+  (let ((puzzle (make-test-puzzle :target-word "crane")))
+    (wordle-leaderboard-record! puzzle "  Alice  " :solved)
+    (let ((entries (wordle-leaderboard puzzle)))
+      (destructuring-bind (name plays correct) (first entries)
+        (is (string= "alice" name))
+        (is (= 1 plays))
+        (is (= 1 correct))))))
+
+(test wordle-leaderboard-format-empty
+  "Formatting an empty leaderboard shows appropriate message"
+  (let ((puzzle (make-test-puzzle :target-word "crane")))
+    (let ((output (wordle-format-leaderboard puzzle)))
+      (is (search "No Wordle leaderboard data" output)))))
+
+(test wordle-leaderboard-format-header
+  "Formatting a non-empty leaderboard includes header and columns"
+  (let ((puzzle (make-test-puzzle :target-word "crane")))
+    (wordle-leaderboard-record! puzzle "Alice" :solved)
+    (let ((output (wordle-format-leaderboard puzzle)))
+      (is (search "Leaderboard" output))
+      (is (search "Player" output))
+      (is (search "Plays" output))
+      (is (search "Correct" output))
+      (is (search "Win%" output)))))
+
+(test wordle-leaderboard-format-shows-player
+  "Formatting shows the player name and stats"
+  (let ((puzzle (make-test-puzzle :target-word "crane")))
+    (wordle-leaderboard-record! puzzle "Alice" :solved)
+    (let ((output (wordle-format-leaderboard puzzle)))
+      (is (search "alice" output))
+      (is (search "1" output)))))
+
+(test wordle-leaderboard-format-sorted-by-correct
+  "Leaderboard is sorted by correct guesses descending"
+  (let ((puzzle (make-test-puzzle :target-word "crane")))
+    (wordle-leaderboard-record! puzzle "Bob" :solved)      ; 1 correct
+    (wordle-leaderboard-record! puzzle "Alice" :solved)     ; 1 correct, same
+    (wordle-leaderboard-record! puzzle "Alice" :solved)     ; 2 correct now
+    (let* ((entries (wordle-leaderboard puzzle))
+           (sorted (sort (copy-list entries)
+                         (lambda (a b)
+                           (or (> (third a) (third b))
+                               (and (= (third a) (third b))
+                                    (> (second a) (second b))))))))
+      (is (string= "alice" (first (first sorted))))
+      (is (string= "bob" (first (second sorted)))))))
+
+(test wordle-leaderboard-format-highlights-top
+  "Top scorer is highlighted with bold green"
+  (let ((puzzle (make-test-puzzle :target-word "crane")))
+    (wordle-leaderboard-record! puzzle "Alice" :solved)
+    (wordle-leaderboard-record! puzzle "Bob" :failed)
+    (let ((output (wordle-format-leaderboard puzzle)))
+      ;; Alice (top scorer) should have bold green formatting
+      (is (search "alice" output))
+      (is (search "bob" output)))))
+
+;; ─── Leaderboard via handle-tell
+
+(test wordle-handle-tell-leaderboard-command
+  "handle-tell responds to 'leaderboard' with leaderboard data"
+  (let* ((session (make-instance 'stream-session
+                                 :stream (make-string-output-stream)
+                                 :use-colors nil))
+         (character (new-character "TestCharacter" session))
+         (puzzle (make-test-puzzle :target-word "crane"))
+         captured-messages)
+    (flet ((mock-send (p msg &key newline)
+             (declare (ignore p newline))
+             (push msg captured-messages)))
+      (let ((old (fdefinition 'character-send-message)))
+        (setf (fdefinition 'character-send-message) #'mock-send)
+        (unwind-protect
+             (progn
+               (is-true (handle-tell puzzle character "leaderboard"))
+               (is (search "No Wordle leaderboard data" (car captured-messages))))
+          (setf (fdefinition 'character-send-message) old))))))
+
+(test wordle-handle-tell-stats-alias
+  "handle-tell responds to 'stats' alias with leaderboard data"
+  (let* ((session (make-instance 'stream-session
+                                 :stream (make-string-output-stream)
+                                 :use-colors nil))
+         (character (new-character "TestCharacter" session))
+         (puzzle (make-test-puzzle :target-word "crane"))
+         captured-messages)
+    (flet ((mock-send (p msg &key newline)
+             (declare (ignore p newline))
+             (push msg captured-messages)))
+      (let ((old (fdefinition 'character-send-message)))
+        (setf (fdefinition 'character-send-message) #'mock-send)
+        (unwind-protect
+             (progn
+               (is-true (handle-tell puzzle character "stats"))
+               (is (search "No Wordle leaderboard data" (car captured-messages))))
+          (setf (fdefinition 'character-send-message) old))))))
+
+(test wordle-handle-tell-scores-alias
+  "handle-tell responds to 'scores' alias with leaderboard data"
+  (let* ((session (make-instance 'stream-session
+                                 :stream (make-string-output-stream)
+                                 :use-colors nil))
+         (character (new-character "TestCharacter" session))
+         (puzzle (make-test-puzzle :target-word "crane"))
+         captured-messages)
+    (flet ((mock-send (p msg &key newline)
+             (declare (ignore p newline))
+             (push msg captured-messages)))
+      (let ((old (fdefinition 'character-send-message)))
+        (setf (fdefinition 'character-send-message) #'mock-send)
+        (unwind-protect
+             (progn
+               (is-true (handle-tell puzzle character "scores"))
+               (is (search "No Wordle leaderboard data" (car captured-messages))))
+          (setf (fdefinition 'character-send-message) old))))))
+
+;; ─── Leaderboard stats recording during gameplay
+
+(test wordle-handle-tell-solved-records-stat
+  "Solving a puzzle records a stat for a registered (owner) character"
+  (let* ((session (make-instance 'stream-session
+                                 :stream (make-string-output-stream)
+                                 :use-colors nil))
+         (character (new-character "TestCharacter" session :owner "TestAccount"))
+         (puzzle (make-test-puzzle :target-word "crane"))
+         (room (new-room :name "test"))
+         captured-messages)
+    (setf (object-location character) room)
+    (flet ((mock-send (p msg &key newline)
+             (declare (ignore p newline))
+             (push msg captured-messages)))
+      (let ((old (fdefinition 'character-send-message)))
+        (setf (fdefinition 'character-send-message) #'mock-send)
+        (unwind-protect
+             (progn
+               (handle-tell puzzle character "crane")
+               (let ((entries (wordle-leaderboard puzzle)))
+                 (is (= 1 (length entries)))
+                 (destructuring-bind (name plays correct) (first entries)
+                   (is (string= "testaccount" name))
+                   (is (= 1 plays))
+                   (is (= 1 correct))))))
+          (setf (fdefinition 'character-send-message) old)))))
+
+(test wordle-handle-tell-failed-records-stat
+  "Failing a puzzle records a stat for a registered (owner) character"
+  (let* ((session (make-instance 'stream-session
+                                 :stream (make-string-output-stream)
+                                 :use-colors nil))
+         (character (new-character "TestCharacter" session :owner "TestAccount"))
+         (puzzle (make-test-puzzle :target-word "crane" :max-guesses 1))
+         (room (new-room :name "test"))
+         captured-messages)
+    (setf (object-location character) room)
+    (flet ((mock-send (p msg &key newline)
+             (declare (ignore p newline))
+             (push msg captured-messages)))
+      (let ((old (fdefinition 'character-send-message)))
+        (setf (fdefinition 'character-send-message) #'mock-send)
+        (unwind-protect
+             (progn
+               (handle-tell puzzle character "dumpy")
+               (let ((entries (wordle-leaderboard puzzle)))
+                 (is (= 1 (length entries)))
+                 (destructuring-bind (name plays correct) (first entries)
+                   (is (string= "testaccount" name))
+                   (is (= 1 plays))
+                   (is (= 0 correct))))))
+          (setf (fdefinition 'character-send-message) old)))))
+
+(test wordle-handle-tell-guest-not-recorded
+  "Guest characters (no owner) do NOT get recorded on the leaderboard"
+  (let* ((session (make-instance 'stream-session
+                                 :stream (make-string-output-stream)
+                                 :use-colors nil))
+         (character (new-character "Guest" session :owner nil))
+         (puzzle (make-test-puzzle :target-word "crane"))
+         (room (new-room :name "test"))
+         captured-messages)
+    (setf (object-location character) room)
+    (flet ((mock-send (p msg &key newline)
+             (declare (ignore p newline))
+             (push msg captured-messages)))
+      (let ((old (fdefinition 'character-send-message)))
+        (setf (fdefinition 'character-send-message) #'mock-send)
+        (unwind-protect
+             (progn
+               (handle-tell puzzle character "crane")
+               (is (equal '() (wordle-leaderboard puzzle))))
+          (setf (fdefinition 'character-send-message) old))))))
+
+(test wordle-handle-tell-continue-not-recorded
+  "A non-final guess does NOT record a leaderboard stat"
+  (let* ((session (make-instance 'stream-session
+                                 :stream (make-string-output-stream)
+                                 :use-colors nil))
+         (character (new-character "TestCharacter" session :owner "TestAccount"))
+         (puzzle (make-test-puzzle :target-word "crane"))
+         (room (new-room :name "test"))
+         captured-messages)
+    (setf (object-location character) room)
+    (flet ((mock-send (p msg &key newline)
+             (declare (ignore p newline))
+             (push msg captured-messages)))
+      (let ((old (fdefinition 'character-send-message)))
+        (setf (fdefinition 'character-send-message) #'mock-send)
+        (unwind-protect
+             (progn
+               (handle-tell puzzle character "train")
+               (is (equal '() (wordle-leaderboard puzzle))))
+          (setf (fdefinition 'character-send-message) old))))))
+
+(test wordle-leaderboard-help-text
+  "Help text mentions the leaderboard command"
+  (let ((puzzle (make-test-puzzle :target-word "crane")))
+    (let ((help (wordle-help-text puzzle)))
+      (is (search "leaderboard" help)))))
+
+(test wordle-leaderboard-not-lost-on-reset
+  "Resetting character guesses does NOT clear the leaderboard"
+  (let ((puzzle (make-test-puzzle :target-word "crane")))
+    (wordle-leaderboard-record! puzzle "Alice" :solved)
+    (wordle-reset puzzle :new-word "quest")
+    (is (= 1 (length (wordle-leaderboard puzzle))))))

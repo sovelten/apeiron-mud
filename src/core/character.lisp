@@ -36,3 +36,6 @@ If the character has no session (e.g. disconnected), the message is silently dro
 (defmethod object-describe ((obj mud-character))
   "Bright green for character characters."
   (bright-green (format nil "~A (ID: ~D)" (object-name obj) (object-id obj))))
+
+(defun guest? (character)
+  (null (character-owner character)))

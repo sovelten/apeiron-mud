@@ -146,6 +146,11 @@ close/reopen cycles that trigger BKNR transaction log replay warnings."
   (bknr.datastore:snapshot)
   t)
 
+(defun safe-update ()
+  "Pulls latest code changes, snapshots BKNR before loading"
+  (sync-world)
+  (ql:quickload :apeiron))
+
 ;; ─── Persistent class mapping ───────────────────────────────────────────────
 
 (defvar *transient->persistent-class-map*
@@ -295,7 +300,7 @@ When FORCE-NEW is true any existing store data is wiped first."
           (let ((guests (remove-if-not
                          (lambda (o)
                            (and (typep o 'mud-character)
-                                (null (character-owner o))
+                                (guest? o)
                                 (not (bknr.indices:object-destroyed-p o))))
                          (bknr.datastore:store-objects-with-class
                           'persistent-object))))
