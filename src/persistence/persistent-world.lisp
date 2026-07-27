@@ -146,6 +146,11 @@ close/reopen cycles that trigger BKNR transaction log replay warnings."
   (bknr.datastore:snapshot)
   t)
 
+(defun safe-update ()
+  "Pulls latest code changes, snapshots BKNR before loading"
+  (sync-world)
+  (ql:quickload :apeiron))
+
 ;; ─── Persistent class mapping ───────────────────────────────────────────────
 
 (defvar *transient->persistent-class-map*

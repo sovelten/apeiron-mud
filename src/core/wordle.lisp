@@ -168,12 +168,21 @@
    (word-date :initarg :word-date
               :accessor wordle-word-date
               :initform (wordle-date-key)
-              :documentation "Integer date key (YYYYMMDD) of the current target-word."))
+              :documentation "Integer date key (YYYYMMDD) of the current target-word.")
+   (leaderboard :initarg :leaderboard
+                :accessor wordle-leaderboard
+                :initform '()
+                :documentation
+                "List of (account-name plays correct) tracking registered
+                 account stats on this puzzle.  Persisted via BKNR."))
   (:documentation "A Wordle-like puzzle object for the MUD.
 
 Characters interact with the puzzle by telling it words.  Each character's
 guesses are tracked independently.  When a new day arrives the puzzle
-automatically rotates to that day's word and resets all progress."))
+automatically rotates to that day's word and resets all progress.
+
+Each puzzle instance tracks its own leaderboard of registered (non-guest)
+accounts — number of plays and correct solves."))
 
 (defmethod object-describe ((obj mud-wordle-puzzle))
   "Magenta for Wordle puzzles."
@@ -453,16 +462,86 @@ where RESULT-CODE is one of:
 
 ;; ─── Help text ────────────────────────────────────────────────────────────
 
+;; ─── Leaderboard (per-puzzle, registered accounts only) ────────────────────
+
+(defun wordle-leaderboard-record! (puzzle account-name result-code)
+  "Record a completed Wordle game for ACCOUNT-NAME on this PUZZLE.
+
+RESULT-CODE is :solved or :failed.  Increments the play count and
+optionally the correct count for this account on this puzzle.
+
+Only registered accounts (non-guest) are tracked — guests are silently
+ignored.  ACCOUNT-NAME is the MUD-ACCOUNT name (not character name)."
+  (declare (type string account-name))
+  (let* ((key (string-downcase (string-trim '(#\Space #\Tab) account-name)))
+         (entries (wordle-leaderboard puzzle))
+         (existing (assoc key entries :test #'string=)))
+    (if existing
+        (progn
+          (incf (second existing))          ; plays
+          (when (eq result-code :solved)
+            (incf (third existing))))       ; correct
+        (push (list key 1 (if (eq result-code :solved) 1 0))
+              entries))
+    (setf (wordle-leaderboard puzzle) entries)
+    t))
+
+(defun wordle-format-leaderboard (puzzle)
+  "Return a string displaying this PUZZLE's Wordle leaderboard.
+Sorted by correct guesses descending, then plays descending.
+Only accounts with at least one play are shown."
+  (let ((entries (wordle-leaderboard puzzle)))
+    (if (null entries)
+        (format nil "~A~%"
+                (yellow "No Wordle leaderboard data yet for this puzzle!"))
+        (let* ((sorted (sort (copy-list entries)
+                             (lambda (a b)
+                               (or (> (third a) (third b))
+                                   (and (= (third a) (third b))
+                                        (> (second a) (second b)))))))
+               (max-correct (reduce #'max sorted :key #'third :initial-value 0)))
+          (with-output-to-string (stream)
+            (format stream "~A~%"
+                    (bold-white (format nil "=== ~A Leaderboard ==="
+                                        (object-name puzzle))))
+            (format stream "~A~%~%"
+                    (yellow "Registered players, ranked by correct solves."))
+            (format stream "  ~A~%"
+                    (bold-white (format nil "~20A  ~5A  ~7A  ~6A"
+                                        "Player" "Plays" "Correct" "Win%")))
+            (format stream "  ~A~%"
+                    (color-text (make-string 42 :initial-element #\-)
+                                +sgr-dim+))
+            (dolist (entry sorted)
+              (destructuring-bind (name plays correct) entry
+                (let* ((win-pct (if (plusp plays)
+                                    (float (/ correct plays 1/100))
+                                    0.0))
+                       (highlight (and (= correct max-correct) (plusp correct)))
+                       (line (format nil "  ~20A  ~5D  ~7D  ~5,1F"
+                                     name plays correct win-pct)))
+                  (if highlight
+                      (format stream "~A~%" (bold-green line))
+                      (format stream "~A~%" line)))))
+            (format stream "~%")
+            (format stream "~A~%"
+                    (color-text "Play this Wordle puzzle to get on the board!"
+                                +sgr-dim+))
+            (format stream "~A~%"
+                    (color-text "Only registered (non-guest) players are tracked."
+                                +sgr-dim+)))))))
+
 (defun wordle-help-text (puzzle)
   "Return a help string explaining how to play Wordle on this puzzle."
   (wordle-ensure-fresh-word! puzzle)
   (with-output-to-string (stream)
     (format stream "~A~%~%" (bold-white (format nil "=== How to play ~A ===" (object-name puzzle))))
     (format stream "~A~%~A~%~%" (bold-white "Goal:") "Guess the 5-letter word in 6 tries.")
-    (format stream "~A~%~A~%~A~%~A~%~%" (bold-white "How to play:")
+    (format stream "~A~%~A~%~A~%~A~%~A~%~%" (bold-white "How to play:")
             "  tell <puzzle> <word>  - Make a guess (e.g. tell board crane)"
             "  tell <puzzle> help    - Show this help"
-            "  tell <puzzle> show    - Show the current puzzle state")
+            "  tell <puzzle> show    - Show the current puzzle state"
+            "  tell <puzzle> leaderboard - Show leaderboard stats")
     (format stream "~A~%~A~%~A~%~A~%~A"
             (bold-white "Colour guide:")
             (format nil "  ~A - Letter is correct and in the right position"
@@ -476,7 +555,7 @@ where RESULT-CODE is one of:
 ;; ─── Speech interaction ────────────────────────────────────────────────────
 
 (defmethod handle-tell ((puzzle mud-wordle-puzzle) speaker message)
-  "Respond when a character tells the puzzle a 5-letter word, help, or board."
+  "Respond when a character tells the puzzle a 5-letter word, help, board, or leaderboard."
   (wordle-ensure-fresh-word! puzzle)
   (let* ((cleaned (string-trim '(#\Space #\Tab #\Newline) message))
          (lower (string-downcase cleaned)))
@@ -489,6 +568,10 @@ where RESULT-CODE is one of:
       ((member lower '("show") :test #'string=)
        (character-send-message speaker (wordle-display puzzle (object-name speaker)))
        t)
+      ;; "leaderboard" — show this puzzle's leaderboard
+      ((member lower '("leaderboard" "stats" "scores") :test #'string=)
+       (character-send-message speaker (wordle-format-leaderboard puzzle))
+       t)
       ;; 5-letter word — process as a guess
       ((and (= (length lower) 5)
             (every (lambda (c) (find c "abcdefghijklmnopqrstuvwxyz")) lower))
@@ -496,6 +579,11 @@ where RESULT-CODE is one of:
            (wordle-guess puzzle (object-name speaker) lower)
          (character-send-message speaker display)
          (when (or (eq result-code :solved) (eq result-code :failed))
+           ;; Record leaderboard stats for registered (non-guest) accounts
+           (let ((owner (character-owner speaker)))
+             (when owner
+               (wordle-leaderboard-record! puzzle owner result-code)))
+           ;; Broadcast result to the room
            (let* ((room (object-location speaker))
                   (guesses (wordle-character-guesses-list puzzle (object-name speaker)))
                   (result-text (with-output-to-string (s)
