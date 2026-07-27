@@ -8,6 +8,8 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    env:
+      LISP: sbcl-bin
     steps:
       - uses: actions/checkout@v4
 
