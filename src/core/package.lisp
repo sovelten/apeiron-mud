@@ -290,6 +290,7 @@
    #:character-output-event
    #:session-id
    #:character-name
+   #:guest?
    #:input
    #:output
 

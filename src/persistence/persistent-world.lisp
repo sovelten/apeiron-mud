@@ -295,7 +295,7 @@ When FORCE-NEW is true any existing store data is wiped first."
           (let ((guests (remove-if-not
                          (lambda (o)
                            (and (typep o 'mud-character)
-                                (null (character-owner o))
+                                (guest? o)
                                 (not (bknr.indices:object-destroyed-p o))))
                          (bknr.datastore:store-objects-with-class
                           'persistent-object))))
