@@ -256,6 +256,7 @@ Routes based on HTTP method:
                                             "method" "notifications/message"
                                             "params" (%make-ht "level" "info"
                                                                "data" text)))))
+                                    (apeiron-mcp/src/package::%log "SSE: sending event len=~D" (length text))
                                     (%sse-write stream
                                                 (format nil "data: ~A~%~%" notification))
                                     nil)))

@@ -22,6 +22,10 @@
    #:%error
    #:%make-ht
 
+   ;; Debug logging
+   #:*debug-log*
+   #:%log
+
    ;; HTTP server
    #:*http-acceptor*
    #:*http-port*

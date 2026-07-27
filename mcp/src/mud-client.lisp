@@ -44,6 +44,17 @@ POST tool calls (which send commands and read responses).")
 (defun (setf %mud-conn) (new-value)
   (setf (gethash (bordeaux-threads:current-thread) *mud-connections*) new-value))
 
+(defvar *debug-log* t
+  "When T, emit debug logging to *error-output*.")
+
+(defun %log (fmt &rest args)
+  "Write a timestamped debug log line to *error-output*."
+  (when *debug-log*
+    (let ((ts (multiple-value-bind (s m h) (decode-universal-time (get-universal-time) 0)
+                (format nil "~2,'0D:~2,'0D:~2,'0D" h m s))))
+      (format *error-output* "~&[~A ~A] ~?~%" ts (bordeaux-threads:current-thread) fmt args)
+      (finish-output *error-output*))))
+
 (defun mud-connected-p ()
   "Return true when we have an active connection to the MUD."
   (let ((conn (%mud-conn)))
@@ -199,12 +210,17 @@ Returns: the full welcome text including the name prompt."
                  (vector-push-extend #\Newline acc))
                (loop for c across stripped
                      do (vector-push-extend c acc))
-               ;; Detect name prompt heuristically
+               ;; Detect login choice or name prompt heuristically
                (when (or (search "name" stripped :test #'char-equal)
                          (search "enter" stripped :test #'char-equal)
                          (search "who" stripped :test #'char-equal))
                  (return-from %read-name-prompt
-                   (values (coerce acc 'string) :ok)))))))))))
+                   (values (coerce acc 'string) :ok)))
+               (when (or (search "guest" stripped :test #'char-equal)
+                         (search "connect" stripped :test #'char-equal)
+                         (search "Choose" stripped :test #'char-equal))
+                 (return-from %read-name-prompt
+                   (values (coerce acc 'string) :login-choice)))))))))))
 
 ;; ─── Public: connect to the MUD ──────────────────────────────────
 
@@ -225,6 +241,11 @@ calls to SEND-COMMAND and DISCONNECT-FROM-MUD.
 Note: does NOT disconnect existing connections — the HTTP session
 layer is responsible for saving/restoring per-session connections."
 
+  (%log "connect-to-mud: connecting to ~A:~D as ~S" host port player-name)
+  ;; Clean up any previous connection
+  (when (mud-connected-p)
+    (%log "connect-to-mud: closing previous connection")
+    (ignore-errors (disconnect-from-mud)))
   (handler-case
       (let* ((usocket (usocket:socket-connect host port
                                               :element-type 'character))
@@ -233,6 +254,15 @@ layer is responsible for saving/restoring per-session connections."
         ;; Read the initial server output / name prompt
         (multiple-value-bind (welcome status)
             (%read-name-prompt conn)
+
+          ;; If the server presents a login choice (new/guest/connect),
+          ;; choose "g" for guest access and read the name prompt
+          (when (eq status :login-choice)
+            (telnet:telnet-write-string conn "g" :end :crlf)
+            (sleep 0.3)
+            (setf (values welcome status)
+                  (%read-name-prompt conn)))
+
           (unless (eq status :ok)
             (telnet:telnet-connection-close conn)
             (return-from connect-to-mud
@@ -260,6 +290,7 @@ layer is responsible for saving/restoring per-session connections."
 
               ;; Store the connection
               (setf (%mud-conn) conn)
+              (%log "connect-to-mud: SUCCESS, conn=~A" conn)
 
               (values full-welcome nil :ok)))))
 
@@ -276,6 +307,7 @@ layer is responsible for saving/restoring per-session connections."
       (values nil (format nil "Socket error connecting to ~A:~D" host port) :error))
     (error (e)
       (setf (%mud-conn) nil)
+      (%log "connect-to-mud: ERROR ~A" e)
       (values nil (format nil "Connection error: ~A" e) :error))))
 
 ;; ─── Public: send a command ──────────────────────────────────────
@@ -294,18 +326,23 @@ Returns (nil error-message) on failure or if not connected.
 The response is the server output between sending the command and
 receiving the next prompt, with ANSI codes stripped."
   (unless (mud-connected-p)
+    (%log "send-command: NOT CONNECTED, returning error")
     (return-from send-command
       (values nil "Not connected to MUD. Use mud-connect first.")))
 
+  (%log "send-command: waiting for lock...")
   (bordeaux-threads:with-lock-held (*mud-connection-lock*)
+    (%log "send-command: lock acquired, sending: ~S" command-string)
     (handler-case
         (let ((conn (%mud-conn)))
           ;; Send the command
           (telnet:telnet-write-string conn command-string :end :crlf)
 
           ;; Read the response
+          (%log "send-command: reading response...")
           (multiple-value-bind (text status)
               (%read-until-prompt conn)
+            (%log "send-command: done, status=~A text-len=~D" status (length text))
             (case status
               (:ok (values text nil))
               (:timeout (values text "Response may be incomplete (timeout)"))
@@ -348,9 +385,11 @@ Sends the 'quit' command and closes the telnet connection.
 Returns two values: (message nil) on success, (nil error) on failure."
   (unless (mud-connected-p)
     (setf (%mud-conn) nil)
+    (%log "disconnect: already disconnected")
     (return-from disconnect-from-mud
       (values "Not connected" nil)))
 
+  (%log "disconnect: sending quit")
   (handler-case
       (let ((conn (%mud-conn)))
         ;; Try to send quit gracefully
@@ -395,11 +434,13 @@ In either mode, this reads the MUD prompt and any text that arrives
 between prompts — it does NOT send a command.  This enables the LLM
 to wait for and react to in-game events."
   (unless (mud-connected-p)
+    (%log "listen: NOT CONNECTED")
     (if callback
         (funcall callback "Not connected to MUD." :error)
         (return-from listen-for-activity
           (values nil "Not connected to MUD." :error))))
 
+  (%log "listen: starting, timeout=~Ds" timeout)
   (let ((conn (%mud-conn))
         (deadline (+ (get-internal-real-time)
                      (* timeout internal-time-units-per-second))))
@@ -415,24 +456,34 @@ to wait for and react to in-game events."
         ;; connection while send-command (called from a POST handler)
         ;; is sending a command and reading its response.  The lock is
         ;; released after each iteration so POST handlers don't starve.
-        (bordeaux-threads:with-lock-held (*mud-connection-lock*)
-          (multiple-value-bind (text status)
-              (%read-until-prompt conn :total-timeout (min idle-timeout remaining))
-            (case status
-              (:disconnected
-               (setf (%mud-conn) nil)
-               (if callback
-                   (funcall callback "Connection to MUD was lost." :disconnected)
-                   (return-from listen-for-activity
-                     (values text nil :disconnected))))
-              (:ok
-               (let ((trimmed (string-trim '(#\Space #\Newline #\Return #\Tab) text)))
-                 (when (> (length trimmed) 0)
-                   (if callback
-                       (let ((result (funcall callback trimmed nil)))
-                         (when (eq result :stop)
-                           (return-from listen-for-activity :stopped)))
-                       (return-from listen-for-activity
-                         (values text nil :ok))))))
-              ;; :timeout means no output — just loop and try again
-              (:timeout nil))))))))
+        ;;
+        ;; IMPORTANT: the callback is called OUTSIDE the lock to prevent
+        ;; a blocking SSE write from starving send-command.
+        (let ((cb-result nil)
+              (cb-args nil))
+          (bordeaux-threads:with-lock-held (*mud-connection-lock*)
+            (multiple-value-bind (text status)
+                (%read-until-prompt conn :total-timeout (min idle-timeout remaining))
+              (case status
+                (:disconnected
+                 (setf (%mud-conn) nil)
+                 (setf cb-args (list "Connection to MUD was lost." :disconnected)))
+                (:ok
+                 (let ((trimmed (string-trim '(#\Space #\Newline #\Return #\Tab) text)))
+                   (when (> (length trimmed) 0)
+                     (setf cb-args (list trimmed nil)))))
+                (:timeout nil))))
+          ;; Call the callback OUTSIDE the lock
+          (when cb-args
+            (if callback
+                (progn
+                  (setf cb-result (apply callback cb-args))
+                  (when (eq cb-result :stop)
+                    (return-from listen-for-activity :stopped)))
+                (destructuring-bind (text status) cb-args
+                  (return-from listen-for-activity
+                    (values text nil (if (eq status :disconnected) :disconnected :ok))))))
+          ;; Yield briefly so POST handlers (send-command) can grab the lock.
+          ;; Without this, the SSE loop re-acquires the lock so fast after
+          ;; %read-until-prompt times out that send-command starves.
+          (sleep 0.05))))))

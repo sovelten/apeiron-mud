@@ -24,6 +24,33 @@ welcome.  Returns T on success."
     (declare (ignore err))
     (and response (search expected response))))
 
+(defun %raw-telnet-login (port player-name)
+  "Connect a raw telnet speaker to MUD on PORT as PLAYER-NAME,
+handle the login flow (choose guest, send name, drain welcome).
+Returns the telnet connection."
+  (let* ((us (usocket:socket-connect "127.0.0.1" port :element-type 'character))
+         (c (telnet:make-telnet-connection us)))
+    ;; Read through login choice prompt, send "g"
+    (loop for line = (telnet:telnet-read-line c :timeout 3)
+          while line
+          do (when (or (search "Choose" line :test #'char-equal)
+                       (search "guest" line :test #'char-equal))
+               (telnet:telnet-write-string c "g" :end :crlf)
+               (loop-finish)))
+    ;; Read through name prompt, send name
+    (loop for line = (telnet:telnet-read-line c :timeout 3)
+          while line
+          do (when (search "name" line :test #'char-equal)
+               (telnet:telnet-write-string c player-name :end :crlf)
+               (loop-finish)))
+    ;; Drain welcome message + room description
+    (sleep 0.5)
+    (loop repeat 15 do
+      (multiple-value-bind (l s) (telnet:telnet-read-line c :timeout 0.3)
+        (declare (ignore l))
+        (when (eq s :timeout) (return))))
+    c))
+
 (defmacro with-mud-server ((port-var) &body body)
   "Start a MUD server on a random port with a clean BKNR store,
 bind PORT-VAR, run BODY, stop server and clean up."
@@ -589,8 +616,7 @@ is ready to read the body after headers."
   (let* ((socket (usocket:socket-connect host port
                                          :element-type 'character))
          (stream (usocket:socket-stream socket)))
-    ;; Write GET request — do NOT send Connection: close so the SSE
-    ;; stream stays open for reading events as they arrive.
+    ;; Write GET request
     (format stream "GET ~A HTTP/1.1~C~C" path #\Return #\Newline)
     (format stream "Host: ~A:~D~C~C" host port #\Return #\Newline)
     (loop for (k . v) in headers do
@@ -624,18 +650,18 @@ is ready to read the body after headers."
                            resp-headers))))
         (values stream socket code (nreverse resp-headers))))))
 
-(defun %read-sse-line (stream timeout-seconds)
-  "Read one line from STREAM with TIMEOUT-SECONDS.  Returns the line
-or NIL on timeout/eof."
+(defun %read-sse-line (stream socket timeout-seconds)
+  "Read one line from STREAM with TIMEOUT-SECONDS, using SOCKET
+(usocket) for non-blocking readiness check.  Returns the line,
+NIL on timeout, or :eof when the stream is closed."
   (let ((deadline (+ (get-internal-real-time)
                      (* timeout-seconds internal-time-units-per-second))))
     (loop
-      (when (listen stream)
-        (return-from %read-sse-line
-          (read-line stream nil nil)))
+      (when (usocket:wait-for-input socket :timeout 0.05)
+        (let ((line (read-line stream nil :eof)))
+          (return-from %read-sse-line line)))
       (when (>= (get-internal-real-time) deadline)
-        (return-from %read-sse-line nil))
-      (sleep 0.05))))
+        (return-from %read-sse-line nil)))))
 
 (test http-sse-without-connection
   "SSE GET without a MUD connection returns 400 error."
@@ -684,10 +710,11 @@ or NIL on timeout/eof."
                  ;; Collect events and verify both messages arrived
                  (let ((all-data (make-string-output-stream)))
                    (loop repeat 20
-                         for line = (%read-sse-line sse-stream 0.5)
-                         while line
+                         for line = (%read-sse-line sse-stream sse-socket 0.5)
+                         while (and line (not (eq line :eof)))
                          do (write-string line all-data))
                    (let ((data (get-output-stream-string all-data)))
+                     (format t "~&SSE-DEBUG received ~D bytes: ~S~%" (length data) data)
                      (is (search "First event" data)
                          "Should receive 'First event' via SSE")
                      (is (search "Second event" data)
@@ -722,8 +749,8 @@ or NIL on timeout/eof."
                  ;; Read SSE events — should get the notification
                  (let ((event-found nil))
                    (loop repeat 20
-                         for line = (%read-sse-line sse-stream 0.5)
-                         while line
+                         for line = (%read-sse-line sse-stream sse-socket 0.5)
+                         while (and line (not (eq line :eof)))
                          do (when (and (> (length line) 6)
                                        (string= (subseq line 0 6) "data: "))
                               (let ((payload (subseq line 6)))
@@ -745,16 +772,8 @@ or NIL on timeout/eof."
   "listen-for-activity returns text when another player speaks."
   (with-mud-server (port)
     (connect-to-mud "127.0.0.1" port "ListenChar")
-    ;; Connect speaker via raw telnet
-    (let* ((us (usocket:socket-connect "127.0.0.1" port :element-type 'character))
-           (c (telnet:make-telnet-connection us)))
-      (telnet:telnet-read-line c :timeout 3)
-      (telnet:telnet-write-string c "SpeakerCh" :end :crlf)
-      (sleep 0.3)
-      (loop repeat 10 do
-        (multiple-value-bind (l s) (telnet:telnet-read-line c :timeout 0.3)
-          (declare (ignore l))
-          (when (eq s :timeout) (return))))
+    ;; Connect speaker via raw telnet with proper login flow
+    (let ((c (%raw-telnet-login port "SpeakerCh")))
       (telnet:telnet-write-string c "say Hello from listen test!" :end :crlf)
       (sleep 0.3)
       (multiple-value-bind (text err status)
@@ -769,15 +788,7 @@ or NIL on timeout/eof."
   "listen-for-activity can be called multiple times for separate events."
   (with-mud-server (port)
     (connect-to-mud "127.0.0.1" port "MultiListen")
-    (let* ((us (usocket:socket-connect "127.0.0.1" port :element-type 'character))
-           (c (telnet:make-telnet-connection us)))
-      (telnet:telnet-read-line c :timeout 3)
-      (telnet:telnet-write-string c "Speaker2" :end :crlf)
-      (sleep 0.3)
-      (loop repeat 10 do
-        (multiple-value-bind (l s) (telnet:telnet-read-line c :timeout 0.3)
-          (declare (ignore l))
-          (when (eq s :timeout) (return))))
+    (let ((c (%raw-telnet-login port "Speaker2")))
       ;; First speech
       (telnet:telnet-write-string c "say First speech!" :end :crlf)
       (sleep 0.3)
