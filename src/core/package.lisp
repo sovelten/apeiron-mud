@@ -164,6 +164,8 @@
 
    ;; Wordle puzzle
    #:*wordle-default-words*
+   #:*wordle-pt-br-words*
+   #:wordle-normalize
    #:*wordle-override-time*
    #:mud-wordle-puzzle
    #:new-wordle-puzzle

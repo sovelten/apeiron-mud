@@ -894,3 +894,83 @@
                (wordle-daily-word :word-list word-list :universal-time time-2)))
     (is (stringp (wordle-daily-word :word-list word-list :universal-time time-1)))
     (is (= 5 (length (wordle-daily-word :word-list word-list :universal-time time-1))))))
+
+;; ─── Accent normalization / pt-BR support
+
+(test wordle-normalize-strips-accents
+  "wordle-normalize strips Portuguese diacritics"
+  (is (equal "c" (wordle-normalize "ç")))
+  (is (equal "a" (wordle-normalize "á")))
+  (is (equal "a" (wordle-normalize "à")))
+  (is (equal "a" (wordle-normalize "â")))
+  (is (equal "a" (wordle-normalize "ã")))
+  (is (equal "e" (wordle-normalize "é")))
+  (is (equal "e" (wordle-normalize "ê")))
+  (is (equal "i" (wordle-normalize "í")))
+  (is (equal "o" (wordle-normalize "ó")))
+  (is (equal "o" (wordle-normalize "ô")))
+  (is (equal "o" (wordle-normalize "õ")))
+  (is (equal "u" (wordle-normalize "ú")))
+  (is (equal "macas" (wordle-normalize "maçãs")))
+  (is (equal "saude" (wordle-normalize "saúde")))
+  (is (equal "orgao" (wordle-normalize "órgão"))))
+
+(test wordle-normalize-uppercase
+  "wordle-normalize handles uppercase accented characters"
+  (is (equal "C" (wordle-normalize "Ç")))
+  (is (equal "A" (wordle-normalize "Á")))
+  (is (equal "E" (wordle-normalize "É")))
+  (is (equal "ATRAS" (wordle-normalize "ATRÁS")))
+  (is (equal "MUSICA" (wordle-normalize "MÚSICA"))))
+
+(test wordle-normalize-plain-ascii
+  "wordle-normalize does not change plain ASCII letters"
+  (is (equal "hello" (wordle-normalize "hello")))
+  (is (equal "crane" (wordle-normalize "crane")))
+  (is (equal "ABCDE" (wordle-normalize "ABCDE"))))
+
+(test wordle-evaluate-guess-accent-insensitive
+  "wordle-evaluate-guess matches accented target with plain guess"
+  (is (equal '(:correct :correct :correct :correct :correct)
+             (wordle-evaluate-guess "maçãs" "macas")))
+  (is (equal '(:correct :correct :correct :correct :correct)
+             (wordle-evaluate-guess "órgão" "orgao")))
+  (is (equal '(:correct :correct :correct :correct :correct)
+             (wordle-evaluate-guess "saúde" "saude"))))
+
+(test wordle-evaluate-guess-accent-mixed
+  "wordle-evaluate-guess still marks wrong letters correctly with accents"
+  (let ((result (wordle-evaluate-guess "maçãs" "mocas")))
+    (is (eq :correct (nth 0 result)))
+    (is (eq :absent  (nth 1 result)))
+    (is (eq :correct (nth 2 result)))
+    (is (eq :correct (nth 3 result)))
+    (is (eq :correct (nth 4 result)))))
+
+(test wordle-pt-br-word-list-length
+  "All words in *wordle-pt-br-words* are 5 letters"
+  (loop for word across *wordle-pt-br-words*
+        do (is (= 5 (length word)))))
+
+(test wordle-pt-br-puzzle-creation
+  "A puzzle using the pt-BR word list can be created and played"
+  (let ((puzzle (new-wordle-puzzle
+                 :word-list *wordle-pt-br-words*
+                 :target-word "maçãs")))
+    (is (typep puzzle 'mud-wordle-puzzle))
+    (is (equal "maçãs" (wordle-target-word puzzle)))
+    ;; A plain ASCII guess that matches after normalization
+    (multiple-value-bind (display result-code)
+        (wordle-guess puzzle "TestCharacter" "macas")
+      (declare (ignore display))
+      (is (eq :solved result-code)))))
+
+(test wordle-pt-br-input-validation
+  "Accented characters are accepted in input"
+  (let ((puzzle (new-wordle-puzzle
+                 :word-list *wordle-pt-br-words*
+                 :target-word "maçãs")))
+    (multiple-value-bind (display result-code)
+        (wordle-guess puzzle "TestCharacter" "maçãs")
+      (declare (ignore display))
+      (is (eq :solved result-code)))))

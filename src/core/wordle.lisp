@@ -99,6 +99,77 @@
    "youth" "zebra")
   "Default vector of 5-letter words for Wordle puzzles.")
 
+(defparameter *wordle-pt-br-words*
+  (vector
+   "abrir" "acaso" "achar" "agudo" "altar" "amado" "amigo" "andar" "anexo"
+   "apoio" "areia" "areal" "arroz" "asilo" "ativo" "atrás" "áudio" "aviso"
+   "baixo" "banho" "barco" "batal" "beijo" "bicho" "bolsa" "bomba" "bônus"
+   "braço" "bravo" "breve" "briga" "busca" "cabra" "cacho" "caixa" "calma"
+   "calor" "campo" "capaz" "carne" "carro" "carta" "cesta" "chefe" "cheio"
+   "choro" "chave" "ciclo" "cinza" "circo" "cobra" "colar" "comer" "copos"
+   "corda" "corpo" "costa" "couro" "cravo" "credo" "crise" "cruza" "dança"
+   "dados" "danos" "dedos" "deles" "doido" "donas" "dorso" "drama" "droga"
+   "dever" "fácil" "falar" "farol" "falso" "fases" "feliz" "festa" "ficha"
+   "filho" "filme" "final" "fogos" "folha" "fonte" "forma" "forte" "força"
+   "fruta" "fugir" "fúria" "galho" "garfo" "gasto" "gelos" "gêmeo" "geral"
+   "gesto" "gente" "goela" "golpe" "gosto" "grade" "grama" "graxa" "grilo"
+   "grude" "grupo" "harpa" "haste" "homem" "honra" "hoste" "ideal" "igual"
+   "irmão" "isola" "janta" "jogar" "juízo" "leite" "lento" "livro" "louco"
+   "lugar" "luzir" "maçãs" "macho" "magro" "manto" "mares" "matar" "meiga"
+   "melão" "menos" "mesmo" "metal" "minha" "misto" "mocho" "monge" "monta"
+   "morte" "morar" "mundo" "mural" "murro" "naval" "navio" "negar" "ninho"
+   "nível" "noite" "nossa" "nuvem" "óbito" "olhar" "olhos" "órgão" "palha"
+   "pampa" "papel" "parar" "parte" "passo" "pátio" "pavio" "peixe" "pêlos"
+   "pense" "perda" "pesca" "piano" "pilha" "pires" "pista" "pobre" "poder"
+   "poema" "pompa" "ponte" "porta" "posse" "pouco" "praia" "prata" "prato"
+   "prazo" "preço" "presa" "preto" "primo" "prosa" "pular" "pulso" "quase"
+   "rádio" "raiva" "range" "rapaz" "raste" "reais" "recém" "redor" "regra"
+   "reino" "reler" "remar" "rente" "resma" "resto" "rezar" "risco" "risos"
+   "rocha" "rodar" "rolha" "rompa" "rosto" "roubo" "rubro" "rugir" "rumor"
+   "sábio" "sabão" "sabor" "sadio" "salmo" "salto" "saúde" "seara" "seção"
+   "seita" "selva" "selos" "sente" "serra" "servo" "sesta" "sexta" "sigla"
+   "silvo" "sítio" "sobra" "sogra" "soldo" "solta" "sonho" "sopro" "sorte"
+   "sulco" "sumir" "surdo" "surto" "tábua" "talho" "tanto" "tarde" "tarja"
+   "tecer" "teima" "telha" "tempo" "tênis" "tenso" "terço" "termo" "terno"
+   "terra" "testa" "teste" "texto" "tigre" "tinta" "tirar" "toada" "tocha"
+   "tolos" "tomar" "tonto" "tórax" "torre" "torta" "tosse" "tosta" "total"
+   "touro" "traço" "traga" "trama" "trapo" "trato" "trema" "trigo" "troca"
+   "troço" "trono" "trova" "trupe" "tumba" "tumor" "turma" "turno" "ungir"
+   "único" "unido" "untar" "urdir" "urgir" "usado" "usura" "vadio" "vagão"
+   "vagar" "vapor" "varal" "vasto" "vazão" "vazio" "vedar" "veias" "velar"
+   "velho" "veloz" "vemos" "vendo" "vento" "verão" "verbo" "verde" "verso"
+   "veste" "vetar" "vidas" "vidro" "vigia" "vigor" "vinda" "vinho" "vinte"
+   "viola" "virar" "visão" "visar" "visto" "vital" "viver" "vivos" "vogal"
+   "volta" "vulto")
+  "Vector of 5-letter Portuguese (pt-BR) words for Wordle puzzles.
+  Includes accented characters (á, â, ã, ç, é, ê, í, ó, ô, õ, ú).")
+
+;; ─── Accent normalization ─────────────────────────────────────────────────
+
+(defun wordle-normalize (string)
+  "Return a copy of STRING with characters that bear diacritics
+  replaced by their base letters (e.g. á→a, ç→c, ü→u).
+  The case of the original character is preserved.
+
+  Uses CHAR-NAME to decompose, which handles *any* accented character
+  generically — no explicit mapping table needed.  Characters without
+  diacritics are returned unchanged."
+  (let ((result (make-array (length string) :element-type 'character
+                                          :fill-pointer 0)))
+    (loop for c across string do
+      (let ((name (char-name c)))
+        (if (and name (search "_WITH_" name))
+            ;; Accented: base letter is the char before "_WITH_" in the name
+            ;; e.g. "LATIN_SMALL_LETTER_A_WITH_ACUTE" → base is "A"
+            (let* ((prefix (subseq name 0 (search "_WITH_" name)))
+                   (base-char (aref prefix (1- (length prefix)))))
+              (vector-push (if (upper-case-p c)
+                               (char-upcase base-char)
+                               (char-downcase base-char))
+                           result))
+            (vector-push c result))))
+    result))
+
 ;; ─── Daily word selection ─────────────────────────────────────────────────
 
 (defvar *wordle-override-time* nil
@@ -276,9 +347,15 @@ Returns a list of 5 keyword results:
 
 Handles duplicate letters correctly: if a letter appears twice in the
 guess but only once in the target, only one gets :present and the other
-gets :absent."
-  (let* ((target (string-downcase target-word))
-         (guess  (string-downcase guess-word))
+gets :absent.
+
+Uses WORDLE-NORMALIZE for accent-insensitive comparison: accented
+characters in the target (from the word list) are compared against
+plain ASCII letters in the guess (as typed by the player), so
+e.g. 'maçã' matches 'macac'.  The original characters of both
+target and guess are preserved for display."
+  (let* ((target (wordle-normalize (string-downcase target-word)))
+         (guess  (wordle-normalize (string-downcase guess-word)))
          (target-chars (coerce target 'list))
          (guess-chars  (coerce guess 'list))
          (results (make-list 5 :initial-element nil))
@@ -406,8 +483,6 @@ without spoiling the answer."
                           (format nil "Speak a 5-letter word aloud (~D ~A remaining)"
                                   rem (if (= rem 1) "guess" "guesses"))))))))))
 
-;; ─── Make a guess ──────────────────────────────────────────────────────────
-
 (defun wordle-guess (puzzle character-name guess-word)
   "Process a guess from CHARACTER-NAME.
 
@@ -439,16 +514,19 @@ where RESULT-CODE is one of:
         (values (format nil "~A Speak a 5-letter word."
                         (yellow "The board ignores:"))
                 :invalid)))
-    (unless (every (lambda (c) (find c "abcdefghijklmnopqrstuvwxyz"))
+    (unless (every (lambda (c) (find c "abcdefghijklmnopqrstuvwxyzáàâãéêíóôõúç"))
                    lower)
       (return-from wordle-guess
-        (values (format nil "~A Speak only letters A-Z."
+        (values (format nil "~A Speak only letters A-Z (accents accepted)."
                         (yellow "The board ignores:"))
                 :invalid)))
-    ;; Check for repeated guess
-    (let ((guesses (wordle-character-guesses-list puzzle character-name)))
-      (when (find lower guesses :test (lambda (a b) (string= a b))
-                  :key #'car)
+    ;; Check for repeated guess (accent-insensitive)
+    (let* ((normalized-lower (wordle-normalize lower))
+           (guesses (wordle-character-guesses-list puzzle character-name)))
+      (when (find normalized-lower guesses
+                  :test (lambda (a b)
+                          (string= a (wordle-normalize (car b))))
+                  :key #'identity)
         (return-from wordle-guess
           (values (format nil "~A You already guessed '~A'."
                           (yellow "Repeat:")
