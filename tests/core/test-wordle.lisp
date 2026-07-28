@@ -432,9 +432,9 @@
   (let* ((word-list (vector "apple" "berry" "crane" "dance" "eagle"))
          (time-1 (encode-universal-time 0 0 0 15 6 2026))
          (time-2 (encode-universal-time 12 30 0 15 6 2026)))
-    (is (equal (wordle-daily-word word-list time-1)
-               (wordle-daily-word word-list time-2)))
-    (is (equal "berry" (wordle-daily-word word-list time-1)))))
+    (is (equal (wordle-daily-word :word-list word-list :universal-time time-1)
+               (wordle-daily-word :word-list word-list :universal-time time-2)))
+    (is (equal "crane" (wordle-daily-word :word-list word-list :universal-time time-1)))))
 
 (test wordle-daily-rotation
   "After solving, when a new day arrives, the character sees a fresh puzzle"
@@ -442,26 +442,40 @@
          (day-1 (encode-universal-time 0 0 0 15 6 2026))
          (day-2 (encode-universal-time 0 0 0 16 6 2026))
          (puzzle (new-wordle-puzzle :word-list word-list
-                                    :target-word (wordle-daily-word word-list day-1)))
+                                    :seed 42
+                                    :target-word (wordle-daily-word
+                                                   :word-list word-list
+                                                   :universal-time day-1
+                                                   :seed 42)))
          (session (make-instance 'stream-session
                                  :stream (make-string-output-stream)
                                  :use-colors nil))
          (character (new-character "TestCharacter" session)))
     (setf (wordle-word-date puzzle) (wordle-date-key day-1))
-    (setf (wordle-target-word puzzle) (wordle-daily-word word-list day-1))
     (let ((*wordle-override-time* day-1))
       (multiple-value-bind (display result-code)
-          (wordle-guess puzzle "TestCharacter" (wordle-daily-word word-list day-1))
+          (wordle-guess puzzle "TestCharacter"
+                        (wordle-daily-word
+                         :word-list word-list
+                         :universal-time day-1
+                         :seed 42))
         (declare (ignore display))
         (is (eq :solved result-code))
         (is-true (wordle-character-solved-p puzzle "TestCharacter"))))
     (let ((*wordle-override-time* day-2))
       (wordle-display puzzle "TestCharacter")
       (is-false (wordle-character-solved-p puzzle "TestCharacter"))
-      (is (equal (wordle-daily-word word-list day-2)
+      (is (equal (wordle-daily-word
+                  :word-list word-list
+                  :universal-time day-2
+                  :seed 42)
                  (wordle-target-word puzzle)))
       (multiple-value-bind (display result-code)
-          (wordle-guess puzzle "TestCharacter" (wordle-daily-word word-list day-2))
+          (wordle-guess puzzle "TestCharacter"
+                        (wordle-daily-word
+                         :word-list word-list
+                         :universal-time day-2
+                         :seed 42))
         (declare (ignore display))
         (is (eq :solved result-code))))))
 
@@ -470,8 +484,8 @@
   (let* ((word-list (vector "apple" "berry" "crane" "dance" "eagle"))
          (day-1 (encode-universal-time 0 0 0 15 6 2026))
          (day-2 (encode-universal-time 0 0 0 16 6 2026)))
-    (is (not (equal (wordle-daily-word word-list day-1)
-                    (wordle-daily-word word-list day-2))))))
+    (is (not (equal (wordle-daily-word :word-list word-list :universal-time day-1)
+                    (wordle-daily-word :word-list word-list :universal-time day-2))))))
 
 (test wordle-set-daily-word!
   "Set-daily-word! updates the puzzle to today's word and resets progress"
@@ -818,3 +832,65 @@
     (wordle-leaderboard-record! puzzle "Alice" :solved)
     (wordle-reset puzzle :new-word "quest")
     (is (= 1 (length (wordle-leaderboard puzzle))))))
+
+;; ─── Seed / daily word selection
+
+(test wordle-seed-initialized
+  "Newly created puzzle has a numeric seed"
+  (let ((puzzle (new-wordle-puzzle)))
+    (is (integerp (wordle-seed puzzle)))
+    (is (plusp (wordle-seed puzzle)))))
+
+(test wordle-seed-in-constructor
+  "Passing an explicit seed sets it on the puzzle"
+  (let ((puzzle (new-wordle-puzzle :seed 42)))
+    (is (= 42 (wordle-seed puzzle)))))
+
+(test wordle-seed-produces-consistent-daily-word
+  "Given the same seed and date, wordle-daily-word returns the same word"
+  (let* ((word-list (vector "apple" "berry" "crane" "dance" "eagle"))
+         (time (encode-universal-time 0 0 0 1 6 2025))
+         (a (wordle-daily-word :word-list word-list :universal-time time :seed 42))
+         (b (wordle-daily-word :word-list word-list :universal-time time :seed 42)))
+    (is (equal a b))))
+
+(test wordle-different-seeds-different-words
+  "Two puzzles with different seeds produce different daily words on the same date"
+  (let* ((word-list (vector "apple" "berry" "crane" "dance" "eagle"))
+         (time (encode-universal-time 0 0 0 1 6 2025))
+         (word-a (wordle-daily-word :word-list word-list :universal-time time :seed 1))
+         (word-b (wordle-daily-word :word-list word-list :universal-time time :seed 2)))
+    (is (not (equal word-a word-b)))))
+
+(test wordle-same-seed-same-word-different-dates
+  "Two puzzles with the same seed on the same date get the same word,
+   but different dates get different words"
+  (let* ((word-list (vector "apple" "berry" "crane" "dance" "eagle"))
+         (day-1 (encode-universal-time 0 0 0 1 6 2025))
+         (day-2 (encode-universal-time 0 0 0 2 6 2025))
+         (puzzle-a (new-wordle-puzzle :word-list word-list :seed 99))
+         (puzzle-b (new-wordle-puzzle :word-list word-list :seed 99))
+         (puzzle-c (new-wordle-puzzle :word-list word-list :seed 99)))
+    (setf (wordle-target-word puzzle-a) (wordle-daily-word :word-list word-list :universal-time day-1 :seed 99))
+    (setf (wordle-word-date puzzle-a) (wordle-date-key day-1))
+    (setf (wordle-target-word puzzle-b) (wordle-daily-word :word-list word-list :universal-time day-1 :seed 99))
+    (setf (wordle-word-date puzzle-b) (wordle-date-key day-1))
+    (setf (wordle-target-word puzzle-c) (wordle-daily-word :word-list word-list :universal-time day-2 :seed 99))
+    (setf (wordle-word-date puzzle-c) (wordle-date-key day-2))
+    ;; Same seed, same date = same word
+    (is (equal (wordle-target-word puzzle-a)
+               (wordle-target-word puzzle-b)))
+    ;; Same seed, different date = different word
+    (is (not (equal (wordle-target-word puzzle-a)
+                    (wordle-target-word puzzle-c))))))
+
+(test wordle-daily-word-without-seed
+  "wordle-daily-word still works without a seed (backward compatibility)"
+  (let* ((word-list (vector "apple" "berry" "crane" "dance" "eagle"))
+         (time-1 (encode-universal-time 0 0 0 15 6 2026))
+         (time-2 (encode-universal-time 12 30 0 15 6 2026)))
+    ;; No seed means pure date-based (puzzle-agnostic) hashing
+    (is (equal (wordle-daily-word :word-list word-list :universal-time time-1)
+               (wordle-daily-word :word-list word-list :universal-time time-2)))
+    (is (stringp (wordle-daily-word :word-list word-list :universal-time time-1)))
+    (is (= 5 (length (wordle-daily-word :word-list word-list :universal-time time-1))))))

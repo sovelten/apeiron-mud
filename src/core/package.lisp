@@ -185,6 +185,7 @@
    #:wordle-date-key
    #:wordle-ensure-fresh-word!
    #:wordle-word-date
+   #:wordle-seed
    #:wordle-leaderboard
    #:wordle-leaderboard-record!
    #:wordle-format-leaderboard
