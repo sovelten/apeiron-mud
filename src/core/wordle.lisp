@@ -99,6 +99,77 @@
    "youth" "zebra")
   "Default vector of 5-letter words for Wordle puzzles.")
 
+(defparameter *wordle-pt-br-words*
+  (vector
+   "abrir" "acaso" "achar" "agudo" "altar" "amado" "amigo" "andar" "anexo"
+   "apoio" "areia" "areal" "arroz" "asilo" "ativo" "atrás" "áudio" "aviso"
+   "baixo" "banho" "barco" "batal" "beijo" "bicho" "bolsa" "bomba" "bônus"
+   "braço" "bravo" "breve" "briga" "busca" "cabra" "cacho" "caixa" "calma"
+   "calor" "campo" "capaz" "carne" "carro" "carta" "cesta" "chefe" "cheio"
+   "choro" "chave" "ciclo" "cinza" "circo" "cobra" "colar" "comer" "copos"
+   "corda" "corpo" "costa" "couro" "cravo" "credo" "crise" "cruza" "dança"
+   "dados" "danos" "dedos" "deles" "doido" "donas" "dorso" "drama" "droga"
+   "dever" "fácil" "falar" "farol" "falso" "fases" "feliz" "festa" "ficha"
+   "filho" "filme" "final" "fogos" "folha" "fonte" "forma" "forte" "força"
+   "fruta" "fugir" "fúria" "galho" "garfo" "gasto" "gelos" "gêmeo" "geral"
+   "gesto" "gente" "goela" "golpe" "gosto" "grade" "grama" "graxa" "grilo"
+   "grude" "grupo" "harpa" "haste" "homem" "honra" "hoste" "ideal" "igual"
+   "irmão" "isola" "janta" "jogar" "juízo" "leite" "lento" "livro" "louco"
+   "lugar" "luzir" "maçãs" "macho" "magro" "manto" "mares" "matar" "meiga"
+   "melão" "menos" "mesmo" "metal" "minha" "misto" "mocho" "monge" "monta"
+   "morte" "morar" "mundo" "mural" "murro" "naval" "navio" "negar" "ninho"
+   "nível" "noite" "nossa" "nuvem" "óbito" "olhar" "olhos" "órgão" "palha"
+   "pampa" "papel" "parar" "parte" "passo" "pátio" "pavio" "peixe" "pêlos"
+   "pense" "perda" "pesca" "piano" "pilha" "pires" "pista" "pobre" "poder"
+   "poema" "pompa" "ponte" "porta" "posse" "pouco" "praia" "prata" "prato"
+   "prazo" "preço" "presa" "preto" "primo" "prosa" "pular" "pulso" "quase"
+   "rádio" "raiva" "range" "rapaz" "raste" "reais" "recém" "redor" "regra"
+   "reino" "reler" "remar" "rente" "resma" "resto" "rezar" "risco" "risos"
+   "rocha" "rodar" "rolha" "rompa" "rosto" "roubo" "rubro" "rugir" "rumor"
+   "sábio" "sabão" "sabor" "sadio" "salmo" "salto" "saúde" "seara" "seção"
+   "seita" "selva" "selos" "sente" "serra" "servo" "sesta" "sexta" "sigla"
+   "silvo" "sítio" "sobra" "sogra" "soldo" "solta" "sonho" "sopro" "sorte"
+   "sulco" "sumir" "surdo" "surto" "tábua" "talho" "tanto" "tarde" "tarja"
+   "tecer" "teima" "telha" "tempo" "tênis" "tenso" "terço" "termo" "terno"
+   "terra" "testa" "teste" "texto" "tigre" "tinta" "tirar" "toada" "tocha"
+   "tolos" "tomar" "tonto" "tórax" "torre" "torta" "tosse" "tosta" "total"
+   "touro" "traço" "traga" "trama" "trapo" "trato" "trema" "trigo" "troca"
+   "troço" "trono" "trova" "trupe" "tumba" "tumor" "turma" "turno" "ungir"
+   "único" "unido" "untar" "urdir" "urgir" "usado" "usura" "vadio" "vagão"
+   "vagar" "vapor" "varal" "vasto" "vazão" "vazio" "vedar" "veias" "velar"
+   "velho" "veloz" "vemos" "vendo" "vento" "verão" "verbo" "verde" "verso"
+   "veste" "vetar" "vidas" "vidro" "vigia" "vigor" "vinda" "vinho" "vinte"
+   "viola" "virar" "visão" "visar" "visto" "vital" "viver" "vivos" "vogal"
+   "volta" "vulto")
+  "Vector of 5-letter Portuguese (pt-BR) words for Wordle puzzles.
+  Includes accented characters (á, â, ã, ç, é, ê, í, ó, ô, õ, ú).")
+
+;; ─── Accent normalization ─────────────────────────────────────────────────
+
+(defun wordle-normalize (string)
+  "Return a copy of STRING with characters that bear diacritics
+  replaced by their base letters (e.g. á→a, ç→c, ü→u).
+  The case of the original character is preserved.
+
+  Uses CHAR-NAME to decompose, which handles *any* accented character
+  generically — no explicit mapping table needed.  Characters without
+  diacritics are returned unchanged."
+  (let ((result (make-array (length string) :element-type 'character
+                                          :fill-pointer 0)))
+    (loop for c across string do
+      (let ((name (char-name c)))
+        (if (and name (search "_WITH_" name))
+            ;; Accented: base letter is the char before "_WITH_" in the name
+            ;; e.g. "LATIN_SMALL_LETTER_A_WITH_ACUTE" → base is "A"
+            (let* ((prefix (subseq name 0 (search "_WITH_" name)))
+                   (base-char (aref prefix (1- (length prefix)))))
+              (vector-push (if (upper-case-p c)
+                               (char-upcase base-char)
+                               (char-downcase base-char))
+                           result))
+            (vector-push c result))))
+    result))
+
 ;; ─── Daily word selection ─────────────────────────────────────────────────
 
 (defvar *wordle-override-time* nil
@@ -109,20 +180,32 @@
   "Return the current universal time, or the override time for testing."
   (or *wordle-override-time* (get-universal-time)))
 
-(defun wordle-daily-word (&optional (word-list *wordle-default-words*)
-                            (universal-time (wordle-now)))
-  "Return a deterministic word from WORD-LIST based on the date.
-  Same date always gives the same word; word changes daily."
-  (multiple-value-bind (second minute hour day month year)
-      (decode-universal-time universal-time)
-    (declare (ignore second minute hour))
-    (let ((day-index (+ day (* month 31) (* year 365))))
-      (aref word-list (mod day-index (length word-list))))))
+(defun wordle-daily-word (&key
+                           (word-list *wordle-default-words*)
+                           (universal-time (wordle-now))
+                           (seed nil seed-p))
+  "Return a deterministic word from WORD-LIST based on UNIVERSAL-TIME.
+
+  Same date always gives the same word; word changes daily.
+  Uses hashing of the date to produce a pseudo-random (but stable) index,
+  so consecutive days do not pick adjacent words.
+
+  When SEED is provided, it is combined with the date so different seeds
+  produce different words on the same date.  Each puzzle instance stores
+  its own seed to vary its daily word independently."
+  (let ((date-key (wordle-date-key universal-time))
+        (n (length word-list)))
+    (if seed-p
+        (aref word-list (mod (sxhash (cons date-key seed)) n))
+        (aref word-list (mod (sxhash date-key) n)))))
 
 (defun wordle-set-daily-word! (puzzle &optional (universal-time (get-universal-time)))
-  "Set the puzzle's target word to today's daily word and reset all character progress."
-  (wordle-reset puzzle :new-word (wordle-daily-word (wordle-word-list puzzle)
-                                                     universal-time)))
+  "Set the puzzle's target word to today's daily word and reset all character progress.
+  Uses the puzzle's SEED so different puzzle instances get different daily words."
+  (wordle-reset puzzle :new-word (wordle-daily-word
+                                   :word-list (wordle-word-list puzzle)
+                                   :universal-time universal-time
+                                   :seed (wordle-seed puzzle))))
 
 (defun wordle-date-key (&optional (universal-time (wordle-now)))
   "Return an integer YYYYMMDD for UNIVERSAL-TIME, for date comparisons."
@@ -174,14 +257,25 @@
                 :initform '()
                 :documentation
                 "List of (account-name plays correct) tracking registered
-                 account stats on this puzzle.  Persisted via BKNR."))
+                 account stats on this puzzle.  Persisted via BKNR.")
+   (seed :initarg :seed
+         :accessor wordle-seed
+         :initform (random most-positive-fixnum)
+         :documentation
+         "Per-instance random seed.  Combined with the date to select the
+          daily word, so different puzzle instances on the same date get
+          different words."))
   (:documentation "A Wordle-like puzzle object for the MUD.
 
 Characters interact with the puzzle by telling it words.  Each character's
 guesses are tracked independently.  When a new day arrives the puzzle
 automatically rotates to that day's word and resets all progress.
 
-Each puzzle instance tracks its own leaderboard of registered (non-guest)
+Each puzzle instance has its own SEED for daily word selection, so
+different instances (in different rooms, e.g.) produce different words
+on the same date.
+
+Each puzzle instance also tracks its own leaderboard of registered (non-guest)
 accounts — number of plays and correct solves."))
 
 (defmethod object-describe ((obj mud-wordle-puzzle))
@@ -197,19 +291,27 @@ accounts — number of plays and correct solves."))
 arranged.  Coloured pegs sit in trays beside it, ready to mark each guess.")
                            target-word
                            (max-guesses 6)
-                           (word-list *wordle-default-words*))
+                           (word-list *wordle-default-words*)
+                           seed)
   "Create a new Wordle puzzle object.
 
 TARGET-WORD is the 5-letter word to guess.  If not provided, the daily
-word (based on today's date) is used.  The daily word is the same for
-all puzzles created on the same date."
-  (make-instance 'mud-wordle-puzzle
-                 :name name
-                 :description description
-                 :target-word (or target-word
-                                   (wordle-daily-word word-list))
-                 :max-guesses max-guesses
-                 :word-list word-list))
+word (based on today's date) is used.  Each puzzle instance generates its
+own random SEED so different puzzles produce different daily words.
+
+SEED can be provided explicitly to create reproducible puzzle instances."
+  (let ((puzzle-seed (or seed (random most-positive-fixnum))))
+    (make-instance 'mud-wordle-puzzle
+                   :name name
+                   :description description
+                   :target-word (or target-word
+                                    (wordle-daily-word
+                                     :word-list word-list
+                                     :universal-time (wordle-now)
+                                     :seed puzzle-seed))
+                   :max-guesses max-guesses
+                   :word-list word-list
+                   :seed puzzle-seed)))
 
 ;; ─── Per-character state management ───────────────────────────────────────────
 
@@ -245,9 +347,15 @@ Returns a list of 5 keyword results:
 
 Handles duplicate letters correctly: if a letter appears twice in the
 guess but only once in the target, only one gets :present and the other
-gets :absent."
-  (let* ((target (string-downcase target-word))
-         (guess  (string-downcase guess-word))
+gets :absent.
+
+Uses WORDLE-NORMALIZE for accent-insensitive comparison: accented
+characters in the target (from the word list) are compared against
+plain ASCII letters in the guess (as typed by the player), so
+e.g. 'maçã' matches 'macac'.  The original characters of both
+target and guess are preserved for display."
+  (let* ((target (wordle-normalize (string-downcase target-word)))
+         (guess  (wordle-normalize (string-downcase guess-word)))
          (target-chars (coerce target 'list))
          (guess-chars  (coerce guess 'list))
          (results (make-list 5 :initial-element nil))
@@ -375,8 +483,6 @@ without spoiling the answer."
                           (format nil "Speak a 5-letter word aloud (~D ~A remaining)"
                                   rem (if (= rem 1) "guess" "guesses"))))))))))
 
-;; ─── Make a guess ──────────────────────────────────────────────────────────
-
 (defun wordle-guess (puzzle character-name guess-word)
   "Process a guess from CHARACTER-NAME.
 
@@ -408,16 +514,19 @@ where RESULT-CODE is one of:
         (values (format nil "~A Speak a 5-letter word."
                         (yellow "The board ignores:"))
                 :invalid)))
-    (unless (every (lambda (c) (find c "abcdefghijklmnopqrstuvwxyz"))
+    (unless (every (lambda (c) (find c "abcdefghijklmnopqrstuvwxyzáàâãéêíóôõúç"))
                    lower)
       (return-from wordle-guess
-        (values (format nil "~A Speak only letters A-Z."
+        (values (format nil "~A Speak only letters A-Z (accents accepted)."
                         (yellow "The board ignores:"))
                 :invalid)))
-    ;; Check for repeated guess
-    (let ((guesses (wordle-character-guesses-list puzzle character-name)))
-      (when (find lower guesses :test (lambda (a b) (string= a b))
-                  :key #'car)
+    ;; Check for repeated guess (accent-insensitive)
+    (let* ((normalized-lower (wordle-normalize lower))
+           (guesses (wordle-character-guesses-list puzzle character-name)))
+      (when (find normalized-lower guesses
+                  :test (lambda (a b)
+                          (string= a (wordle-normalize (car b))))
+                  :key #'identity)
         (return-from wordle-guess
           (values (format nil "~A You already guessed '~A'."
                           (yellow "Repeat:")

@@ -164,6 +164,8 @@
 
    ;; Wordle puzzle
    #:*wordle-default-words*
+   #:*wordle-pt-br-words*
+   #:wordle-normalize
    #:*wordle-override-time*
    #:mud-wordle-puzzle
    #:new-wordle-puzzle
@@ -185,6 +187,7 @@
    #:wordle-date-key
    #:wordle-ensure-fresh-word!
    #:wordle-word-date
+   #:wordle-seed
    #:wordle-leaderboard
    #:wordle-leaderboard-record!
    #:wordle-format-leaderboard

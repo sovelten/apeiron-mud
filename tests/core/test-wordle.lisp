@@ -432,9 +432,9 @@
   (let* ((word-list (vector "apple" "berry" "crane" "dance" "eagle"))
          (time-1 (encode-universal-time 0 0 0 15 6 2026))
          (time-2 (encode-universal-time 12 30 0 15 6 2026)))
-    (is (equal (wordle-daily-word word-list time-1)
-               (wordle-daily-word word-list time-2)))
-    (is (equal "berry" (wordle-daily-word word-list time-1)))))
+    (is (equal (wordle-daily-word :word-list word-list :universal-time time-1)
+               (wordle-daily-word :word-list word-list :universal-time time-2)))
+    (is (equal "crane" (wordle-daily-word :word-list word-list :universal-time time-1)))))
 
 (test wordle-daily-rotation
   "After solving, when a new day arrives, the character sees a fresh puzzle"
@@ -442,26 +442,40 @@
          (day-1 (encode-universal-time 0 0 0 15 6 2026))
          (day-2 (encode-universal-time 0 0 0 16 6 2026))
          (puzzle (new-wordle-puzzle :word-list word-list
-                                    :target-word (wordle-daily-word word-list day-1)))
+                                    :seed 42
+                                    :target-word (wordle-daily-word
+                                                   :word-list word-list
+                                                   :universal-time day-1
+                                                   :seed 42)))
          (session (make-instance 'stream-session
                                  :stream (make-string-output-stream)
                                  :use-colors nil))
          (character (new-character "TestCharacter" session)))
     (setf (wordle-word-date puzzle) (wordle-date-key day-1))
-    (setf (wordle-target-word puzzle) (wordle-daily-word word-list day-1))
     (let ((*wordle-override-time* day-1))
       (multiple-value-bind (display result-code)
-          (wordle-guess puzzle "TestCharacter" (wordle-daily-word word-list day-1))
+          (wordle-guess puzzle "TestCharacter"
+                        (wordle-daily-word
+                         :word-list word-list
+                         :universal-time day-1
+                         :seed 42))
         (declare (ignore display))
         (is (eq :solved result-code))
         (is-true (wordle-character-solved-p puzzle "TestCharacter"))))
     (let ((*wordle-override-time* day-2))
       (wordle-display puzzle "TestCharacter")
       (is-false (wordle-character-solved-p puzzle "TestCharacter"))
-      (is (equal (wordle-daily-word word-list day-2)
+      (is (equal (wordle-daily-word
+                  :word-list word-list
+                  :universal-time day-2
+                  :seed 42)
                  (wordle-target-word puzzle)))
       (multiple-value-bind (display result-code)
-          (wordle-guess puzzle "TestCharacter" (wordle-daily-word word-list day-2))
+          (wordle-guess puzzle "TestCharacter"
+                        (wordle-daily-word
+                         :word-list word-list
+                         :universal-time day-2
+                         :seed 42))
         (declare (ignore display))
         (is (eq :solved result-code))))))
 
@@ -470,8 +484,8 @@
   (let* ((word-list (vector "apple" "berry" "crane" "dance" "eagle"))
          (day-1 (encode-universal-time 0 0 0 15 6 2026))
          (day-2 (encode-universal-time 0 0 0 16 6 2026)))
-    (is (not (equal (wordle-daily-word word-list day-1)
-                    (wordle-daily-word word-list day-2))))))
+    (is (not (equal (wordle-daily-word :word-list word-list :universal-time day-1)
+                    (wordle-daily-word :word-list word-list :universal-time day-2))))))
 
 (test wordle-set-daily-word!
   "Set-daily-word! updates the puzzle to today's word and resets progress"
@@ -818,3 +832,145 @@
     (wordle-leaderboard-record! puzzle "Alice" :solved)
     (wordle-reset puzzle :new-word "quest")
     (is (= 1 (length (wordle-leaderboard puzzle))))))
+
+;; ─── Seed / daily word selection
+
+(test wordle-seed-initialized
+  "Newly created puzzle has a numeric seed"
+  (let ((puzzle (new-wordle-puzzle)))
+    (is (integerp (wordle-seed puzzle)))
+    (is (plusp (wordle-seed puzzle)))))
+
+(test wordle-seed-in-constructor
+  "Passing an explicit seed sets it on the puzzle"
+  (let ((puzzle (new-wordle-puzzle :seed 42)))
+    (is (= 42 (wordle-seed puzzle)))))
+
+(test wordle-seed-produces-consistent-daily-word
+  "Given the same seed and date, wordle-daily-word returns the same word"
+  (let* ((word-list (vector "apple" "berry" "crane" "dance" "eagle"))
+         (time (encode-universal-time 0 0 0 1 6 2025))
+         (a (wordle-daily-word :word-list word-list :universal-time time :seed 42))
+         (b (wordle-daily-word :word-list word-list :universal-time time :seed 42)))
+    (is (equal a b))))
+
+(test wordle-different-seeds-different-words
+  "Two puzzles with different seeds produce different daily words on the same date"
+  (let* ((word-list (vector "apple" "berry" "crane" "dance" "eagle"))
+         (time (encode-universal-time 0 0 0 1 6 2025))
+         (word-a (wordle-daily-word :word-list word-list :universal-time time :seed 1))
+         (word-b (wordle-daily-word :word-list word-list :universal-time time :seed 2)))
+    (is (not (equal word-a word-b)))))
+
+(test wordle-same-seed-same-word-different-dates
+  "Two puzzles with the same seed on the same date get the same word,
+   but different dates get different words"
+  (let* ((word-list (vector "apple" "berry" "crane" "dance" "eagle"))
+         (day-1 (encode-universal-time 0 0 0 1 6 2025))
+         (day-2 (encode-universal-time 0 0 0 2 6 2025))
+         (puzzle-a (new-wordle-puzzle :word-list word-list :seed 99))
+         (puzzle-b (new-wordle-puzzle :word-list word-list :seed 99))
+         (puzzle-c (new-wordle-puzzle :word-list word-list :seed 99)))
+    (setf (wordle-target-word puzzle-a) (wordle-daily-word :word-list word-list :universal-time day-1 :seed 99))
+    (setf (wordle-word-date puzzle-a) (wordle-date-key day-1))
+    (setf (wordle-target-word puzzle-b) (wordle-daily-word :word-list word-list :universal-time day-1 :seed 99))
+    (setf (wordle-word-date puzzle-b) (wordle-date-key day-1))
+    (setf (wordle-target-word puzzle-c) (wordle-daily-word :word-list word-list :universal-time day-2 :seed 99))
+    (setf (wordle-word-date puzzle-c) (wordle-date-key day-2))
+    ;; Same seed, same date = same word
+    (is (equal (wordle-target-word puzzle-a)
+               (wordle-target-word puzzle-b)))
+    ;; Same seed, different date = different word
+    (is (not (equal (wordle-target-word puzzle-a)
+                    (wordle-target-word puzzle-c))))))
+
+(test wordle-daily-word-without-seed
+  "wordle-daily-word still works without a seed (backward compatibility)"
+  (let* ((word-list (vector "apple" "berry" "crane" "dance" "eagle"))
+         (time-1 (encode-universal-time 0 0 0 15 6 2026))
+         (time-2 (encode-universal-time 12 30 0 15 6 2026)))
+    ;; No seed means pure date-based (puzzle-agnostic) hashing
+    (is (equal (wordle-daily-word :word-list word-list :universal-time time-1)
+               (wordle-daily-word :word-list word-list :universal-time time-2)))
+    (is (stringp (wordle-daily-word :word-list word-list :universal-time time-1)))
+    (is (= 5 (length (wordle-daily-word :word-list word-list :universal-time time-1))))))
+
+;; ─── Accent normalization / pt-BR support
+
+(test wordle-normalize-strips-accents
+  "wordle-normalize strips Portuguese diacritics"
+  (is (equal "c" (wordle-normalize "ç")))
+  (is (equal "a" (wordle-normalize "á")))
+  (is (equal "a" (wordle-normalize "à")))
+  (is (equal "a" (wordle-normalize "â")))
+  (is (equal "a" (wordle-normalize "ã")))
+  (is (equal "e" (wordle-normalize "é")))
+  (is (equal "e" (wordle-normalize "ê")))
+  (is (equal "i" (wordle-normalize "í")))
+  (is (equal "o" (wordle-normalize "ó")))
+  (is (equal "o" (wordle-normalize "ô")))
+  (is (equal "o" (wordle-normalize "õ")))
+  (is (equal "u" (wordle-normalize "ú")))
+  (is (equal "macas" (wordle-normalize "maçãs")))
+  (is (equal "saude" (wordle-normalize "saúde")))
+  (is (equal "orgao" (wordle-normalize "órgão"))))
+
+(test wordle-normalize-uppercase
+  "wordle-normalize handles uppercase accented characters"
+  (is (equal "C" (wordle-normalize "Ç")))
+  (is (equal "A" (wordle-normalize "Á")))
+  (is (equal "E" (wordle-normalize "É")))
+  (is (equal "ATRAS" (wordle-normalize "ATRÁS")))
+  (is (equal "MUSICA" (wordle-normalize "MÚSICA"))))
+
+(test wordle-normalize-plain-ascii
+  "wordle-normalize does not change plain ASCII letters"
+  (is (equal "hello" (wordle-normalize "hello")))
+  (is (equal "crane" (wordle-normalize "crane")))
+  (is (equal "ABCDE" (wordle-normalize "ABCDE"))))
+
+(test wordle-evaluate-guess-accent-insensitive
+  "wordle-evaluate-guess matches accented target with plain guess"
+  (is (equal '(:correct :correct :correct :correct :correct)
+             (wordle-evaluate-guess "maçãs" "macas")))
+  (is (equal '(:correct :correct :correct :correct :correct)
+             (wordle-evaluate-guess "órgão" "orgao")))
+  (is (equal '(:correct :correct :correct :correct :correct)
+             (wordle-evaluate-guess "saúde" "saude"))))
+
+(test wordle-evaluate-guess-accent-mixed
+  "wordle-evaluate-guess still marks wrong letters correctly with accents"
+  (let ((result (wordle-evaluate-guess "maçãs" "mocas")))
+    (is (eq :correct (nth 0 result)))
+    (is (eq :absent  (nth 1 result)))
+    (is (eq :correct (nth 2 result)))
+    (is (eq :correct (nth 3 result)))
+    (is (eq :correct (nth 4 result)))))
+
+(test wordle-pt-br-word-list-length
+  "All words in *wordle-pt-br-words* are 5 letters"
+  (loop for word across *wordle-pt-br-words*
+        do (is (= 5 (length word)))))
+
+(test wordle-pt-br-puzzle-creation
+  "A puzzle using the pt-BR word list can be created and played"
+  (let ((puzzle (new-wordle-puzzle
+                 :word-list *wordle-pt-br-words*
+                 :target-word "maçãs")))
+    (is (typep puzzle 'mud-wordle-puzzle))
+    (is (equal "maçãs" (wordle-target-word puzzle)))
+    ;; A plain ASCII guess that matches after normalization
+    (multiple-value-bind (display result-code)
+        (wordle-guess puzzle "TestCharacter" "macas")
+      (declare (ignore display))
+      (is (eq :solved result-code)))))
+
+(test wordle-pt-br-input-validation
+  "Accented characters are accepted in input"
+  (let ((puzzle (new-wordle-puzzle
+                 :word-list *wordle-pt-br-words*
+                 :target-word "maçãs")))
+    (multiple-value-bind (display result-code)
+        (wordle-guess puzzle "TestCharacter" "maçãs")
+      (declare (ignore display))
+      (is (eq :solved result-code)))))
