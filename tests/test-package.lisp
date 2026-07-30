@@ -89,6 +89,51 @@
     (setf *debug-mode* nil)
     (setf bknr.datastore::*store-verbose* nil)))
 
+(defun test-world-with-rooms ()
+  "Create a transient world with rooms, connections, and a guestbook
+for tests that need them.  This lets tests avoid depending on the
+specific default-transient-world layout."
+  (let ((world (make-instance 'mud-world)))
+    (let ((tavern (new-room :name "Test Tavern"))
+          (forest (new-room :name "Dark Forest"))
+          (guestbook (new-guestbook :name "a test guestbook")))
+      ;; Register rooms in world
+      (world-add-object! world tavern)
+      (world-add-object! world forest)
+      (world-add-object! world guestbook)
+      (container-add-object tavern guestbook)
+      ;; Connect rooms (creates a north/south pair)
+      (connect-north-south! world forest tavern)
+      (world-set-starting-room! world tavern))
+    world))
+
+(defun test-world-with-biomes ()
+  "Create a transient world with a central hub room connected to four
+biome rooms (north, south, east, west) and a guestbook.  Useful for
+tests that need directional connections on the starting room."
+  (let ((world (make-instance 'mud-world)))
+    (let ((hub (new-room :name "Central Hub"))
+          (north (new-room :name "Northern Reaches"))
+          (south (new-room :name "Southern Swamp"))
+          (east (new-room :name "Eastern Desert"))
+          (west (new-room :name "Western Woods"))
+          (guestbook (new-guestbook :name "a test guestbook")))
+      ;; Register rooms in world
+      (world-add-object! world hub)
+      (world-add-object! world north)
+      (world-add-object! world south)
+      (world-add-object! world east)
+      (world-add-object! world west)
+      (world-add-object! world guestbook)
+      (container-add-object hub guestbook)
+      ;; Connect hub to biomes
+      (connect-north-south! world north hub)
+      (connect-north-south! world hub south)
+      (connect-west-east! world west hub)
+      (connect-west-east! world hub east)
+      (world-set-starting-room! world hub))
+    world))
+
 (defun run-tests ()
   "Run all MUD tests with a clean, isolated temporary BKNR store."
   (setup-test-environment)

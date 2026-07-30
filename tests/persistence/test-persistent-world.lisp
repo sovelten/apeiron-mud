@@ -11,7 +11,8 @@
 (test bknr-id-conflict-on-restart
   "Test that world-level IDs do NOT conflict after store close/reopen."
   (unwind-protect
-       (let* ((world (apeiron.persistence:world-restore-or-initialize :force-new t))
+       (let* ((world (apeiron.persistence:world-restore-or-initialize
+                      :force-new t :initializer #'test-world-with-rooms))
               (initial-ids (mapcar #'apeiron.core:object-id
                                    (apeiron.core:world-all-rooms world))))
 
@@ -21,7 +22,8 @@
          (bknr.datastore:close-store)
          ;; characters is a transient slot — auto-initialized on restore
 
-         (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
+         (let* ((new-world (apeiron.persistence:world-restore-or-initialize
+                            :initializer #'test-world-with-rooms))
                 (restored-ids (mapcar #'apeiron.core:object-id
                                       (apeiron.core:world-all-rooms new-world))))
            ;; Ensure rooms were loaded with their original world-level IDs
@@ -53,26 +55,29 @@ reflect the transient world's counter so new objects don't get duplicate IDs."
 must not contain duplicates.  Connections are persisted in the store and
 INITIALIZE-TRANSIENT-INSTANCE pushes again on restore, so without marking
 the slot transient each restore doubles the list."
-  (let* ((world (apeiron.persistence:world-restore-or-initialize :force-new t))
-         (gathering (apeiron.core:starting-room world)))
-    ;; The Gathering has 4 connections (north, east, west, south)
-    (is (= 4 (length (apeiron.core:room-connections gathering)))
-        "Should have exactly 4 connections before restart")
+  (let* ((world (apeiron.persistence:world-restore-or-initialize
+                  :force-new t :initializer #'test-world-with-rooms))
+         (hub (apeiron.core:starting-room world)))
+    ;; test-world-with-rooms has 1 connection (north/south between forest and tavern)
+    (is (= 1 (length (apeiron.core:room-connections hub)))
+        "Should have exactly 1 connection before restart")
     ;; First restart
     (apeiron.persistence:sync-world)
     (bknr.datastore:close-store)
-    (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
+    (let* ((new-world (apeiron.persistence:world-restore-or-initialize
+                       :initializer #'test-world-with-rooms))
            (reloaded (apeiron.core:starting-room new-world)))
-      (is (= 4 (length (apeiron.core:room-connections reloaded)))
-          "After 1st restart: should have 4 connections, not ~D"
+      (is (= 1 (length (apeiron.core:room-connections reloaded)))
+          "After 1st restart: should have 1 connection, not ~D"
           (length (apeiron.core:room-connections reloaded)))
       ;; Second restart — this often reveals the duplication
       (apeiron.persistence:sync-world)
       (bknr.datastore:close-store)
-      (let* ((newer-world (apeiron.persistence:world-restore-or-initialize))
+      (let* ((newer-world (apeiron.persistence:world-restore-or-initialize
+                           :initializer #'test-world-with-rooms))
              (reloaded2 (apeiron.core:starting-room newer-world)))
-        (is (= 4 (length (apeiron.core:room-connections reloaded2)))
-            "After 2nd restart: should have 4 connections, not ~D"
+        (is (= 1 (length (apeiron.core:room-connections reloaded2)))
+            "After 2nd restart: should have 1 connection, not ~D"
             (length (apeiron.core:room-connections reloaded2)))))))
 
 (test connect-rooms-on-persistent-world-no-duplicate
@@ -97,7 +102,8 @@ in the room's connections list."
       (delete-file csv-path)))
   (unwind-protect
        ;; Find the guestbook in the starting room
-       (let* ((world (apeiron.persistence:world-restore-or-initialize :force-new t))
+       (let* ((world (apeiron.persistence:world-restore-or-initialize
+                      :force-new t :initializer #'test-world-with-rooms))
               (tavern (apeiron.core:starting-room world))
               (guestbook (find-if (lambda (obj) (typep obj 'apeiron.core:mud-guestbook))
                                   (apeiron.core:container-all-objects tavern))))
@@ -114,7 +120,8 @@ in the room's connections list."
          (bknr.datastore:close-store)
          ;; characters is a transient slot — auto-initialized on restore
          ;; Find the guestbook in the restored world
-         (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
+         (let* ((new-world (apeiron.persistence:world-restore-or-initialize
+                            :initializer #'test-world-with-rooms))
                 (reloaded-tavern (apeiron.core:starting-room new-world))
                 (reloaded-gbook (find-if (lambda (obj) (typep obj 'apeiron.core:mud-guestbook))
                                          (apeiron.core:container-all-objects reloaded-tavern))))
@@ -158,32 +165,31 @@ must survive a snapshot + close-store + reopen cycle."
 
 (test guestbook-present-after-restore
   "After closing and reopening the BKNR store, the guestbook should still
-be present in 'The Gathering' room.  This guards against a bug where
+be present in the starting room.  This guards against a bug where
 CONTAINER-ADD-OBJECT did not set OBJECT-LOCATION, so the rebuild step
 in WORLD-RESTORE-OR-INITIALIZE could not find the guestbook and it
 disappeared from the room."
-  (let* ((world (apeiron.persistence:world-restore-or-initialize :force-new t))
-         (tavern (apeiron.core:starting-room world))
-         (gathering-name (apeiron.core:object-name tavern)))
-
-    (is (string= "The Gathering" gathering-name))
+  (let* ((world (apeiron.persistence:world-restore-or-initialize
+                 :force-new t :initializer #'test-world-with-rooms))
+         (tavern (apeiron.core:starting-room world)))
 
     ;; Guestbook should be in the room after first materialization
     (let ((gb-first (find-if (lambda (obj) (typep obj 'apeiron.core:mud-guestbook))
                              (apeiron.core:container-all-objects tavern))))
       (is (not (null gb-first))
-          "Guestbook should be in The Gathering after first materialization"))
+          "Guestbook should be in the starting room after first materialization"))
 
     ;; Sync and restart
     (apeiron.persistence:sync-world)
     (bknr.datastore:close-store)
 
-    (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
+    (let* ((new-world (apeiron.persistence:world-restore-or-initialize
+                       :initializer #'test-world-with-rooms))
            (reloaded-tavern (apeiron.core:starting-room new-world))
            (gb-after (find-if (lambda (obj) (typep obj 'apeiron.core:mud-guestbook))
                               (apeiron.core:container-all-objects reloaded-tavern))))
       (is (not (null gb-after))
-          "Guestbook should still be in The Gathering after BKNR restore"))))
+          "Guestbook should still be in the starting room after BKNR restore"))))
 
 (test unbound-persistent-slots-initialized-after-restore
   "When BKNR restores from a snapshot that predates the addition of a
@@ -192,29 +198,32 @@ has no value for it and initforms are not applied during restore).
 INITIALIZE-TRANSIENT-INSTANCE must reinitialize such slots from their
 initforms so they do not cause SLOT-UNBOUND errors on access."
   ;; The user scenario: after restart, connection-find for any direction
-  ;; must NOT signal SLOT-UNBOUND.  The default world's connections
+  ;; must NOT signal SLOT-UNBOUND.  The test world's connections
   ;; are created without :synonyms-a/:synonyms-b, so the slot is bound
   ;; but nil — this is fine.  The bug only manifests when the slot is
   ;; genuinely UNBOUND (e.g. when a slot was added post-snapshot).
-  (let* ((world (apeiron.persistence:world-restore-or-initialize :force-new t))
+  (let* ((world (apeiron.persistence:world-restore-or-initialize
+                 :force-new t :initializer #'test-world-with-biomes))
          (g (starting-room world)))
     ;; Verify connection-find returns a connection for primary directions
-    (is (not (null (connection-find g "east"))) "Find east")
-    (is (not (null (connection-find g "west"))) "Find west")
     (is (not (null (connection-find g "north"))) "Find north")
-    (is (not (null (connection-find g "south"))) "Find south"))
+    (is (not (null (connection-find g "south"))) "Find south")
+    (is (not (null (connection-find g "east"))) "Find east")
+    (is (not (null (connection-find g "west"))) "Find west"))
   ;; After a full snapshot/restore cycle
   (apeiron.persistence:sync-world)
   (bknr.datastore:close-store)
-  (let* ((world2 (apeiron.persistence:world-restore-or-initialize))
+  (let* ((world2 (apeiron.persistence:world-restore-or-initialize
+                  :initializer #'test-world-with-biomes))
          (g2 (starting-room world2)))
-    (is (not (null (connection-find g2 "east"))) "Find east after restore")
-    (is (not (null (connection-find g2 "west"))) "Find west after restore")
     (is (not (null (connection-find g2 "north"))) "Find north after restore")
-    (is (not (null (connection-find g2 "south"))) "Find south after restore"))
+    (is (not (null (connection-find g2 "south"))) "Find south after restore")
+    (is (not (null (connection-find g2 "east"))) "Find east after restore")
+    (is (not (null (connection-find g2 "west"))) "Find west after restore"))
   ;; Simulate a slot added post-snapshot via slot-makunbound, then
   ;; verify that initialize-transient-instance re-initializes it.
-  (let* ((world3 (apeiron.persistence:world-restore-or-initialize))
+  (let* ((world3 (apeiron.persistence:world-restore-or-initialize
+                  :initializer #'test-world-with-biomes))
          (g3 (starting-room world3))
          (conn (first (room-connections g3))))
     (slot-makunbound conn 'apeiron.core::synonyms-a)
