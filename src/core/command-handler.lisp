@@ -158,9 +158,15 @@ APEIRON.EVAL package in case quickload recreated the package."
   (ql:quickload :apeiron :force t)
   ;; Re-establish :use of apeiron.core in the eval context package,
   ;; in case quickload recreated apeiron.core (new package object).
+  ;; Unintern any symbols that shadow newly-exported symbols so
+  ;; the use-package succeeds even when new exports were added.
   (let ((p (find-package '#:apeiron.eval)))
     (when p
-      (ignore-errors (use-package '#:apeiron.core p))))
+      (loop for s being the external-symbols of 'apeiron.core
+            for existing = (find-symbol (symbol-name s) p)
+            do (when (and existing (not (eq existing s)))
+                 (unintern existing p)))
+      (use-package '#:apeiron.core p)))
   (values))
 
 ;; ─── Eval debug helper functions ────────────────────────────────────────────

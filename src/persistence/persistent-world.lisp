@@ -239,29 +239,10 @@ Returns TRANSIENT-WORLD (now a persistent-world)."
 Used as the fallback when WORLD-RESTORE-OR-INITIALIZE is called
 without :TRANSIENT-WORLD."
   (let ((world (make-instance 'mud-world)))
-    (let ((gathering (new-room :name "The Gathering"
-                              :description "A warm, circular hall with a high domed ceiling. Torches flicker along the stone walls, casting dancing shadows."))
-          (forest (new-room :name "A Whispering Forest"
-                            :description "Ancient trees tower overhead, their leaves rustling secrets in the wind."))
-          (desert (new-room :name "A Sun-Bleached Desert"
-                            :description "Endless dunes of golden sand stretch to the horizon under a blinding sun."))
-          (swamp (new-room :name "A Murky Swamp"
-                           :description "Stagnant water laps at gnarled tree roots as thick mist curls around your ankles."))
-          (volcano (new-room :name "A Rumbling Volcano"
-                             :description "The ground trembles beneath your feet. Glowing lava flows through cracks in the black, jagged rock."))
-          (guestbook (new-guestbook :name "an oak guestbook")))
-      (container-add-object gathering guestbook)
-      (connect-rooms! world gathering "north" forest "south")
-      (connect-rooms! world gathering "east" desert "west")
-      (connect-rooms! world gathering "west" swamp "east")
-      (connect-rooms! world gathering "south" volcano "north")
-      (world-add-object! world guestbook)
-      (world-add-object! world gathering)
-      (world-add-object! world forest)
-      (world-add-object! world desert)
-      (world-add-object! world swamp)
-      (world-add-object! world volcano)
-      (world-set-starting-room! world gathering))
+    (let ((nexus (new-room :name "Apeiron Nexus"
+                           :description "You are in a place outside of time and space. All possibiliies and all things conjoin here. You can go everywhere, do everything. Be everything. What will you do?")))
+      (world-add-object! world nexus)
+      (world-set-starting-room! world nexus))
     world))
 
 (defun get-persistent-world ()
