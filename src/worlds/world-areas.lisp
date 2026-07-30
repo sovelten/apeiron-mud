@@ -218,8 +218,8 @@
 (defun new-default-world ()
   "Create the default Apeiron world with all areas (hub, mall, cavern)."
   (let ((world (make-instance 'mud-world)))
-    (let ((gathering (new-room :name "The Gathering"
-                                          :description "A warm, circular hall with a high domed ceiling. Torches flicker along the stone walls, casting dancing shadows. Four archways stand at the cardinal points, each bearing a carved symbol: a leaf (north), a sun (east), a droplet (west), and a flame (south). A sturdy oak guestbook sits on a pedestal in the centre."))
+    (let ((gathering (new-room :name "Apeiron Nexus"
+                               :description "You are in a place outside of time and space. All possibiliies and all things conjoin here. You can go everywhere, do everything. Be everything. What will you do?"))
           (forest (new-room :name "A Whispering Forest"
                                        :description "Ancient trees tower overhead, their leaves rustling secrets in the wind. Shafts of golden sunlight pierce the canopy, illuminating patches of moss and wildflowers. A faint path winds deeper into the woods."))
           (desert (new-room :name "A Sun-Bleached Desert"

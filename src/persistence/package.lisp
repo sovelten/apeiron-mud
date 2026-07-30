@@ -32,6 +32,7 @@
    ;; Store lifecycle
    #:*store-directory*
    #:open-mud-store
+   #:safe-update
    #:sync-world
 
    ;; World persistence
