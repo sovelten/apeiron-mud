@@ -26,13 +26,14 @@
                     contents)
             ;; "Exits:" header
             (bold-white "Exits: ")
-            ;; Exit directions — yellow, with (blocked) suffix if applicable
+            ;; Exit directions — yellow, with synonyms in parens and (blocked) suffix
             (mapcar (lambda (exit-pair)
                       (let ((dir (first exit-pair))
                             (conn (second exit-pair)))
-                        (if (and conn (connection-blocked-p conn))
-                            (format nil "~A ~A" (yellow dir) (bold-red "(blocked)"))
-                            (yellow dir))))
+                        (let ((base (format-exit-direction dir conn obj)))
+                          (if (and conn (connection-blocked-p conn))
+                              (format nil "~A ~A" (yellow base) (bold-red "(blocked)"))
+                              (yellow base)))))
                     exits))))
 
 (defun new-room (&key (name "A Room") (description ""))
@@ -64,6 +65,43 @@ Returns the room at the other end of the matching Connection, or NIL."
 DIRECTION is a lowercase string, CONNECTION is the MUD-CONNECTION."
   (loop for conn in (room-connections room)
         collect (list (connection-direction-to conn room) conn)))
+
+(defun synonyms-for-room (conn room)
+  "Return the list of synonyms for CONN from ROOM's perspective.
+CONN is a MUD-CONNECTION, ROOM is a MUD-ROOM.
+Returns a list of strings (e.g. '(\"n\") for north)."
+  (if (eq room (connection-room-a conn))
+      (connection-synonyms-a conn)
+      (connection-synonyms-b conn)))
+
+(defun format-exit-direction (direction conn room)
+  "Format an exit direction with its synonyms in parentheses.
+
+Cardinal directions (north/south/east/west) with a matching single-letter
+synonym get the compact format: (n)orth, (s)outh, (e)ast, (w)est.
+Other directions with synonyms show: Direction (syn).
+Directions without synonyms are shown as-is.
+
+Examples:
+  north + '(\"n\")  =>  (n)orth
+  south + '(\"s\")  =>  (s)outh
+  Puzzling Forest + '(\"pf\")  =>  Puzzling Forest (pf)
+  north + nil        =>  north"
+  (let ((synonyms (synonyms-for-room conn room)))
+    (cond
+      ;; Cardinal direction with first-letter synonym: (n)orth, (s)outh, etc.
+      ((and synonyms
+            (member direction '("north" "south" "east" "west") :test #'string=)
+            (find (char direction 0) (first synonyms)
+                  :test (lambda (ch syn)
+                          (char-equal ch syn))))
+       (format nil "(~A)~A" (subseq direction 0 1) (subseq direction 1)))
+      ;; Has synonyms: Direction (syn1, syn2)
+      (synonyms
+       (format nil "~A (~{~A~^, ~})" direction
+               (mapcar #'string-downcase synonyms)))
+      ;; No synonyms: just the direction
+      (t direction))))
 
 (defun room-exit-blocked-p (room character direction)
   "Return a blocking message if the character cannot use this exit yet.

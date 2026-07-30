@@ -218,10 +218,10 @@
 (defun new-default-world ()
   "Create the default Apeiron world with all areas (hub, mall, cavern)."
   (let ((world (make-instance 'mud-world)))
-    (let ((gathering (new-room :name "Apeiron Nexus"
-                               :description "You are in a place outside of time and space. All possibiliies and all things conjoin here. You can go everywhere, do everything. Be everything. What will you do?"))
-          (forest (new-room :name "A Whispering Forest"
-                                       :description "Ancient trees tower overhead, their leaves rustling secrets in the wind. Shafts of golden sunlight pierce the canopy, illuminating patches of moss and wildflowers. A faint path winds deeper into the woods."))
+    (let ((nexus (new-room :name "Apeiron Nexus"
+                               :description "You are in a place outside of time and space. All possibilities and all things conjoin here. You can go everywhere, do everything. Be everything. What will you do?"))
+          (forest (new-room :name "Puzzling Forest"
+                            :description "Ancient trees tower overhead, their leaves rustling secrets in the wind. Shafts of golden sunlight pierce the canopy, illuminating patches of moss and wildflowers. A faint path winds deeper into the woods."))
           (desert (new-room :name "A Sun-Bleached Desert"
                                        :description "Endless dunes of golden sand stretch to the horizon under a blinding sun. The heat shimmers in waves, and the silence is broken only by the occasional skitter of a unseen creature. The bleached bones of a long-dead beast protrude from a nearby dune."))
           (swamp (new-room :name "A Murky Swamp"
@@ -229,21 +229,23 @@
           (volcano (new-room :name "A Rumbling Volcano"
                                         :description "The ground trembles beneath your feet. Glowing lava flows through cracks in the black, jagged rock, casting an eerie red glow across the cavern. Heat shimmers violently and the air reeks of sulphur. The mountain groans above you."))
           (guestbook (new-guestbook :name "an oak guestbook")))
-      ;; Place the guestbook in The Gathering
-      (container-add-object gathering guestbook)
-      ;; Connect The Gathering (hub) to the four biomes
-      (connect-north-south! world forest gathering)
-      (connect-west-east! world gathering desert)
-      (connect-west-east! world swamp gathering)
-      (connect-north-south! world gathering volcano)
+      ;; Place the guestbook in the nexus
+      (container-add-object nexus guestbook)
+      ;; Connect the nexus (hub) to the four biomes
+      ;; Forest uses a custom named connection: "Puzzling Forest" with synonym "pf"
+      (connect-rooms! world nexus "Puzzling Forest" forest "nexus"
+                      :synonyms-a '("pf"))
+      (connect-west-east! world nexus desert)
+      (connect-west-east! world swamp nexus)
+      (connect-north-south! world nexus volcano)
       ;; Desert door → shopping mall → Team Rocket cavern maze
       (build-shopping-mall world desert)
       ;; Register all objects in the world
       (world-add-object! world guestbook)
-      (world-add-object! world gathering)
+      (world-add-object! world nexus)
       (world-add-object! world forest)
       (world-add-object! world desert)
       (world-add-object! world swamp)
       (world-add-object! world volcano)
-      (world-set-starting-room! world gathering))
+      (world-set-starting-room! world nexus))
     world))

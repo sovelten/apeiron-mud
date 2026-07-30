@@ -136,6 +136,8 @@
    #:room-exit-target
    #:room-exit-blocked-p
    #:room-exit-list
+   #:format-exit-direction
+   #:synonyms-for-room
 
    ;; Connection system
    #:mud-connection
