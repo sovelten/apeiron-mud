@@ -149,7 +149,8 @@ close/reopen cycles that trigger BKNR transaction log replay warnings."
 (defun safe-update ()
   "Pulls latest code changes, snapshots BKNR before loading"
   (sync-world)
-  (ql:quickload :apeiron))
+  (ql:quickload :apeiron)
+  (sync-world))
 
 ;; ─── Persistent class mapping ───────────────────────────────────────────────
 
@@ -240,7 +241,7 @@ Used as the fallback when WORLD-RESTORE-OR-INITIALIZE is called
 without :TRANSIENT-WORLD."
   (let ((world (make-instance 'mud-world)))
     (let ((nexus (new-room :name "Apeiron Nexus"
-                           :description "You are in a place outside of time and space. All possibiliies and all things conjoin here. You can go everywhere, do everything. Be everything. What will you do?")))
+                           :description "You are in a place outside of time and space. All possibilities and all things conjoin here. You can go everywhere, do everything. Be everything. What will you do?")))
       (world-add-object! world nexus)
       (world-set-starting-room! world nexus))
     world))

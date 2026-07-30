@@ -112,3 +112,83 @@
             (object-set-property alice "passed-test" t)
             (is (null (room-exit-blocked-p room1 alice "north")))
             (is (stringp (room-exit-blocked-p room1 bob "north"))))))
+
+(test cardinal-direction-format
+  "Format cardinal directions with first-letter synonyms as (n)orth, (s)outh, etc."
+  (let* ((world (new-world))
+         (room1 (new-room :name "Room A"))
+         (room2 (new-room :name "Room B"))
+         (conn (connect-rooms! world room1 "north" room2 "south"
+                 :synonyms-a '("n") :synonyms-b '("s"))))
+    (is (string= "(n)orth" (format-exit-direction "north" conn room1))
+        "Cardinal north with 'n' synonym should show as (n)orth")
+    (is (string= "(s)outh" (format-exit-direction "south" conn room2))
+        "Cardinal south with 's' synonym should show as (s)outh")))
+
+(test non-cardinal-direction-format
+  "Format non-cardinal directions with synonyms as Direction (syn)."
+  (let* ((world (new-world))
+         (room1 (new-room :name "Nexus"))
+         (room2 (new-room :name "Forest"))
+         (conn (connect-rooms! world room1 "Puzzling Forest" room2 "nexus"
+                 :synonyms-a '("pf"))))
+    (is (string= "Puzzling Forest (pf)" (format-exit-direction "Puzzling Forest" conn room1))
+        "Non-cardinal direction should show as 'Direction (syn)'")))
+
+(test multiple-synonyms-format
+  "Format directions with multiple synonyms as Direction (syn1, syn2)."
+  (let* ((world (new-world))
+         (room1 (new-room :name "Hall"))
+         (room2 (new-room :name "Garden"))
+         (conn (connect-rooms! world room1 "doorway" room2 "gate"
+                 :synonyms-a '("door" "dr") :synonyms-b '("g"))))
+    (is (string= "doorway (door, dr)" (format-exit-direction "doorway" conn room1))
+        "Multiple synonyms should show as 'Direction (syn1, syn2)'")))
+
+(test no-synonyms-format
+  "Format directions without synonyms as just the direction name."
+  (let* ((world (new-world))
+         (room1 (new-room :name "Room A"))
+         (room2 (new-room :name "Room B"))
+         (conn (connect-rooms! world room1 "north" room2 "south")))
+    (is (string= "north" (format-exit-direction "north" conn room1))
+        "Direction without synonyms should show as-is")))
+
+(test synonyms-for-room-perspective
+  "Test that synonyms-for-room returns synonyms from the correct perspective."
+  (let* ((world (new-world))
+         (room-a (new-room :name "Room A"))
+         (room-b (new-room :name "Room B"))
+         (conn (connect-rooms! world room-a "north" room-b "south"
+                 :synonyms-a '("n") :synonyms-b '("s"))))
+    (is (equal '("n") (synonyms-for-room conn room-a))
+        "From room-a, synonyms should be 'n'")
+    (is (equal '("s") (synonyms-for-room conn room-b))
+        "From room-b, synonyms should be 's'")))
+
+(test mixed-exits-description
+  "Test that object-describe for a room with mixed exits shows proper formatting."
+  (let* ((world (new-world))
+         (hub (new-room :name "Central Hub"))
+         (forest (new-room :name "Puzzling Forest"))
+         (desert (new-room :name "Desert"))
+         (cave (new-room :name "Cave")))
+    (world-add-object! world hub)
+    (world-add-object! world forest)
+    (world-add-object! world desert)
+    (world-add-object! world cave)
+    ;; Custom named exit with synonym (direction names are downcased by connect-rooms!)
+    (connect-rooms! world hub "Puzzling Forest" forest "nexus"
+                    :synonyms-a '("pf"))
+    ;; Cardinal exit with standard synonyms — hub is west-room, desert is east-room
+    (connect-west-east! world hub desert)
+    ;; Blocked exit
+    (connect-rooms! world hub "tunnel" cave "entrance"
+                    :blocked t)
+    (let ((desc (object-describe hub)))
+      (is (search "puzzling forest (pf)" desc)
+          "Custom direction should show with synonym in parens (downcased)")
+      (is (search "(e)ast" desc)
+          "Cardinal east with 'e' synonym should show as (e)ast")
+      (is (search "tunnel (blocked)" desc)
+          "Blocked exit should show the direction name with (blocked) suffix"))))
