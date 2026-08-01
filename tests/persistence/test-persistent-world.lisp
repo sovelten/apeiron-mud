@@ -87,7 +87,8 @@ in the room's connections list."
          (gathering (apeiron.core:starting-room world))
          (count-before (length (apeiron.core:room-connections gathering)))
          (new-room (apeiron.core:create-object! world (apeiron.core:new-room :name "Secret"))))
-    (apeiron.core:connect-rooms! world gathering "west" new-room "east")
+    (apeiron.core:connect-rooms! world gathering new-room
+                                 :to "west" :from "east")
     (is (= (1+ count-before)
            (length (apeiron.core:room-connections gathering)))
         "Expected ~D connections after adding one, got ~D"
@@ -199,8 +200,8 @@ INITIALIZE-TRANSIENT-INSTANCE must reinitialize such slots from their
 initforms so they do not cause SLOT-UNBOUND errors on access."
   ;; The user scenario: after restart, connection-find for any direction
   ;; must NOT signal SLOT-UNBOUND.  The test world's connections
-  ;; are created without :synonyms-a/:synonyms-b, so the slot is bound
-  ;; but nil — this is fine.  The bug only manifests when the slot is
+  ;; are created with plain direction specs, so the direction slot is
+  ;; bound — this is fine.  The bug only manifests when the slot is
   ;; genuinely UNBOUND (e.g. when a slot was added post-snapshot).
   (let* ((world (apeiron.persistence:world-restore-or-initialize
                  :force-new t :initializer #'test-world-with-biomes))
@@ -226,10 +227,10 @@ initforms so they do not cause SLOT-UNBOUND errors on access."
                   :initializer #'test-world-with-biomes))
          (g3 (starting-room world3))
          (conn (first (room-connections g3))))
-    (slot-makunbound conn 'apeiron.core::synonyms-a)
-    (is-false (slot-boundp conn 'apeiron.core::synonyms-a) "unbound after makunbound")
+    (slot-makunbound conn 'apeiron.core::direction-a)
+    (is-false (slot-boundp conn 'apeiron.core::direction-a) "unbound after makunbound")
     (bknr.datastore:initialize-transient-instance conn)
-    (is-true (slot-boundp conn 'apeiron.core::synonyms-a) "re-bound after init")))
+    (is-true (slot-boundp conn 'apeiron.core::direction-a) "re-bound after init")))
 
 (test owned-character-survives-restart
   "An owned character created for an account now SURVIVES a service restart.

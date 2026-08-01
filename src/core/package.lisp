@@ -142,6 +142,7 @@
    ;; Connection system
    #:mud-connection
    #:make-connection
+   #:add-synonym
    #:connection-room-a
    #:connection-room-b
    #:connection-direction-a

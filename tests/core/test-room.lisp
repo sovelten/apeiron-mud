@@ -40,7 +40,8 @@
   (let ((world (new-world))
         (room1 (new-room :name "Forest"))
         (room2 (new-room :name "Cave")))
-    (let ((conn (connect-rooms! world room1 "north" room2 "south"
+    (let ((conn (connect-rooms! world room1 room2
+                  :to "north" :from "south"
                   :name "forest-cave passage")))
       (is (typep conn 'mud-connection))
       (is (eq (room-exit-target room1 "north") room2))
@@ -61,7 +62,8 @@
   (let ((world (new-world))
         (room1 (new-room :name "Forest"))
         (room2 (new-room :name "Cave")))
-    (let ((conn (connect-rooms! world room1 "north" room2 "south"
+    (let ((conn (connect-rooms! world room1 room2
+                  :to "north" :from "south"
                   :name "locked gate"
                   :blocked t)))
       (is-true (connection-blocked-p conn))
@@ -84,7 +86,8 @@
                                              :stream (make-string-output-stream)))))
           (object-move alice room1)
           (object-move bob room1)
-          (let ((conn (connect-rooms! world room1 "north" room2 "south"
+          (let ((conn (connect-rooms! world room1 room2
+                        :to "north" :from "south"
                         :name "iron gate"
                         :blocked t)))
             (is (stringp (room-exit-blocked-p room1 alice "north")))
@@ -104,7 +107,8 @@
                                              :stream (make-string-output-stream)))))
           (object-move alice room1)
           (object-move bob room1)
-          (let ((conn (connect-rooms! world room1 "north" room2 "south")))
+          (let ((conn (connect-rooms! world room1 room2
+                        :to "north" :from "south")))
                   (object-set-property conn "challenge-flag" "passed-test")
                   (object-set-property conn "challenge-question" "What is 2+2?")
             (is (stringp (room-exit-blocked-p room1 alice "north")))
@@ -118,8 +122,8 @@
   (let* ((world (new-world))
          (room1 (new-room :name "Room A"))
          (room2 (new-room :name "Room B"))
-         (conn (connect-rooms! world room1 "north" room2 "south"
-                 :synonyms-a '("n") :synonyms-b '("s"))))
+         (conn (connect-rooms! world room1 room2
+                 :to '("north" "n") :from '("south" "s"))))
     (is (string= "(n)orth" (format-exit-direction "north" conn room1))
         "Cardinal north with 'n' synonym should show as (n)orth")
     (is (string= "(s)outh" (format-exit-direction "south" conn room2))
@@ -130,8 +134,8 @@
   (let* ((world (new-world))
          (room1 (new-room :name "Nexus"))
          (room2 (new-room :name "Forest"))
-         (conn (connect-rooms! world room1 "Puzzling Forest" room2 "nexus"
-                 :synonyms-a '("pf"))))
+         (conn (connect-rooms! world room1 room2
+                 :to '("Puzzling Forest" "pf") :from "nexus")))
     (is (string= "Puzzling Forest (pf)" (format-exit-direction "Puzzling Forest" conn room1))
         "Non-cardinal direction should show as 'Direction (syn)'")))
 
@@ -140,8 +144,8 @@
   (let* ((world (new-world))
          (room1 (new-room :name "Hall"))
          (room2 (new-room :name "Garden"))
-         (conn (connect-rooms! world room1 "doorway" room2 "gate"
-                 :synonyms-a '("door" "dr") :synonyms-b '("g"))))
+         (conn (connect-rooms! world room1 room2
+                 :to '("doorway" "door" "dr") :from '("gate" "g"))))
     (is (string= "doorway (door, dr)" (format-exit-direction "doorway" conn room1))
         "Multiple synonyms should show as 'Direction (syn1, syn2)'")))
 
@@ -150,7 +154,8 @@
   (let* ((world (new-world))
          (room1 (new-room :name "Room A"))
          (room2 (new-room :name "Room B"))
-         (conn (connect-rooms! world room1 "north" room2 "south")))
+         (conn (connect-rooms! world room1 room2
+                 :to "north" :from "south")))
     (is (string= "north" (format-exit-direction "north" conn room1))
         "Direction without synonyms should show as-is")))
 
@@ -159,8 +164,8 @@
   (let* ((world (new-world))
          (room-a (new-room :name "Room A"))
          (room-b (new-room :name "Room B"))
-         (conn (connect-rooms! world room-a "north" room-b "south"
-                 :synonyms-a '("n") :synonyms-b '("s"))))
+         (conn (connect-rooms! world room-a room-b
+                 :to '("north" "n") :from '("south" "s"))))
     (is (equal '("n") (synonyms-for-room conn room-a))
         "From room-a, synonyms should be 'n'")
     (is (equal '("s") (synonyms-for-room conn room-b))
@@ -178,12 +183,13 @@
     (world-add-object! world desert)
     (world-add-object! world cave)
     ;; Custom named exit with synonym (direction names are downcased by connect-rooms!)
-    (connect-rooms! world hub "Puzzling Forest" forest "nexus"
-                    :synonyms-a '("pf"))
+    (connect-rooms! world hub forest
+                    :to '("Puzzling Forest" "pf") :from "nexus")
     ;; Cardinal exit with standard synonyms — hub is west-room, desert is east-room
     (connect-west-east! world hub desert)
     ;; Blocked exit
-    (connect-rooms! world hub "tunnel" cave "entrance"
+    (connect-rooms! world hub cave
+                    :to "tunnel" :from "entrance"
                     :blocked t)
     (let ((desc (object-describe hub)))
       (is (search "puzzling forest (pf)" desc)
