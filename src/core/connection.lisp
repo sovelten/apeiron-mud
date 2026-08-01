@@ -96,17 +96,57 @@ call CONNECT-ROOMS (in world.lisp) for that."
   "Return the primary direction name from a direction SPEC (string or list)."
   (if (listp spec) (first spec) spec))
 
-(defun add-synonym (direction-string &rest synonyms)
-  "Return a direction spec for DIRECTION-STRING plus SYNONYMS.
+(defun add-synonym (direction-or-connection &rest args)
+  "Add synonyms to a direction spec or to an existing connection.
 
-A direction spec is a plain string when there are no SYNONYMS, or a list
-whose first element is the direction and whose remaining elements are the
-synonyms.  Examples:
+With a string as the first argument it builds a direction spec:
   (add-synonym \"north\")        => \"north\"
-  (add-synonym \"north\" \"n\")  => (\"north\" \"n\")"
-  (if synonyms
-      (list* direction-string synonyms)
-      direction-string))
+  (add-synonym \"north\" \"n\")  => (\"north\" \"n\")
+
+With a MUD-CONNECTION as the first argument it adds SYNONYMS to the end
+of the connection whose primary direction matches DIRECTION-STRING
+(case-insensitive), mutating the connection and returning it:
+  (add-synonym conn \"south\" \"s\")"
+  (etypecase direction-or-connection
+    (string
+     (if args
+         (list* direction-or-connection args)
+         direction-or-connection))
+    (mud-connection
+     (if (null args)
+         (error "add-synonym: expected a direction-string to match, e.g. (add-synonym conn \"south\" \"s\")")
+         (destructuring-bind (direction-string &rest synonyms) args
+           (add-connection-synonyms direction-or-connection direction-string synonyms))))))
+
+(defun add-connection-synonyms (connection direction-string synonyms)
+  "Add SYNONYMS to the end of CONNECTION whose primary direction matches
+DIRECTION-STRING (case-insensitive).  Mutates and returns CONNECTION."
+  (when synonyms
+    (cond
+      ((string-equal (direction-primary (connection-direction-a connection))
+                     direction-string)
+       (setf (connection-direction-a connection)
+             (spec-add-synonyms (connection-direction-a connection) synonyms)))
+      ((string-equal (direction-primary (connection-direction-b connection))
+                     direction-string)
+       (setf (connection-direction-b connection)
+             (spec-add-synonyms (connection-direction-b connection) synonyms)))
+      (t
+       (error "add-synonym: no end of ~A has direction ~S"
+              (object-name connection) direction-string))))
+  connection)
+
+(defun spec-add-synonyms (spec synonyms)
+  "Return SPEC with SYNONYMS appended, deduplicated (case-insensitive).
+The result stays a plain string when the spec has no synonyms, otherwise
+a list of strings."
+  (let ((base (if (listp spec) spec (list spec))))
+    (dolist (syn synonyms)
+      (unless (member syn base :test #'string-equal)
+        (setf base (append base (list (string-downcase syn))))))
+    (if (= 1 (length base))
+        (first base)
+        base)))
 
 ;; ─── Helpers ────────────────────────────────────────────────────────────────
 

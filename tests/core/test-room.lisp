@@ -198,3 +198,84 @@
           "Cardinal east with 'e' synonym should show as (e)ast")
       (is (search "tunnel (blocked)" desc)
           "Blocked exit should show the direction name with (blocked) suffix"))))
+
+(test add-synonym-builds-direction-spec
+  "add-synonym with a string builds a direction spec."
+  (is (string= "north" (add-synonym "north"))
+      "No synonyms -> plain string")
+  (is (equal '("north" "n") (add-synonym "north" "n"))
+      "Direction plus one synonym")
+  (is (equal '("doorway" "door" "dr") (add-synonym "doorway" "door" "dr"))
+      "Direction plus multiple synonyms"))
+
+(test add-synonym-adds-synonym-to-connection
+  "add-synonym with a connection adds the synonym to the matching end."
+  (let* ((world (new-world))
+         (room-a (new-room :name "Room A"))
+         (room-b (new-room :name "Room B"))
+         (conn (connect-rooms! world room-a room-b
+                               :to "south" :from "north")))
+    (is (eq conn (add-synonym conn "south" "s"))
+        "Should return the connection")
+    (is (equal '("south" "s") (connection-direction-a conn))
+        "Matching end's spec gains the synonym")
+    (is (string= "north" (connection-direction-b conn))
+        "Other end is untouched")
+    (is (string= "south" (connection-direction-to conn room-a))
+        "Primary direction is preserved")
+    (is (equal '("s") (synonyms-for-room conn room-a))
+        "Synonym visible from room-a's perspective")
+    (is (eq (connection-find room-a "s") conn)
+        "New synonym works from room-a")
+    (is (null (connection-find room-b "s"))
+        "Synonym does not apply to the other end")
+    (is (eq (room-exit-target room-a "s") room-b)
+        "Can move through the new synonym")
+    (is (string= "(s)outh" (format-exit-direction "south" conn room-a))
+        "Exit display shows the new synonym")))
+
+(test add-synonym-multiple-and-dedup
+  "add-synonym appends several synonyms and skips duplicates."
+  (let* ((world (new-world))
+         (room-a (new-room :name "Room A"))
+         (room-b (new-room :name "Room B"))
+         (conn (connect-rooms! world room-a room-b
+                               :to "south" :from "north")))
+    (add-synonym conn "south" "s")
+    (add-synonym conn "south" "so")
+    (add-synonym conn "south" "S")          ; duplicate (case-insensitive)
+    (is (equal '("south" "s" "so") (connection-direction-a conn))
+        "Synonyms appended once, duplicates skipped")))
+
+(test add-synonym-case-insensitive-direction-match
+  "add-synonym matches the connection end case-insensitively."
+  (let* ((world (new-world))
+         (room-a (new-room :name "Room A"))
+         (room-b (new-room :name "Room B"))
+         (conn (connect-rooms! world room-a room-b
+                               :to "south" :from "north")))
+    (add-synonym conn "SOUTH" "s")
+    (is (equal '("south" "s") (connection-direction-a conn))
+        "Direction matched case-insensitively")))
+
+(test add-synonym-no-match-signals-error
+  "add-synonym signals an error when no end has the direction."
+  (let* ((world (new-world))
+         (room-a (new-room :name "Room A"))
+         (room-b (new-room :name "Room B"))
+         (conn (connect-rooms! world room-a room-b
+                               :to "south" :from "north")))
+    (signals (error) (add-synonym conn "east" "e"))
+    (is (string= "south" (connection-direction-a conn))
+        "Connection unchanged after the error")))
+
+(test add-synonym-no-synonyms-is-noop
+  "add-synonym with no synonyms leaves the connection unchanged."
+  (let* ((world (new-world))
+         (room-a (new-room :name "Room A"))
+         (room-b (new-room :name "Room B"))
+         (conn (connect-rooms! world room-a room-b
+                               :to "south" :from "north")))
+    (is (eq conn (add-synonym conn "south")))
+    (is (string= "south" (connection-direction-a conn))
+        "Direction spec unchanged")))
