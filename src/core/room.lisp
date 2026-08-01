@@ -69,10 +69,10 @@ DIRECTION is a lowercase string, CONNECTION is the MUD-CONNECTION."
 (defun synonyms-for-room (conn room)
   "Return the list of synonyms for CONN from ROOM's perspective.
 CONN is a MUD-CONNECTION, ROOM is a MUD-ROOM.
-Returns a list of strings (e.g. '(\"n\") for north)."
-  (if (eq room (connection-room-a conn))
-      (connection-synonyms-a conn)
-      (connection-synonyms-b conn)))
+Returns a list of strings (e.g. '(\"n\") for north), or NIL."
+  (direction-synonyms (if (eq room (connection-room-a conn))
+                          (connection-direction-a conn)
+                          (connection-direction-b conn))))
 
 (defun format-exit-direction (direction conn room)
   "Format an exit direction with its synonyms in parentheses.

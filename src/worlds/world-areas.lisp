@@ -206,11 +206,12 @@
                    "Mannequins display the latest trainer gear: cargo shorts, fingerless gloves, and hats that somehow never fall off during battle. A sale banner screams '50% OFF REPEL!'.")))
     (setf (object-description desert)
           (concatenate 'string (object-description desert) door-flavor))
-    (connect-rooms! world desert "door" mall "desert")
+    (connect-rooms! world desert mall :to "door" :from "desert")
     (connect-north-south! world mall food-court)
     (connect-west-east! world mall arcade)
     (connect-west-east! world fashion mall)
-    (connect-rooms! world arcade "maintenance" (build-team-rocket-cavern world) "mall")
+    (connect-rooms! world arcade (build-team-rocket-cavern world)
+                    :to "maintenance" :from "mall")
     (dolist (room (list mall food-court arcade fashion))
       (register-room world room))
     mall))
@@ -233,8 +234,8 @@
       (container-add-object nexus guestbook)
       ;; Connect the nexus (hub) to the four biomes
       ;; Forest uses a custom named connection: "Puzzling Forest" with synonym "pf"
-      (connect-rooms! world nexus "Puzzling Forest" forest "nexus"
-                      :synonyms-a '("pf"))
+      (connect-rooms! world nexus forest
+                      :to '("Puzzling Forest" "pf") :from "nexus")
       (connect-west-east! world nexus desert)
       (connect-west-east! world swamp nexus)
       (connect-north-south! world nexus volcano)

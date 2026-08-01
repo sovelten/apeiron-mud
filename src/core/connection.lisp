@@ -17,18 +17,16 @@
            :documentation "Second room in the connection")
    (direction-a :initarg :direction-a
                 :accessor connection-direction-a
-                :documentation "Direction name from ROOM-A to ROOM-B (e.g. \"north\")")
+                :initform nil
+                :documentation "Direction spec from ROOM-A to ROOM-B: a string
+(e.g. \"north\") or a list of strings whose first element is the direction
+and the rest are synonyms (e.g. '(\"north\" \"n\")).")
    (direction-b :initarg :direction-b
                 :accessor connection-direction-b
-                :documentation "Direction name from ROOM-B to ROOM-A (e.g. \"south\")")
-   (synonyms-a :initarg :synonyms-a
-               :accessor connection-synonyms-a
-               :initform nil
-               :documentation "List of alternative direction names from ROOM-A to ROOM-B (e.g. (\"n\"))")
-   (synonyms-b :initarg :synonyms-b
-               :accessor connection-synonyms-b
-               :initform nil
-               :documentation "List of alternative direction names from ROOM-B to ROOM-A (e.g. (\"s\"))")
+                :initform nil
+                :documentation "Direction spec from ROOM-B to ROOM-A: a string
+(e.g. \"south\") or a list of strings whose first element is the direction
+and the rest are synonyms (e.g. '(\"south\" \"s\")).")
    (blocked :initarg :blocked
             :accessor connection-blocked-p
             :initform nil
@@ -38,7 +36,8 @@
                     :initform nil
                     :documentation "Custom message shown when blocked (e.g. a riddle)"))
   (:documentation "A bidirectional connection between two rooms, with a direction
-name at each end.  Characters cannot traverse a blocked connection."))
+spec at each end (a string, or a list of strings with synonyms).
+Characters cannot traverse a blocked connection."))
 
 ;; ─── Printing ──────────────────────────────────────────────────────────────
 
@@ -49,9 +48,9 @@ name at each end.  Characters cannot traverse a blocked connection."))
       (format stream "~A~@[ — ~A:~A <-> ~A:~A~]~@[ [BLOCKED]~]"
               (object-name conn)
               (and ra rb (object-name ra))
-              (and ra (connection-direction-a conn))
+              (and ra (direction-primary (connection-direction-a conn)))
               (and rb (object-name rb))
-              (and rb (connection-direction-b conn))
+              (and rb (direction-primary (connection-direction-b conn)))
               (connection-blocked-p conn)))))
 
 ;; ─── Constructor ────────────────────────────────────────────────────────────
@@ -60,14 +59,14 @@ name at each end.  Characters cannot traverse a blocked connection."))
                         &key (name (format nil "passage between ~A and ~A"
                                            (object-name room-a)
                                            (object-name room-b)))
-                          blocked blocked-message
-                          synonyms-a synonyms-b)
+                          blocked blocked-message)
   "Create and return a new MUD-CONNECTION between ROOM-A and ROOM-B.
 
-DIRECTION-A is the direction name from ROOM-A to ROOM-B (e.g. \"north\").
-DIRECTION-B is the direction name from ROOM-B to ROOM-A (e.g. \"south\").
-SYNONYMS-A and SYNONYMS-B are lists of alternative names for each direction
-(e.g. '(\"n\") for \"north\").
+DIRECTION-A is the direction spec from ROOM-A to ROOM-B (e.g. \"north\").
+DIRECTION-B is the direction spec from ROOM-B to ROOM-A (e.g. \"south\").
+Each spec is a string (just the direction name) or a list of strings whose
+first element is the direction and the remaining elements are synonyms
+(e.g. '(\"north\" \"n\")).  Use ADD-SYNONYM to build specs.
 When BLOCKED is true the passage starts blocked.
 BLOCKED-MESSAGE is shown to characters when they try to pass.
 
@@ -77,12 +76,37 @@ call CONNECT-ROOMS (in world.lisp) for that."
                  :name name
                  :room-a room-a
                  :room-b room-b
-                 :direction-a (string-downcase direction-a)
-                 :direction-b (string-downcase direction-b)
-                 :synonyms-a (mapcar #'string-downcase synonyms-a)
-                 :synonyms-b (mapcar #'string-downcase synonyms-b)
+                 :direction-a (normalize-direction direction-a)
+                 :direction-b (normalize-direction direction-b)
                  :blocked blocked
                  :blocked-message blocked-message))
+
+(defun normalize-direction (spec)
+  "Downcase a direction SPEC (string or list of strings)."
+  (if (listp spec)
+      (mapcar #'string-downcase spec)
+      (string-downcase spec)))
+
+(defun direction-synonyms (spec)
+  "Return the synonym list from a direction SPEC (NIL for a plain string)."
+  (when (listp spec)
+    (rest spec)))
+
+(defun direction-primary (spec)
+  "Return the primary direction name from a direction SPEC (string or list)."
+  (if (listp spec) (first spec) spec))
+
+(defun add-synonym (direction-string &rest synonyms)
+  "Return a direction spec for DIRECTION-STRING plus SYNONYMS.
+
+A direction spec is a plain string when there are no SYNONYMS, or a list
+whose first element is the direction and whose remaining elements are the
+synonyms.  Examples:
+  (add-synonym \"north\")        => \"north\"
+  (add-synonym \"north\" \"n\")  => (\"north\" \"n\")"
+  (if synonyms
+      (list* direction-string synonyms)
+      direction-string))
 
 ;; ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -93,21 +117,22 @@ call CONNECT-ROOMS (in world.lisp) for that."
       (connection-room-a connection)))
 
 (defun connection-direction-to (connection room)
-  "Return the direction name that leads out of ROOM through CONNECTION."
-  (if (eq room (connection-room-a connection))
-      (connection-direction-a connection)
-      (connection-direction-b connection)))
+  "Return the primary direction name that leads out of ROOM through CONNECTION."
+  (direction-primary (if (eq room (connection-room-a connection))
+                         (connection-direction-a connection)
+                         (connection-direction-b connection))))
 
 ;; ─── Blocking management ───────────────────────────────────────────────────
 
 (defun connection-direction-matches (connection room direction)
   "Return non-NIL if DIRECTION matches the primary direction name or any
 synonym for the connection end that leads out of ROOM."
-  (or (string-equal direction (connection-direction-to connection room))
-      (let ((synonyms (if (eq room (connection-room-a connection))
-                          (connection-synonyms-a connection)
-                          (connection-synonyms-b connection))))
-        (some (lambda (syn) (string-equal direction syn)) synonyms))))
+  (let ((spec (if (eq room (connection-room-a connection))
+                  (connection-direction-a connection)
+                  (connection-direction-b connection))))
+    (if (listp spec)
+        (some (lambda (d) (string-equal direction d)) spec)
+        (string-equal direction spec))))
 
 (defun connection-find (room direction)
   "Find a connection from ROOM in the given DIRECTION, or nil.

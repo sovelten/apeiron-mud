@@ -49,14 +49,16 @@ indices, and return the object."
     (setf (gethash (object-id object) (world-characters world)) object))
   object)
 
-(defgeneric connect-rooms! (world room-a direction-a room-b direction-b
-                            &key name blocked blocked-message synonyms-a synonyms-b)
+(defgeneric connect-rooms! (world room-a room-b
+                            &key to from name blocked blocked-message)
   (:documentation "Create a bidirectional Connection between ROOM-A and ROOM-B in WORLD.
 
-DIRECTION-A is the direction name from ROOM-A to ROOM-B (e.g. \"north\").
-DIRECTION-B is the direction name from ROOM-B to ROOM-A (e.g. \"south\").
-SYNONYMS-A and SYNONYMS-B are lists of alternative names for each direction
-(e.g. '(\"n\") for \"north\").
+TO is the direction name from ROOM-A to ROOM-B (e.g. \"north\").
+FROM is the direction name from ROOM-B to ROOM-A (e.g. \"south\").
+Each of TO and FROM accepts either a string (just the direction) or a
+list of strings whose first element is the direction and the remaining
+elements are synonyms (e.g. '(\"north\" \"n\")).  Neither may be NIL.
+
 When BLOCKED is true the passage starts blocked and cannot be traversed.
 BLOCKED-MESSAGE is shown to characters when they try to pass.
 
@@ -65,17 +67,17 @@ registered in the world.
 
 Returns the registered MUD-CONNECTION instance."))
 
-(defmethod connect-rooms! ((world mud-world) room-a direction-a room-b direction-b
-                           &key (name (format nil "passage between ~A and ~A"
-                                              (object-name room-a)
-                                              (object-name room-b)))
-                             blocked blocked-message
-                             synonyms-a synonyms-b)
-  (let* ((conn (make-connection room-a direction-a room-b direction-b
+(defmethod connect-rooms! ((world mud-world) room-a room-b
+                           &key to from
+                             (name (format nil "passage between ~A and ~A"
+                                           (object-name room-a)
+                                           (object-name room-b)))
+                             blocked blocked-message)
+  (when (or (null to) (null from))
+    (error "connect-rooms!: :to and :from are required and cannot be nil."))
+  (let* ((conn (make-connection room-a to room-b from
                                 :name name :blocked blocked
-                                :blocked-message blocked-message
-                                :synonyms-a synonyms-a
-                                :synonyms-b synonyms-b))
+                                :blocked-message blocked-message))
          (registered (create-object! world conn)))
     (push registered (room-connections room-a))
     (push registered (room-connections room-b))
@@ -85,16 +87,16 @@ Returns the registered MUD-CONNECTION instance."))
   "Connect NORTH-ROOM (left arg) south to SOUTH-ROOM (right arg).
 From SOUTH-ROOM you go north to NORTH-ROOM.
 Synonyms: \"s\" from north-room, \"n\" from south-room."
-  (apply #'connect-rooms! world north-room "south" south-room "north"
-         :synonyms-a '("s") :synonyms-b '("n")
+  (apply #'connect-rooms! world north-room south-room
+         :to (add-synonym "south" "s") :from (add-synonym "north" "n")
          args))
 
 (defun connect-west-east! (world west-room east-room &rest args)
   "Connect WEST-ROOM (left arg) east to EAST-ROOM (right arg).
 From EAST-ROOM you go west to WEST-ROOM.
 Synonyms: \"e\" from west-room, \"w\" from east-room."
-  (apply #'connect-rooms! world west-room "east" east-room "west"
-         :synonyms-a '("e") :synonyms-b '("w")
+  (apply #'connect-rooms! world west-room east-room
+         :to (add-synonym "east" "e") :from (add-synonym "west" "w")
          args))
 
 (defun world-set-starting-room! (world room)
