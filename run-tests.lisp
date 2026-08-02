@@ -7,12 +7,7 @@
 (asdf:load-asd #P"./apeiron.asd")
 (asdf:load-asd #P"./apeiron-test.asd")
 
-;; Set the environment so configure-logging picks "test" mode:
-;; file-only logging, no console output.
-(setf (uiop:getenv "APEIRON_ENV") "test")
-
-;; Load log4cl first and silence its default console output before
-;; anything else gets a chance to log.
+;; Load log4cl first and silence its default console.
 (ql:quickload :log4cl)
 (log:config :fatal :sane :filter :fatal :immediate-flush)
 

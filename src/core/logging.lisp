@@ -3,12 +3,12 @@
 ;;;; Provides `configure-logging` which sets up log4cl with:
 ;;;;   • A daily-rolling file appender to <data-directory>/mud.log
 ;;;;     (old logs renamed to mud.log.YYYYMMDD).
-;;;;   • Console output controlled by the APEIRON_ENV environment variable.
+;;;;   • Optional console output controlled by the APEIRON_ENV variable.
 ;;;;
 ;;;; Environment-driven behaviour:
-;;;;   APEIRON_ENV=test   → file-only at :INFO, console stays silent
-;;;;   APEIRON_ENV=debug  → file + console at :DEBUG
-;;;;   (unset/other)      → file + console at :INFO  (production default)
+;;;;   APEIRON_ENV=console → file + console at :INFO  (server with console)
+;;;;   APEIRON_ENV=debug   → file + console at :DEBUG (development)
+;;;;   (unset / "test")    → file-only at :INFO       (CI, tests, quiet)
 ;;;;
 ;;;; NDC (Nested Diagnostic Context) can be pushed via LOG:WITH-NDC inside
 ;;;; session handler threads so every log line from a connection automatically
@@ -30,9 +30,9 @@ LOG-DIRECTORY is the directory where log files are written; defaults to
 *DATA-DIRECTORY*.  Configuration is idempotent — a second call is a no-op.
 
 Reads the APEIRON_ENV environment variable to decide console behaviour:
-  \"test\"  → file-only logging (console stays silent)
-  \"debug\" → file + console at :DEBUG level
-  (unset)  → file + console at :INFO level (production)
+  \"console\" → file + console at :INFO (server)
+  \"debug\"   → file + console at :DEBUG (development)
+  (unset)    → file-only at :INFO (CI / tests / quiet production)
 
 Sets up a daily-rolling file appender with NDC context in the pattern
 layout so LOG:WITH-NDC data is visible in log output."
@@ -47,13 +47,12 @@ layout so LOG:WITH-NDC data is visible in log output."
   (let* ((apeiron-env (uiop:getenv "APEIRON_ENV"))
          (env (when apeiron-env (string-downcase (string-trim " " apeiron-env))))
          (log-level (if (string= env "debug") :debug :info))
-         (log-file (merge-pathnames "mud.log" log-directory)))
+         (log-file (merge-pathnames "mud.log" log-directory))
+         (console? (or (string= env "console") (string= env "debug"))))
 
     ;; ── Clean slate ────────────────────────────────────────────────────
-    ;; :SANE clears all existing appenders.  :FATAL sets both the logger
-    ;; level and, via :FILTER :FATAL, the console appender threshold so
-    ;; that only FATAL messages reach the console.  This keeps the console
-    ;; silent during tests and normal operation alike.
+    ;; :SANE :FATAL :FILTER :FATAL clears existing appenders and creates a
+    ;; console appender locked at FATAL — silent by default.
     (log:config :fatal :sane :filter :fatal :immediate-flush)
 
     ;; ── Daily-rolling file appender ────────────────────────────────────
@@ -63,15 +62,13 @@ layout so LOG:WITH-NDC data is visible in log output."
                 :ndc
                 :immediate-flush)
 
-    ;; ── Console appender ───────────────────────────────────────────────
-    ;; In "test" mode the console stays silent (locked at :FATAL above).
-    ;; In every other mode we add a console appender at the chosen level.
-    (unless (string= env "test")
+    ;; ── Console appender (opt-in) ──────────────────────────────────────
+    (when console?
       (log:config :console))
 
     (setf *logging-configured* t)
     (let ((msg (format nil "Logging initialised (~A) — log file: ~A"
-                       (or env "production") log-file)))
+                       (or env "quiet") log-file)))
       (log:info "~A" msg))
     t))
 
