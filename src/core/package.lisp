@@ -18,6 +18,9 @@
    #:*mud-version*
    #:*debug-mode*
 
+   ;; Run mode
+   #:*run-mode*
+
    ;; Command constants
    #:+max-command-length+
    #:+command-timeout+
