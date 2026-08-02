@@ -3,8 +3,12 @@
 ;;;; Provides `configure-logging` which sets up log4cl with:
 ;;;;   • A daily-rolling file appender to <data-directory>/mud.log
 ;;;;     (old logs renamed to mud.log.YYYYMMDD).
-;;;;   • A console appender for development (when *DEBUG-MODE* is non-NIL).
-;;;;   • Hierarchical loggers (apeiron.server, apeiron.core, apeiron.persistence).
+;;;;   • Console output controlled by the APEIRON_ENV environment variable.
+;;;;
+;;;; Environment-driven behaviour:
+;;;;   APEIRON_ENV=test   → file-only at :INFO, console stays silent
+;;;;   APEIRON_ENV=debug  → file + console at :DEBUG
+;;;;   (unset/other)      → file + console at :INFO  (production default)
 ;;;;
 ;;;; NDC (Nested Diagnostic Context) can be pushed via LOG:WITH-NDC inside
 ;;;; session handler threads so every log line from a connection automatically
@@ -25,13 +29,13 @@
 LOG-DIRECTORY is the directory where log files are written; defaults to
 *DATA-DIRECTORY*.  Configuration is idempotent — a second call is a no-op.
 
-Sets up:
-  • Root logger at :INFO level.
-  • A daily-rolling file appender → <log-directory>/mud.log
-    (rolled daily; old logs kept as mud.log.YYYYMMDD).
-  • NDC context in the pattern layout so LOG:WITH-NDC data is visible.
-  • A console appender when *DEBUG-MODE* is on.
-  • Sub-loggers for each module so they can be independently tuned."
+Reads the APEIRON_ENV environment variable to decide console behaviour:
+  \"test\"  → file-only logging (console stays silent)
+  \"debug\" → file + console at :DEBUG level
+  (unset)  → file + console at :INFO level (production)
+
+Sets up a daily-rolling file appender with NDC context in the pattern
+layout so LOG:WITH-NDC data is visible in log output."
   (when *logging-configured*
     (log:info "Logging already configured; skipping re-initialisation.")
     (return-from configure-logging t))
@@ -40,21 +44,34 @@ Sets up:
   (ensure-directories-exist
    (merge-pathnames "mud.log" log-directory))
 
-  (let ((log-file (merge-pathnames "mud.log" log-directory)))
-    ;; ── Root logger level + daily-rolling file appender ────────────────
-    ;; Rolls daily; old logs stored as mud.log.YYYYMMDD.
-    ;; :NDC includes Nested Diagnostic Context in the log pattern.
-    (log:config :info
+  (let* ((apeiron-env (uiop:getenv "APEIRON_ENV"))
+         (env (when apeiron-env (string-downcase (string-trim " " apeiron-env))))
+         (log-level (if (string= env "debug") :debug :info))
+         (log-file (merge-pathnames "mud.log" log-directory)))
+
+    ;; ── Clean slate ────────────────────────────────────────────────────
+    ;; :SANE clears all existing appenders.  :FATAL sets both the logger
+    ;; level and, via :FILTER :FATAL, the console appender threshold so
+    ;; that only FATAL messages reach the console.  This keeps the console
+    ;; silent during tests and normal operation alike.
+    (log:config :fatal :sane :filter :fatal :immediate-flush)
+
+    ;; ── Daily-rolling file appender ────────────────────────────────────
+    ;; Always active.  Rolls daily; old logs stored as mud.log.YYYYMMDD.
+    (log:config log-level
                 :daily log-file
                 :ndc
                 :immediate-flush)
 
-    ;; ── Console appender (debug mode) ──────────────────────────────────
-    (when *debug-mode*
+    ;; ── Console appender ───────────────────────────────────────────────
+    ;; In "test" mode the console stays silent (locked at :FATAL above).
+    ;; In every other mode we add a console appender at the chosen level.
+    (unless (string= env "test")
       (log:config :console))
 
     (setf *logging-configured* t)
-    (let ((msg (format nil "Logging initialised — log file: ~A" log-file)))
+    (let ((msg (format nil "Logging initialised (~A) — log file: ~A"
+                       (or env "production") log-file)))
       (log:info "~A" msg))
     t))
 
@@ -63,7 +80,6 @@ Sets up:
 Called from `stop-mud-server`."
   (when *logging-configured*
     (log:info "Logging shutting down.")
-    ;; Reset to a sane minimal config so we don't leave file handles open.
-    (log:config :sane)
+    (log:config :fatal :immediate-flush)
     (setf *logging-configured* nil))
   (values))
