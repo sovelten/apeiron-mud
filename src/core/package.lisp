@@ -303,12 +303,7 @@
    #:input
    #:output
 
-   ;; Event logging
-   #:start-event-logging
-   #:stop-event-logging
-   #:*event-log-file*
-
-   ;; log4cl logging (preferred)
+   ;; log4cl logging
    #:*logging-configured*
    #:configure-logging
    #:shutdown-logging

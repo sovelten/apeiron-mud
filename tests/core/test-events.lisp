@@ -188,26 +188,6 @@ Example:
 ;; Deprecated API wrappers
 ;; ---------------------------------------------------------------------------
 
-(test deprecated-start-event-logging-still-works
-  "start-event-logging (deprecated) should delegate to configure-logging."
-  (with-temp-log-dir
-    (lambda (dir)
-      (declare (ignore dir))
-      (handler-bind ((warning #'muffle-warning))
-        (is-true (start-event-logging :log-file "ignored.log")))
-      (is-true *logging-configured*)
-      (shutdown-logging))))
-
-(test deprecated-stop-event-logging-still-works
-  "stop-event-logging (deprecated) should delegate to shutdown-logging."
-  (with-temp-log-dir
-    (lambda (dir)
-      (declare (ignore dir))
-      (configure-logging)
-      (handler-bind ((warning #'muffle-warning))
-        (stop-event-logging))
-      (is-false *logging-configured*))))
-
 ;; ---------------------------------------------------------------------------
 ;; handle-event generic
 ;; ---------------------------------------------------------------------------

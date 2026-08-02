@@ -15,8 +15,8 @@
 ;;;; carries its remote address and session metadata.  The :NDC layout option
 ;;;; ensures it appears in the log output.
 ;;;;
-;;;; Call `configure-logging` once at server startup (replaces the old
-;;;; `start-event-logging`).  Call `shutdown-logging` at server stop.
+;;;; Call `configure-logging` once at server startup.
+;;;; Call `shutdown-logging` at server stop.
 
 (in-package #:apeiron.core)
 
