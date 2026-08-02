@@ -112,7 +112,10 @@ Returns (values character account)."
 (defun handle-client (world session)
   "Main loop for handling a client connection."
   (let* ((telnet-conn (and (typep session 'telnet-session)
-                           (session-telnet-connection session))))
+                           (session-telnet-connection session)))
+         (session-id (session-id session))
+         (remote-addr (and (typep session 'telnet-session)
+                           (session-remote-address session))))
     ;; Drain pending telnet negotiation (MSSP, etc.) BEFORE the
     ;; login prompt, so the MSSP response is sent immediately
     ;; after the client's data arrives.
@@ -133,72 +136,74 @@ Returns (values character account)."
       (mud-write session "Welcome to the MUD!")
 
       (let ((char-name (object-name character)))
-        (log-message "New connection: ~A~:[ (guest)~; (account: ~A)~]"
-                     char-name
-                     (character-owner character)
-                     (character-owner character))
+        (let ((ndc (format nil "ip=~A session=~A char=~A"
+                           remote-addr session-id char-name)))
+          (log:with-ndc (ndc)
+            (log-message "New connection: ~A~:[ (guest)~; (account: ~A)~]"
+                         char-name
+                         (character-owner character)
+                         (character-owner character))
 
-        ;; ─── Game loop ────────────────────────────────────────────────
-        (handler-case
-            (loop while *server-running*
-                  do
-                     (handler-case
-                         (progn
-                           ;; Send prompt
-                           (session-send-prompt session)
+            ;; ─── Game loop ────────────────────────────────────────────────
+            (handler-case
+                (loop while *server-running*
+                      do
+                         (handler-case
+                             (progn
+                               ;; Send prompt
+                               (session-send-prompt session)
 
-                           (multiple-value-bind (line status) (read-line-with-timeout-loop session)
-                             (cond
-                               ((eq status :timeout)
-                                (mud-write session "Timed out due to inactivity.")
-                                (log-message "Client ~A timed out due to inactivity" char-name)
-                                (return))
-                               ((or (eq status :eof) (typep status 'error))
-                                (log-message "Client ~A disconnected ~A" char-name status)
-                                (return))
-                               (line
-                                (let ((trimmed (string-trim '(#\Return #\Newline) line)))
-                                  (when (and trimmed (> (length trimmed) 0))
-                                    (process-command world character trimmed))))
-                               (t
-                                (return)))))
-                       (end-of-file ()
-                         ;; Connection closed by client
-                         (log-message "Client ~A disconnected end-of-file" char-name)
-                         (return))
-                       (error (e)
-                         ;; Check if this is a "broken pipe" or similar connection error
-                         (let ((error-str (format nil "~A" e)))
-                           (if (or (search "Broken pipe" error-str)
-                                   (search "closed" error-str)
-                                   (search "reset" error-str))
-                               ;; Connection error, exit gracefully
-                               (progn
-                                 (log-message "Client ~A connection lost" char-name)
-                                 (return))
-                               ;; Other error, log it
-                               (progn
-                                 (log-error "Error in client handler: ~A" e)
-                                 (return)))))))
-          (error (e)
-            (log-error "Client handler error for ~A: ~A" char-name e)))))
+                               (multiple-value-bind (line status) (read-line-with-timeout-loop session)
+                                 (cond
+                                   ((eq status :timeout)
+                                    (mud-write session "Timed out due to inactivity.")
+                                    (log-message "Client ~A timed out due to inactivity" char-name)
+                                    (return))
+                                   ((or (eq status :eof) (typep status 'error))
+                                    (log-message "Client ~A disconnected ~A" char-name status)
+                                    (return))
+                                   (line
+                                    (let ((trimmed (string-trim '(#\Return #\Newline) line)))
+                                      (when (and trimmed (> (length trimmed) 0))
+                                        (process-command world character trimmed))))
+                                   (t
+                                    (return)))))
+                           (end-of-file ()
+                             ;; Connection closed by client
+                             (log-message "Client ~A disconnected end-of-file" char-name)
+                             (return))
+                           (error (e)
+                             ;; Check if this is a "broken pipe" or similar connection error
+                             (let ((error-str (format nil "~A" e)))
+                               (if (or (search "Broken pipe" error-str)
+                                       (search "closed" error-str)
+                                       (search "reset" error-str))
+                                   ;; Connection error, exit gracefully
+                                   (progn
+                                     (log-message "Client ~A connection lost" char-name)
+                                     (return))
+                                   ;; Other error, log it
+                                   (progn
+                                     (log-error "Error in client handler: ~A" e)
+                                     (return)))))))
+              (error (e)
+                (log-error "Client handler error for ~A: ~A" char-name e)))))))
 
     ;; Cleanup when disconnected
-    (let ((session-id (session-id session)))
-      (log-message "Attempting to remove thread for session ~A" session-id)
-      (let ((character (session-character session)))
-        (when character
-          ;; Clear session links first — this prevents stop-mud-server
-          ;; Clear session links before world-remove-character! —
-          ;; this prevents stop-mud-server from racing to process
-          ;; the same character via (characters world).
-          (setf (session-character session) nil
-                (character-session character) nil)
-          (world-remove-character! world character)))
-      ;; Remove from tracking AFTER cleanup so stop-mud-server joins
-      ;; this thread before processing characters.
-      (remhash session-id *player-threads*)
-      (session-disconnect session))))
+    (log-message "Attempting to remove thread for session ~A" session-id)
+    (let ((character (session-character session)))
+      (when character
+        ;; Clear session links first — this prevents stop-mud-server
+        ;; Clear session links before world-remove-character! —
+        ;; this prevents stop-mud-server from racing to process
+        ;; the same character via (characters world).
+        (setf (session-character session) nil
+              (character-session character) nil)
+        (world-remove-character! world character)))
+    ;; Remove from tracking AFTER cleanup so stop-mud-server joins
+    ;; this thread before processing characters.
+    (remhash session-id *player-threads*)
+    (session-disconnect session)))
 
 (defun accept-connections (world)
   "Accept incoming client connections.
@@ -334,7 +339,7 @@ connection to TLS in-band."
         (let ((world (world-restore-or-initialize :force-new force-new
                                                   :initializer #'apeiron.worlds:new-default-world)))
           ;; Start event logging to file
-          (start-event-logging :log-file (merge-pathnames "events.log" *data-directory*))
+          (configure-logging)
           ;; Start plain-text listener
           (setf *server-socket*
                 (usocket:socket-listen host port :reuse-address t :backlog 5))
@@ -440,7 +445,7 @@ connection to TLS in-band."
               (session-disconnect session)))))
 
       ;; Stop event logging
-      (stop-event-logging)
+      (shutdown-logging)
       (log-message "MUD Server stopped")
       t)))
 

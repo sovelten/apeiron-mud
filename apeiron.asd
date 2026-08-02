@@ -23,13 +23,15 @@
                "cl-csv"
                "deeds"
                "ironclad"
+               "log4cl"
                "str")
   :components ((:module "src/core"
                 :components
                 ((:file "package")
                  (:file "constants" :depends-on ("package"))
                  (:file "events" :depends-on ("package"))
-                 (:file "utils" :depends-on ("constants" "events"))
+                 (:file "logging" :depends-on ("package" "constants" "events"))
+                 (:file "utils" :depends-on ("constants" "logging"))
                  (:file "colors" :depends-on ("package"))
                  (:file "object" :depends-on ("utils"))
                  (:file "container" :depends-on ("object"))

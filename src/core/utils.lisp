@@ -13,20 +13,21 @@
   (apply #'format nil format-string args))
 
 (defun log-message (format-string &rest args)
-  "Log an informational message.
-Writes to the console when *DEBUG-MODE* is non-NIL, and also issues a
-Deeds info-event so that file-logging and other handlers can pick it up."
-  (let ((message (apply #'format-message format-string args)))
-    (when apeiron.core:*debug-mode*
-      (format t "[INFO] ~A~%" message))
-    (apeiron.core:issue-info-event message)
-    nil))
+  "Log an informational message via log4cl.
+The message is routed through the configured log4cl appenders (file and
+console, depending on `configure-logging`).  All existing call sites
+continue to work unchanged."
+  (let ((message (apply #'format nil format-string args)))
+    (log:info "~A" message))
+  nil)
 
 (defun log-error (format-string &rest args)
-  "Log an error message.
-Writes to the console and also issues a Deeds error-event so that
-file-logging and other handlers can pick it up."
-  (let ((message (apply #'format-message format-string args)))
-    (format t "[ERROR] ~A~%" message)
-    (apeiron.core:issue-error-event message)
-    nil))
+  "Log an error message via log4cl.
+The message is routed through the configured log4cl appenders and always
+printed to the console for visibility."
+  (let ((message (apply #'format nil format-string args)))
+    ;; Always print errors to stderr so they are visible even if
+    ;; log4cl console appender is not configured.
+    (format *error-output* "[ERROR] ~A~%" message)
+    (log:error "~A" message))
+  nil)

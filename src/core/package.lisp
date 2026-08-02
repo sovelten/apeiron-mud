@@ -303,10 +303,10 @@
    #:input
    #:output
 
-   ;; Event logging
-   #:start-event-logging
-   #:stop-event-logging
-   #:*event-log-file*
+   ;; log4cl logging
+   #:*logging-configured*
+   #:configure-logging
+   #:shutdown-logging
 
    ;; Event issuance helpers
    #:issue-info-event

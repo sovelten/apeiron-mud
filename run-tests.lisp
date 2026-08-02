@@ -6,6 +6,11 @@
 ;; Explicitly load the ASDF system definitions
 (asdf:load-asd #P"./apeiron.asd")
 (asdf:load-asd #P"./apeiron-test.asd")
+
+;; Load log4cl first and silence its default console.
+(ql:quickload :log4cl)
+(log:config :fatal :sane :filter :fatal :immediate-flush)
+
 (ql:quickload :apeiron)
 
 ;; Now load the tests
