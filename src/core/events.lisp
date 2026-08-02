@@ -52,17 +52,6 @@ can select for all MUD events with a single event-type specifier."))
 (defvar *event-log-file* nil
   "Pathname of the current event log file, or NIL if logging is disabled.")
 
-(defvar *event-log-stream* nil
-  "The output stream for the event log file.
-Only meaningful inside the log-writer lock; do not read directly.")
-
-(defvar *event-log-lock* (bordeaux-threads:make-lock "event-log-lock")
-  "Mutex that serialises writes to the event log file.")
-
-(defvar *event-log-handlers* nil
-  "List of handler instances registered for file logging.
-Used during shutdown to deregister them.")
-
 (defun format-log-timestamp ()
   "Return a human-readable UTC timestamp string for log lines."
   (multiple-value-bind (sec min hour day month year)
@@ -70,73 +59,25 @@ Used during shutdown to deregister them.")
     (format nil "~4,'0D-~2,'0D-~2,'0DT~2,'0D:~2,'0D:~2,'0DZ"
             year month day hour min sec)))
 
-(defun %write-log-line (level message &key session-id character-name)
-  "Write a single formatted line to the event log file.
-LEVEL is a keyword like :INFO, :ERROR, :WARN, :INPUT, or :OUTPUT.
-Called from within the delivery-function of the logging handlers."
-  (bordeaux-threads:with-lock-held (*event-log-lock*)
-    (when *event-log-stream*
-      (format *event-log-stream* "[~A] ~A ~A~@[ [session=~A]~]~@[ [char=~A]~]~%"
-              (format-log-timestamp)
-              level
-              message
-              session-id
-              character-name)
-      (force-output *event-log-stream*))))
-
 (defun start-event-logging (&key (log-file *event-log-file*))
-  "Start writing events to a log file.
+  "DEPRECATED: Use CONFIGURE-LOGGING instead.
 
-LOG-FILE is the pathname of the log file.  If not supplied, uses the
-current value of *EVENT-LOG-FILE*.  When LOG-FILE is NIL, logging is
-not started.
+Previously opened a flat log file with Deeds-based event handlers.
+Now delegates to `configure-logging` which sets up log4cl with
+a size-based rolling file appender and console output.
 
-Registers queued-handler instances on the standard Deeds event loop that
-write formatted log lines for info/error/warning and character-input events.
-Character-output events are intentionally NOT logged — they produce the
-bulk of the log volume and are rarely needed for debugging.  Returns T
-if logging was started, NIL otherwise."
-  (when log-file
-    ;; Close any previously open log.
-    (stop-event-logging)
-    (setf *event-log-file* log-file)
-    (ensure-directories-exist log-file)
-    (setf *event-log-stream* (open log-file
-                                   :direction :output
-                                   :if-exists :append
-                                   :if-does-not-exist :create))
-    (%write-log-line :SYSTEM "=== Event logging started ===")
-    ;; Register one handler per event type so we can format each correctly.
-    (push (deeds:with-handler deeds:info-event (ev message)
-            (%write-log-line :INFO message))
-          *event-log-handlers*)
-    (push (deeds:with-handler deeds:error-event (ev message)
-            (%write-log-line :ERROR message))
-          *event-log-handlers*)
-    (push (deeds:with-handler deeds:warning-event (ev message)
-            (%write-log-line :WARN message))
-          *event-log-handlers*)
-    (push (deeds:with-handler character-input-event (ev input session-id character-name)
-            (%write-log-line :INPUT input
-                             :session-id session-id
-                             :character-name character-name))
-          *event-log-handlers*)
-    t))
+LOG-FILE is ignored — log4cl writes to <*data-directory*>/mud.log."
+  (declare (ignore log-file))
+  (warn "START-EVENT-LOGGING is deprecated; use CONFIGURE-LOGGING instead.")
+  (configure-logging))
 
 (defun stop-event-logging ()
-  "Stop event logging and close the log file.
-Deregisters all file-logging handlers from the event loop."
-  (when *event-log-stream*
-    (%write-log-line :SYSTEM "=== Event logging stopped ===")
-    (dolist (handler *event-log-handlers*)
-      (ignore-errors
-       (deeds:deregister-handler handler deeds:*standard-event-loop*)
-       (deeds:stop handler)))
-    (setf *event-log-handlers* nil)
-    (close *event-log-stream*)
-    (setf *event-log-stream* nil
-          *event-log-file* nil))
-  (values))
+  "DEPRECATED: Use SHUTDOWN-LOGGING instead.
+
+Previously closed the flat log file and deregistered Deeds handlers.
+Now delegates to `shutdown-logging` which shuts down log4cl."
+  (warn "STOP-EVENT-LOGGING is deprecated; use SHUTDOWN-LOGGING instead.")
+  (shutdown-logging))
 
 ;; ---------------------------------------------------------------------------
 ;; Convenience: issue standard events

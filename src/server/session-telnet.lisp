@@ -18,6 +18,11 @@
   ((telnet-conn :initarg :telnet-conn
                 :reader session-telnet-connection
                 :documentation "The telnet:telnet-connection backing this session.")
+   (remote-address :initarg :remote-address
+                   :initform nil
+                   :reader session-remote-address
+                   :documentation "The remote IP address of the client as a
+string (e.g. \"192.168.1.42\"), or NIL if not available.")
    (mssp-info-fn :initarg :mssp-info-fn
                  :initform nil
                  :reader session-mssp-info-fn
@@ -254,14 +259,28 @@ receiving the initial server negotiation)."
     ;; Return T if we processed any data, nil if no data was available
     (> (fill-pointer chars) 0)))
 
-(defun %make-telnet-session (conn &key mssp-info-fn)
+(defun usocket-address-string (usocket)
+  "Return the remote IP address of USOCKET as a dotted-decimal string,
+or \"unknown\" if it cannot be determined."
+  (handler-case
+      (let ((addr (usocket:get-peer-address usocket)))
+        (typecase addr
+          (string addr)
+          (vector (format nil "~{~D~^.~}" (coerce addr 'list)))
+          (t (princ-to-string addr))))
+    (error ()
+      "unknown")))
+
+(defun %make-telnet-session (conn &key mssp-info-fn remote-address)
   "Create a telnet-session from an already-validated telnet-connection.
-When MSSP-INFO-FN is provided, enables MSSP support on the session."
+When MSSP-INFO-FN is provided, enables MSSP support on the session.
+REMOTE-ADDRESS is the client's IP address as a string."
   (when mssp-info-fn
     (%setup-telnet-mssp (telnet:telnet-conn-protocol conn) mssp-info-fn))
   (make-instance 'telnet-session
                  :id (make-id)
                  :telnet-conn conn
+                 :remote-address remote-address
                  :mssp-info-fn mssp-info-fn))
 
 (defun new-telnet-session (usocket &key start-tls certificate key password
@@ -282,7 +301,8 @@ the server state (e.g. NAME, PLAYERS, UPTIME).
 
 Returns NIL if the connection is rejected as non-telnet traffic
 (e.g., HTTP requests or TLS ClientHello on the plain-text port)."
-  (let ((protocol (if start-tls
+  (let* ((remote-addr (usocket-address-string usocket))
+         (protocol (if start-tls
                        (telnet-register-start-tls
                         (make-instance 'telnet-protocol))
                        (make-instance 'telnet-protocol))))
@@ -317,7 +337,9 @@ Returns NIL if the connection is rejected as non-telnet traffic
                       (log-error
                        "START_TLS upgrade failed: ~A"
                        (telnet:telnet-error-message e))))))))
-      (%make-telnet-session conn :mssp-info-fn mssp-info-fn))))
+      (%make-telnet-session conn
+                            :remote-address remote-addr
+                            :mssp-info-fn mssp-info-fn))))
 
 (defun new-telnet-tls-session (usocket &key certificate key password mssp-info-fn)
   "Create a new telnet-session with immediate TLS encryption from an
@@ -334,7 +356,8 @@ the server state (e.g. NAME, PLAYERS, UPTIME).
 
 Returns NIL if the connection is rejected as non-telnet traffic
 (e.g., HTTP-over-TLS on the secure port)."
-  (let ((conn (telnet:make-telnet-tls-connection usocket
+  (let* ((remote-addr (usocket-address-string usocket))
+         (conn (telnet:make-telnet-tls-connection usocket
                                                   :certificate certificate
                                                   :key key
                                                   :password password)))
@@ -343,7 +366,9 @@ Returns NIL if the connection is rejected as non-telnet traffic
       (log-message "Rejected non-telnet TLS connection on secure port")
       (usocket:socket-close usocket)
       (return-from new-telnet-tls-session nil))
-    (let ((session (%make-telnet-session conn :mssp-info-fn mssp-info-fn)))
+    (let ((session (%make-telnet-session conn
+                                         :remote-address remote-addr
+                                         :mssp-info-fn mssp-info-fn)))
       session)))
 
 (defun new-telnet-session-with-start-tls (usocket &key certificate key password

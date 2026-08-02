@@ -33,6 +33,7 @@
    ;; Telnet session constructors (bridge between telnet and core)
    #:telnet-session
    #:session-telnet-connection
+   #:session-remote-address
    #:session-mssp-info-fn
    #:new-telnet-session
    #:new-telnet-tls-session

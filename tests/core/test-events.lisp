@@ -6,30 +6,32 @@
 ;; Helpers
 ;; ---------------------------------------------------------------------------
 
-(defun with-temp-log-file (thunk)
-  "Execute THUNK with *EVENT-LOG-FILE* bound to a fresh temp file.
-THUNK receives the log-path as its sole argument and should return the
-value to propagate.  The log file is cleaned up after THUNK returns."
-  (let ((log-path (uiop:merge-pathnames*
-                   (format nil "test-events-~D.log" (random 1000000))
-                   (uiop:default-temporary-directory))))
-    (setf *event-log-file* log-path)
-    (when (probe-file log-path)
-      (delete-file log-path))
-    (unwind-protect
-         (funcall thunk log-path)
-      (ignore-errors (stop-event-logging))
-      (ignore-errors (delete-file log-path))
-      (setf *event-log-file* nil))))
+(defun with-temp-log-dir (thunk)
+  "Execute THUNK with *DATA-DIRECTORY* bound to a fresh temp directory
+so log4cl writes its files there.  The directory is cleaned up after
+THUNK returns."
+  (let ((dir (uiop:merge-pathnames*
+              (format nil "test-log4cl-~D/" (random 1000000))
+              (uiop:default-temporary-directory))))
+    (ensure-directories-exist dir)
+    (let ((apeiron.core::*data-directory* dir)
+          (apeiron.core::*logging-configured* nil))
+      (unwind-protect
+           (funcall thunk dir)
+        (ignore-errors (shutdown-logging))
+        (ignore-errors (uiop:delete-directory-tree dir :validate (constantly t)))
+        (setf apeiron.core::*logging-configured* nil)))))
 
-(defun log-file-contents (log-path)
-  "Return the full contents of LOG-PATH as a string, or NIL if the file
+(defun log-file-contents (dir)
+  "Return the full contents of mud.log in DIR as a string, or NIL if the file
 does not exist."
-  (when (probe-file log-path)
-    (with-open-file (s log-path :direction :input)
-      (let ((buf (make-string (file-length s))))
-        (read-sequence buf s)
-        buf))))
+  (let ((log-path (merge-pathnames "mud.log" dir)))
+    (when (probe-file log-path)
+      (with-open-file (s log-path :direction :input)
+        (with-output-to-string (out)
+          (loop for line = (read-line s nil)
+                while line
+                do (write-line line out)))))))
 
 (defmacro with-test-handler ((handler-var event-type (event-var &rest slot-bindings) capture-var) &body body)
   "Create a locally-blocking handler whose delivery-function sets CAPTURE-VAR
@@ -108,89 +110,103 @@ Example:
     (is (search "dark passage" (output ev)))))
 
 ;; ---------------------------------------------------------------------------
-;; File-logging infrastructure (start / stop / write)
+;; log4cl logging infrastructure (configure / shutdown / write)
 ;; ---------------------------------------------------------------------------
 
-(test start-stop-event-logging
-  "Start and stop event logging; verify log file is created and flushed."
-  (with-temp-log-file
-    (lambda (lp)
-      (declare (ignore lp))
-      (start-event-logging :log-file *event-log-file*)
-      (is (probe-file *event-log-file*))
-      (stop-event-logging)
-      ;; After stop, *event-log-file* should be NIL
-      (is (null *event-log-file*)))))
+(test configure-logging-creates-log-file
+  "configure-logging should create the mud.log file in the data directory."
+  (with-temp-log-dir
+    (lambda (dir)
+      (configure-logging)
+      (sleep 0.1)
+      (is-true (probe-file (merge-pathnames "mud.log" dir)))
+      (shutdown-logging))))
 
-(test log-file-contains-system-start-stop-markers
-  "After start and stop, the log file must contain both markers."
-  (let ((contents
-          (with-temp-log-file
-            (lambda (lp)
-              (start-event-logging :log-file *event-log-file*)
-              (stop-event-logging)
-              (log-file-contents lp)))))
-    (is (search "=== Event logging started ===" contents))
-    (is (search "=== Event logging stopped ===" contents))))
+(test shutdown-logging-clears-state
+  "After shutdown-logging, *LOGGING-CONFIGURED* should be NIL."
+  (with-temp-log-dir
+    (lambda (dir)
+      (declare (ignore dir))
+      (configure-logging)
+      (is-true *logging-configured*)
+      (shutdown-logging)
+      (is-false *logging-configured*))))
 
-(test log-file-captures-info-event
-  "An info-event issued while logging is active should appear in the log."
+(test configure-logging-is-idempotent
+  "A second call to configure-logging should be a no-op."
+  (with-temp-log-dir
+    (lambda (dir)
+      (declare (ignore dir))
+      (is-true (configure-logging))
+      ;; Second call should return T but not re-configure.
+      (is-true (configure-logging))
+      (shutdown-logging))))
+
+(test log-message-writes-to-log-file
+  "log-message should write an INFO-level entry to the log file."
   (let ((contents
-          (with-temp-log-file
-            (lambda (lp)
-              (start-event-logging :log-file *event-log-file*)
-              (issue-info-event "hello world")
-              ;; Give the queued handler a moment to process.
+          (with-temp-log-dir
+            (lambda (dir)
+              (configure-logging)
+              (log-message "test message ~D" 42)
               (sleep 0.2)
-              (stop-event-logging)
-              (log-file-contents lp)))))
-    (is (search "INFO hello world" contents))))
+              (shutdown-logging)
+              (log-file-contents dir)))))
+    (is (search "test message 42" contents))
+    (is (search "INFO" contents))))
 
-(test log-file-captures-error-event
-  "An error-event issued while logging is active should appear in the log."
+(test log-error-writes-to-log-file
+  "log-error should write an ERROR-level entry to the log file."
   (let ((contents
-          (with-temp-log-file
-            (lambda (lp)
-              (start-event-logging :log-file *event-log-file*)
-              (issue-error-event "something broke")
+          (with-temp-log-dir
+            (lambda (dir)
+              (configure-logging)
+              (log-error "critical failure ~A" "boom")
               (sleep 0.2)
-              (stop-event-logging)
-              (log-file-contents lp)))))
-    (is (search "ERROR something broke" contents))))
+              (shutdown-logging)
+              (log-file-contents dir)))))
+    (is (search "critical failure boom" contents))
+    (is (search "ERROR" contents))))
 
-(test log-file-captures-character-input-event
-  "A character-input-event issued while logging is active should appear in the log."
+(test log-with-ndc-adds-context
+  "log:with-ndc should attach contextual metadata to log lines."
   (let ((contents
-          (with-temp-log-file
-            (lambda (lp)
-              (start-event-logging :log-file *event-log-file*)
-              (issue-character-input-event 1 "Hero" "attack goblin")
+          (with-temp-log-dir
+            (lambda (dir)
+              (configure-logging)
+              (let ((ndc "ip=10.0.0.1 session=123 char=Hero"))
+                (log:with-ndc (ndc)
+                  (log-message "player action")))
               (sleep 0.2)
-              (stop-event-logging)
-              (log-file-contents lp)))))
-    (is (search "INPUT attack goblin" contents))
-    (is (search "session=1" contents))
-    (is (search "char=Hero" contents))))
+              (shutdown-logging)
+              (log-file-contents dir)))))
+    (is (search "player action" contents))
+    (is (search "Hero" contents))
+    (is (search "10.0.0.1" contents))))
 
-(test log-file-does-not-capture-character-output-event
-  "A character-output-event issued while logging is active should NOT appear
-in the log — output events are intentionally excluded to reduce log volume."
-  (let ((contents
-          (with-temp-log-file
-            (lambda (lp)
-              (start-event-logging :log-file *event-log-file*)
-              (issue-character-output-event 2 "Mage" "The room is dark.")
-              (sleep 0.2)
-              (stop-event-logging)
-              (log-file-contents lp)))))
-    (is (not (search "OUTPUT The room is dark." contents)))
-    (is (not (search "session=2" contents)))
-    (is (not (search "char=Mage" contents)))))
+;; ---------------------------------------------------------------------------
+;; Deprecated API wrappers
+;; ---------------------------------------------------------------------------
 
-(test start-event-logging-no-file-is-noop
-  "start-event-logging with NIL should be a no-op."
-  (let ((*event-log-file* nil))
-    (is (null (start-event-logging)))))
+(test deprecated-start-event-logging-still-works
+  "start-event-logging (deprecated) should delegate to configure-logging."
+  (with-temp-log-dir
+    (lambda (dir)
+      (declare (ignore dir))
+      (handler-bind ((warning #'muffle-warning))
+        (is-true (start-event-logging :log-file "ignored.log")))
+      (is-true *logging-configured*)
+      (shutdown-logging))))
+
+(test deprecated-stop-event-logging-still-works
+  "stop-event-logging (deprecated) should delegate to shutdown-logging."
+  (with-temp-log-dir
+    (lambda (dir)
+      (declare (ignore dir))
+      (configure-logging)
+      (handler-bind ((warning #'muffle-warning))
+        (stop-event-logging))
+      (is-false *logging-configured*))))
 
 ;; ---------------------------------------------------------------------------
 ;; handle-event generic
