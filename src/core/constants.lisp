@@ -12,9 +12,10 @@
 ;; Command constants
 (defconstant +max-command-length+ 256)
 
-;; ─── Runtime data directory ────────────────────────────────────────────────
-;; Runtime data files (guestbook CSV, etc.) live here, separate from BKNR
-;; snapshots which clutter the project root.
+;; ─── Run mode ────────────────────────────────────────────────────────────
+
+(defvar *run-mode* :prod
+  "One of :PROD, :DEBUG, or :TEST.  See logging.lisp for log behaviour.")
 
 (defvar *data-directory*
   (merge-pathnames #p"data/" (asdf:system-source-directory :apeiron))

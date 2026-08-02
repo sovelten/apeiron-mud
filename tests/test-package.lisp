@@ -46,6 +46,7 @@
 (eval-when (:load-toplevel :execute)
   (setf *debug-mode* nil)
   (setf *colorize* nil)
+  (setf *run-mode* :test)
   (setf bknr.datastore::*store-verbose* nil)
   ;; Silence log4cl during testing.  Individual logging tests call
   ;; configure-logging to set up their own per-test file appenders.
