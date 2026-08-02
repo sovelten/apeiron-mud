@@ -35,21 +35,23 @@ Behaviour is driven by *RUN-MODE*:
    (merge-pathnames "mud.log" log-directory))
 
   (let* ((log-file (merge-pathnames "mud.log" log-directory))
-         (level (ecase *run-mode* (:debug :debug) ((:prod :test) :info)))
-         (console? (ecase *run-mode* ((:prod :debug) t) (:test nil))))
+         (level (ecase *run-mode* (:debug :debug) ((:prod :test) :info))))
 
-    ;; ── Clean slate, console locked at FATAL ────────────────────────────
-    (log:config :fatal :sane :filter :fatal :immediate-flush)
-
-    ;; ── Daily-rolling file appender ─────────────────────────────────────
-    (log:config level
-                :daily log-file
-                :ndc
-                :immediate-flush)
-
-    ;; ── Console appender ─────────────────────────────────────────────────
-    (when console?
-      (log:config :console))
+    ;; ── Clean slate + file appender ─────────────────────────────────────
+    ;; The :SANE call clears all existing appenders and creates a single
+    ;; console appender.  In :TEST mode we lock it at :FATAL so nothing
+    ;; reaches the console.  In :PROD/:DEBUG the console appender runs at
+    ;; the chosen log level.
+    (ecase *run-mode*
+      (:test
+       (log:config :fatal :sane :filter :fatal :immediate-flush)
+       (log:config :info :daily log-file :ndc :immediate-flush))
+      (:prod
+       (log:config :info :sane :immediate-flush)
+       (log:config :info :daily log-file :ndc :immediate-flush))
+      (:debug
+       (log:config :debug :sane :immediate-flush)
+       (log:config :debug :daily log-file :ndc :immediate-flush)))
 
     (setf *logging-configured* t)
     (let ((msg (format nil "Logging initialised (~(~A~)) — log file: ~A"

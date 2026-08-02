@@ -188,6 +188,18 @@ Example:
 ;; Deprecated API wrappers
 ;; ---------------------------------------------------------------------------
 
+(test configure-logging-prod-mode-does-not-crash
+  "configure-logging in :PROD mode should not error about duplicate consoles."
+  (let ((old-mode *run-mode*))
+    (setf *run-mode* :prod)
+    (unwind-protect
+         (with-temp-log-dir
+           (lambda (dir)
+             (declare (ignore dir))
+             (finishes (configure-logging))
+             (finishes (shutdown-logging))))
+      (setf *run-mode* old-mode))))
+
 ;; ---------------------------------------------------------------------------
 ;; handle-event generic
 ;; ---------------------------------------------------------------------------
