@@ -47,6 +47,9 @@
   (setf *debug-mode* nil)
   (setf *colorize* nil)
   (setf bknr.datastore::*store-verbose* nil)
+  ;; Silence log4cl during testing.  Individual logging tests call
+  ;; configure-logging to set up their own per-test file appenders.
+  (log:config :fatal :sane :filter :fatal :immediate-flush)
   (let ((temp-dir (uiop:subpathname (uiop:default-temporary-directory) "mud-test-bknr/"))
         (data-dir (uiop:subpathname (uiop:default-temporary-directory) "mud-test-data/")))
     (uiop:delete-directory-tree temp-dir :validate (constantly t) :if-does-not-exist :ignore)
