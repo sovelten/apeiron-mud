@@ -68,6 +68,11 @@ can select for all MUD events with a single event-type specifier."))
     :character-name character-name
     :input input-line))
 
+;; ── Log character inputs via log4cl ──────────────────────────────────────
+(deeds:with-handler character-input-event (ev input session-id character-name)
+  (declare (ignore ev))
+  (log:info "INPUT ~A [session=~A char=~A]" input session-id character-name))
+
 (defun issue-character-output-event (session-id character-name output-text)
   "Issue a character-output-event for the given session and output text."
   (deeds:do-issue character-output-event
