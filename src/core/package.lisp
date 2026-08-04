@@ -158,6 +158,31 @@
    #:connection-set-challenge
    #:connection-blocked-message
 
+   ;; Area system
+   #:mud-area
+   #:new-area
+   #:area-rooms
+   #:area-connections
+   #:area-graph
+   #:area-add-room!
+   #:area-remove-room!
+   #:area-register-connection!
+   #:area-connect-rooms!
+   #:area-remove-connection!
+   #:area-room-p
+   #:area-find-room
+   #:area-room-list
+   #:area-room-count
+   #:area-connection-count
+   #:area-room-connections
+   #:area-adjacent-rooms
+   #:area-shortest-path
+   #:area-route
+   #:area-reachable-p
+   #:area-reachable-rooms
+   #:area-connected-components
+   #:area-connected-graph-p
+
    ;; Guestbook
    #:mud-guestbook
    #:new-guestbook
