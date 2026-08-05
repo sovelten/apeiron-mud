@@ -92,7 +92,7 @@ CHARACTER is the character, ARGS is a raw string that the handler can parse as n
         (character-send-message character "Answer what? Usage: answer <text>")
         (let* ((conn (find-if (lambda (c)
                                 (object-get-property c "challenge-answer"))
-                              (room-connections room)))
+                              (room-exit-connections room)))
                (expected (and conn (object-get-property conn "challenge-answer")))
                (flag (and conn (object-get-property conn "challenge-flag"))))
           (cond

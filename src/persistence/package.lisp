@@ -22,6 +22,7 @@
    #:persistent-guestbook
    #:persistent-wordle
    #:persistent-connection
+   #:persistent-area
    #:persistent-world
 
    ;; Persistent factory functions

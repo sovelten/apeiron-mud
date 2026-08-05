@@ -393,3 +393,61 @@ deleted during world restore — only owned characters survive a crash."
        (when (boundp 'bknr.datastore:*store*)
          (ignore-errors (bknr.datastore:close-store))
          (makunbound 'bknr.datastore:*store*))))))
+
+(test area-persistence
+  "Areas survive a snapshot + restore, stay indexed in the world, and
+  have their cl-graph index rebuilt after restore."
+  (unwind-protect
+       (let* ((world (apeiron.persistence:world-restore-or-initialize
+                      :force-new t :initializer #'test-world-with-area))
+              (area (apeiron.core:world-area-with-name world "Test Cavern")))
+         (is (not (null area)))
+         (is (typep area 'apeiron.persistence:persistent-area))
+         (is (= 3 (apeiron.core:area-room-count area)))
+         (is (= 2 (apeiron.core:area-connection-count area)))
+         (is (= 1 (apeiron.core:world-total-areas world)))
+
+         ;; graph functional before restart
+         (let ((entrance (apeiron.core:starting-room world)))
+           (is (typep entrance 'apeiron.persistence:persistent-room))
+           (is (equal (list "Cavern Entrance" "Great Hall" "Treasure Vault")
+                      (mapcar #'apeiron.core:object-name
+                              (apeiron.core:area-shortest-path
+                               area entrance
+                               (apeiron.core:area-find-room area "Treasure Vault"))))))
+
+         ;; Simulate restart: snapshot, close, restore
+         (apeiron.persistence:sync-world)
+         (bknr.datastore:close-store)
+         (let* ((new-world (apeiron.persistence:world-restore-or-initialize
+                            :initializer #'test-world-with-area))
+                (restored (apeiron.core:world-area-with-name new-world "Test Cavern")))
+           (is (not (null restored))
+               "Area should survive the restart")
+           (is (typep restored 'apeiron.persistence:persistent-area))
+           (is (= 1 (apeiron.core:world-total-areas new-world)))
+           (is (= 3 (apeiron.core:world-total-rooms new-world)))
+           (is (= 3 (apeiron.core:area-room-count restored)))
+           (is (= 2 (apeiron.core:area-connection-count restored)))
+           ;; the entrance survived and points at the restored room
+           (is (typep (apeiron.core:area-entrance restored)
+                      'apeiron.persistence:persistent-room))
+           (is (equal "Cavern Entrance"
+                      (apeiron.core:object-name (apeiron.core:area-entrance restored))))
+
+           ;; graph was rebuilt from the restored connections
+           (let ((entrance (apeiron.core:area-find-room restored "Cavern Entrance"))
+                 (hall (apeiron.core:area-find-room restored "Great Hall"))
+                 (treasure (apeiron.core:area-find-room restored "Treasure Vault")))
+             (is (equal (list entrance hall treasure)
+                        (apeiron.core:area-shortest-path restored entrance treasure)))
+             ;; the one-way property survived and is respected by the rebuilt graph
+             (is (null (apeiron.core:area-shortest-path restored treasure entrance)))
+             (is (equal (list entrance hall treasure)
+                        (sort (apeiron.core:area-reachable-rooms restored entrance)
+                              #'string< :key #'apeiron.core:object-name))))))
+      ;; ---- Cleanup ----------------------------------------------------
+      (ignore-errors
+       (when (boundp 'bknr.datastore:*store*)
+         (ignore-errors (bknr.datastore:close-store))
+         (makunbound 'bknr.datastore:*store*)))))

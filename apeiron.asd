@@ -21,6 +21,7 @@
   :license "MIT"
   :depends-on ("bordeaux-threads"
                "cl-csv"
+               "cl-graph"
                "deeds"
                "ironclad"
                "log4cl"
@@ -39,6 +40,7 @@
                  (:file "guestbook" :depends-on ("object"))
                  (:file "wordle" :depends-on ("object"))
                  (:file "connection" :depends-on ("room"))
+                 (:file "area" :depends-on ("room" "connection"))
                  (:file "npc" :depends-on ("object"))
                  (:file "combat" :depends-on ("npc" "character"))
                  (:file "session" :depends-on ("utils"))

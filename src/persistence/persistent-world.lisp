@@ -32,6 +32,12 @@
 (defwrapping-persistent-class persistent-connection (mud-connection persistent-object)
   ())
 
+(defwrapping-persistent-class persistent-area (mud-area persistent-object)
+  ()
+  ;; the cl-graph index is derived from rooms/connections and rebuilt on
+  ;; restore (see INITIALIZE-TRANSIENT-INSTANCE below).
+  (:transient-slots graph))
+
 (defmethod bknr.datastore:initialize-transient-instance ((gb persistent-guestbook))
   "Re-read guestbook entries from the CSV file after restore."
   (call-next-method)
@@ -52,6 +58,12 @@ values so they don't cause SLOT-UNBOUND errors on access."
       (when (and initfn (not (slot-boundp obj name)))
         (setf (slot-value obj name) (funcall initfn))))))
 
+(defmethod bknr.datastore:initialize-transient-instance :after ((area persistent-area))
+  "Rebuild the area's cl-graph index from its restored rooms and
+connections.  The graph is a transient slot and is not stored in the
+snapshot, so it must be reconstructed after every restore."
+  (area-rebuild-graph! area))
+
 (defun refresh-guestbooks ()
   "Reload all guestbook entries from their CSV files.
 Run this after restarting the server if guestbook entries look stale.
@@ -66,7 +78,7 @@ Usage from the MUD: eval (refresh-guestbooks)"
 
 (defwrapping-persistent-class persistent-world (mud-world)
   ()
-  (:transient-slots characters objects rooms))
+  (:transient-slots characters objects rooms areas))
 
 (defmethod object-set-property ((obj persistent-object) property-name value)
   "Set a property on a persistent object, ensuring BKNR tracks the change.

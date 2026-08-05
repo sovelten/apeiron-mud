@@ -136,6 +136,8 @@
    #:new-room
    #:room-exits
    #:room-connections
+   #:room-area
+   #:room-exit-connections
    #:room-exit-target
    #:room-exit-blocked-p
    #:room-exit-list
@@ -157,6 +159,41 @@
    #:connection-exit-blocked-message
    #:connection-set-challenge
    #:connection-blocked-message
+   #:connection-one-way
+   #:connection-one-way-message
+   #:connection-one-way-p
+   #:connection-usable-p
+   #:cardinal-spec
+
+   ;; Area system
+   #:mud-area
+   #:new-area
+   #:area-rooms
+   #:area-connections
+   #:area-entrance
+   #:area-set-entrance!
+   #:area-graph
+   #:area-add-room!
+   #:area-remove-room!
+   #:area-register-connection!
+   #:area-connect-rooms!
+   #:area-connect-north-south!
+   #:area-connect-west-east!
+   #:area-remove-connection!
+   #:area-room-p
+   #:area-find-room
+   #:area-room-list
+   #:area-room-count
+   #:area-connection-count
+   #:area-room-connections
+   #:area-adjacent-rooms
+   #:area-shortest-path
+   #:area-route
+   #:area-reachable-p
+   #:area-reachable-rooms
+   #:area-connected-components
+   #:area-connected-graph-p
+   #:area-rebuild-graph!
 
    ;; Guestbook
    #:mud-guestbook
@@ -259,10 +296,18 @@
    #:world-characters
    #:world-objects
    #:world-rooms
+   #:world-areas
    #:get-config-key
    #:world-gen-id!
    #:world-add-object!
    #:world-remove-object!
+   #:world-add-area!
+   #:world-remove-area!
+   #:world-area-by-id
+   #:world-all-areas
+   #:world-total-areas
+   #:world-area-with-name
+   #:world-area-of-room
    #:world-set-starting-room!
    #:starting-room
    #:place-character!

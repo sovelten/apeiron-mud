@@ -6,8 +6,18 @@
   ((connections :initarg :connections
                 :accessor room-connections
                 :initform '()
-                :documentation "List of Connection objects attached to this room"))
-  (:documentation "A location/room in the MUD"))
+                :documentation "List of Connection objects attached to this room
+that are NOT part of an area: cross-area passages and legacy connections.
+Connections inside an area live in the area itself and are found through
+ROOM-AREA.")
+   (area :initarg :area
+         :accessor room-area
+         :initform nil
+         :documentation "The MUD-AREA this room belongs to, or NIL when the
+room is not part of any area."))
+  (:documentation "A location/room in the MUD.  A room may belong to at most
+one area (see ROOM-AREA); its exits are the union of the area's connections
+incident to it and its own CONNECTIONS list (see ROOM-EXIT-CONNECTIONS)."))
 
 (defmethod object-describe ((obj mud-room))
   "Get a full description of a room including contents and exits."
@@ -54,16 +64,35 @@
 (defun room-exit-target (room direction)
   "Get the target room when moving in DIRECTION from ROOM.
 
-Returns the room at the other end of the matching Connection, or NIL."
+Returns the room at the other end of the matching Connection, or NIL.
+One-way connections only yield a target from their passable end."
   (let ((conn (connection-find room direction)))
-    (when conn
+    (when (and conn (connection-usable-p conn room))
       (connection-other-room conn room))))
 
-(defun room-exit-list (room)
-  "Return a list of (direction connection) for every exit in ROOM.
+(defun room-exit-connections (room)
+  "Return the list of MUD-CONNECTIONs that lead out of ROOM.
 
-DIRECTION is a lowercase string, CONNECTION is the MUD-CONNECTION."
-  (loop for conn in (room-connections room)
+When ROOM belongs to an area, the area's connections incident to ROOM are
+the preferred source (they live in the area, not on the room), unioned
+with the room's own CONNECTIONS list which holds cross-area and legacy
+connections.  Rooms outside any area fall back to their own connections
+list.  The result is deduplicated."
+  (let ((area (room-area room)))
+    (if area
+        (remove-duplicates (append (area-room-connections area room)
+                                   (room-connections room))
+                           :test #'eq)
+        (room-connections room))))
+
+(defun room-exit-list (room)
+  "Return a list of (direction connection) for every usable exit in ROOM.
+
+DIRECTION is a lowercase string, CONNECTION is the MUD-CONNECTION.
+One-way connections are only listed from their passable end.  Exits come
+from ROOM-EXIT-CONNECTIONS (area connections first, then the room's own)."
+  (loop for conn in (room-exit-connections room)
+        when (connection-usable-p conn room)
         collect (list (connection-direction-to conn room) conn)))
 
 (defun synonyms-for-room (conn room)
@@ -106,13 +135,18 @@ Examples:
 (defun room-exit-blocked-p (room character direction)
   "Return a blocking message if the character cannot use this exit yet.
 
-Three independent checks:
+Four independent checks:
+0. One-way — the connection cannot be traversed from this room
 1. Regular block — the connection is blocked for everyone (locked door)
 2. Challenge block — the connection requires a flag the character doesn't have (riddle)
 3. Flag gate — the room requires a flag the character doesn't have (defeat NPC)"
   (let* ((dir (string-downcase direction))
          (conn (connection-find room dir)))
     (or
+     ;; 0. One-way — wrong end of a one-way passage
+     (when (and conn (not (connection-usable-p conn room)))
+       (or (connection-one-way-message conn)
+           (format nil "You can't go ~A from here." direction)))
      ;; 1. Regular block — blocked for everyone
      (connection-exit-blocked-message room dir)
      ;; 2. Challenge block — stored on the connection, per-character

@@ -138,6 +138,26 @@ tests that need directional connections on the starting room."
       (world-set-starting-room! world hub))
     world))
 
+(defun test-world-with-area ()
+  "Create a transient world containing one area: a three-room chain where
+the last hop (hall -> treasure) is one-way.  The area, its rooms and its
+connections are registered via WORLD-ADD-AREA!, and the cavern entrance
+is set to the entrance room."
+  (let ((world (make-instance 'mud-world)))
+    (let ((area (new-area :name "Test Cavern")))
+      (let ((entrance (new-room :name "Cavern Entrance"))
+            (hall (new-room :name "Great Hall"))
+            (treasure (new-room :name "Treasure Vault")))
+        (area-connect-rooms! area entrance hall :to "north" :from "south")
+        (area-connect-rooms! area hall treasure
+                             :to "east" :from "west"
+                             :one-way :a-to-b
+                             :one-way-message "The vault door slams shut behind you.")
+        (area-set-entrance! area entrance)
+        (world-add-area! world area)
+        (world-set-starting-room! world entrance)))
+    world))
+
 (defun run-tests ()
   "Run all MUD tests with a clean, isolated temporary BKNR store."
   (setup-test-environment)
