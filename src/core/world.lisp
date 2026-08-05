@@ -50,7 +50,8 @@ indices, and return the object."
   object)
 
 (defgeneric connect-rooms! (world room-a room-b
-                            &key to from name blocked blocked-message)
+                            &key to from name blocked blocked-message
+                              one-way one-way-message)
   (:documentation "Create a bidirectional Connection between ROOM-A and ROOM-B in WORLD.
 
 TO is the direction name from ROOM-A to ROOM-B (e.g. \"north\").
@@ -62,6 +63,13 @@ elements are synonyms (e.g. '(\"north\" \"n\")).  Neither may be NIL.
 When BLOCKED is true the passage starts blocked and cannot be traversed.
 BLOCKED-MESSAGE is shown to characters when they try to pass.
 
+ONE-WAY restricts the passage to a single direction:
+  :BOTH    (default) passable in either direction
+  :A-TO-B  passable only from ROOM-A to ROOM-B
+  :B-TO-A  passable only from ROOM-B to ROOM-A
+ONE-WAY-MESSAGE is shown when a character tries to traverse the passage
+the wrong way (e.g. \"The slope is too steep to climb back up.\").
+
 The connection is linked into both rooms' CONNECTIONS lists and
 registered in the world.
 
@@ -72,12 +80,15 @@ Returns the registered MUD-CONNECTION instance."))
                              (name (format nil "passage between ~A and ~A"
                                            (object-name room-a)
                                            (object-name room-b)))
-                             blocked blocked-message)
+                             blocked blocked-message
+                             one-way one-way-message)
   (when (or (null to) (null from))
     (error "connect-rooms!: :to and :from are required and cannot be nil."))
   (let* ((conn (make-connection room-a to room-b from
                                 :name name :blocked blocked
-                                :blocked-message blocked-message))
+                                :blocked-message blocked-message
+                                :one-way one-way
+                                :one-way-message one-way-message))
          (registered (create-object! world conn)))
     (push registered (room-connections room-a))
     (push registered (room-connections room-b))

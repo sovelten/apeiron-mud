@@ -34,10 +34,23 @@ and the rest are synonyms (e.g. '(\"south\" \"s\")).")
    (blocked-message :initarg :blocked-message
                     :accessor connection-blocked-message
                     :initform nil
-                    :documentation "Custom message shown when blocked (e.g. a riddle)"))
-  (:documentation "A bidirectional connection between two rooms, with a direction
-spec at each end (a string, or a list of strings with synonyms).
-Characters cannot traverse a blocked connection."))
+                    :documentation "Custom message shown when blocked (e.g. a riddle)")
+   (one-way :initarg :one-way
+            :accessor connection-one-way
+            :initform :both
+            :documentation "Directionality of the passage: :BOTH (default —
+passable either way), :A-TO-B (only from ROOM-A to ROOM-B), or :B-TO-A
+(only from ROOM-B to ROOM-A).")
+   (one-way-message :initarg :one-way-message
+                    :accessor connection-one-way-message
+                    :initform nil
+                    :documentation "Custom message shown when a character tries to
+traverse the passage the wrong way (e.g. a slope that only goes down)."))
+  (:documentation "A connection between two rooms, with a direction spec at
+each end (a string, or a list of strings with synonyms).  By default the
+connection is bidirectional; with :ONE-WAY set to :A-TO-B or :B-TO-A it can
+only be traversed in that direction.  Characters cannot traverse a blocked
+connection."))
 
 ;; ─── Printing ──────────────────────────────────────────────────────────────
 
@@ -45,13 +58,14 @@ Characters cannot traverse a blocked connection."))
   (print-unreadable-object (conn stream :type t)
     (let ((ra (connection-room-a conn))
           (rb (connection-room-b conn)))
-      (format stream "~A~@[ — ~A:~A <-> ~A:~A~]~@[ [BLOCKED]~]"
+      (format stream "~A~@[ — ~A:~A <-> ~A:~A~]~@[ [BLOCKED]~]~@[ [ONE-WAY]~]"
               (object-name conn)
               (and ra rb (object-name ra))
               (and ra (direction-primary (connection-direction-a conn)))
               (and rb (object-name rb))
               (and rb (direction-primary (connection-direction-b conn)))
-              (connection-blocked-p conn)))))
+              (connection-blocked-p conn)
+              (connection-one-way-p conn)))))
 
 ;; ─── Constructor ────────────────────────────────────────────────────────────
 
@@ -59,7 +73,8 @@ Characters cannot traverse a blocked connection."))
                         &key (name (format nil "passage between ~A and ~A"
                                            (object-name room-a)
                                            (object-name room-b)))
-                          blocked blocked-message)
+                          blocked blocked-message
+                          one-way one-way-message)
   "Create and return a new MUD-CONNECTION between ROOM-A and ROOM-B.
 
 DIRECTION-A is the direction spec from ROOM-A to ROOM-B (e.g. \"north\").
@@ -70,8 +85,18 @@ first element is the direction and the remaining elements are synonyms
 When BLOCKED is true the passage starts blocked.
 BLOCKED-MESSAGE is shown to characters when they try to pass.
 
+ONE-WAY controls the passage's directionality:
+  :BOTH    (default) passable in either direction
+  :A-TO-B  passable only from ROOM-A to ROOM-B
+  :B-TO-A  passable only from ROOM-B to ROOM-A
+ONE-WAY-MESSAGE is shown when a character tries to traverse the passage
+the wrong way (e.g. \"The slope is too steep to climb back up.\").
+
 The connection is NOT linked into any room's connections list or world;
 call CONNECT-ROOMS (in world.lisp) for that."
+  (when (and one-way (not (member one-way '(:both :a-to-b :b-to-a))))
+    (error "make-connection: :one-way must be :both, :a-to-b, or :b-to-a, got ~S"
+           one-way))
   (make-instance 'mud-connection
                  :name name
                  :room-a room-a
@@ -79,7 +104,9 @@ call CONNECT-ROOMS (in world.lisp) for that."
                  :direction-a (normalize-direction direction-a)
                  :direction-b (normalize-direction direction-b)
                  :blocked blocked
-                 :blocked-message blocked-message))
+                 :blocked-message blocked-message
+                 :one-way (or one-way :both)
+                 :one-way-message one-way-message))
 
 (defun normalize-direction (spec)
   "Downcase a direction SPEC (string or list of strings)."
@@ -161,6 +188,23 @@ a list of strings."
   (direction-primary (if (eq room (connection-room-a connection))
                          (connection-direction-a connection)
                          (connection-direction-b connection))))
+
+;; ─── One-way passages ───────────────────────────────────────────────────────
+
+(defun connection-one-way-p (connection)
+  "Return non-NIL if CONNECTION is one-way (not passable in both directions)."
+  (not (eq :both (connection-one-way connection))))
+
+(defun connection-usable-p (connection room)
+  "Return non-NIL if CONNECTION can be traversed from ROOM.
+
+Bidirectional connections (:BOTH) are always usable.  One-way connections
+are usable only from their passable end: :A-TO-B from ROOM-A, :B-TO-A from
+ROOM-B."
+  (ecase (connection-one-way connection)
+    (:both t)
+    (:a-to-b (eq room (connection-room-a connection)))
+    (:b-to-a (eq room (connection-room-b connection)))))
 
 ;; ─── Blocking management ───────────────────────────────────────────────────
 

@@ -228,3 +228,128 @@ Returns (values area tavern forest cave peak)."
   (let ((area (apeiron.core:new-area :name "Empty")))
     (is (zerop (apeiron.core:area-connected-components area)))
     (is (not (apeiron.core:area-connected-graph-p area)))))
+
+;; ─── One-way connections ────────────────────────────────────────────────────
+
+(test make-connection-one-way
+  "One-way connections record their direction and usability."
+  (let ((a (apeiron.core:new-room :name "A"))
+        (b (apeiron.core:new-room :name "B")))
+    ;; default is bidirectional
+    (let ((conn (apeiron.core:make-connection a "north" b "south")))
+      (is (eq :both (apeiron.core:connection-one-way conn)))
+      (is (not (apeiron.core:connection-one-way-p conn)))
+      (is (apeiron.core:connection-usable-p conn a))
+      (is (apeiron.core:connection-usable-p conn b)))
+    ;; :a-to-b is usable only from ROOM-A
+    (let ((conn (apeiron.core:make-connection a "north" b "south"
+                                              :one-way :a-to-b
+                                              :one-way-message "You can't go back.")))
+      (is (eq :a-to-b (apeiron.core:connection-one-way conn)))
+      (is (apeiron.core:connection-one-way-p conn))
+      (is (apeiron.core:connection-usable-p conn a))
+      (is (not (apeiron.core:connection-usable-p conn b)))
+      (is (equal "You can't go back."
+                 (apeiron.core:connection-one-way-message conn))))
+    ;; :b-to-a is usable only from ROOM-B
+    (let ((conn (apeiron.core:make-connection a "north" b "south"
+                                              :one-way :b-to-a)))
+      (is (not (apeiron.core:connection-usable-p conn a)))
+      (is (apeiron.core:connection-usable-p conn b)))
+    ;; invalid keyword is rejected
+    (signals error
+      (apeiron.core:make-connection a "north" b "south" :one-way :sideways))))
+
+(test one-way-room-exits
+  "Movement code only exposes and allows one-way passages from their
+  passable end."
+  (let ((area (apeiron.core:new-area :name "Slope"))
+        (top (apeiron.core:new-room :name "Cliff Top"))
+        (bottom (apeiron.core:new-room :name "Beach")))
+    (apeiron.core:area-connect-rooms! area top bottom
+                                      :to "down" :from "up"
+                                      :one-way :a-to-b
+                                      :one-way-message
+                                      "The slope is too steep to climb back up.")
+    ;; From the top (ROOM-A): the exit is visible and usable.
+    (is (equal (list "down")
+               (mapcar #'first (apeiron.core:room-exit-list top))))
+    (is (eq bottom (apeiron.core:room-exit-target top "down")))
+    (is (null (apeiron.core:room-exit-blocked-p top nil "down")))
+    ;; From the bottom (ROOM-B): no exit back up, with a flavor message.
+    (is (null (apeiron.core:room-exit-list bottom)))
+    (is (null (apeiron.core:room-exit-target bottom "up")))
+    (is (equal "The slope is too steep to climb back up."
+               (apeiron.core:room-exit-blocked-p bottom nil "up")))))
+
+(test one-way-generic-block-message
+  "Without a custom message a generic one-way message is shown."
+  (let ((area (apeiron.core:new-area :name "Secret"))
+        (a (apeiron.core:new-room :name "A"))
+        (b (apeiron.core:new-room :name "B")))
+    (apeiron.core:area-connect-rooms! area a b
+                                      :to "north" :from "south"
+                                      :one-way :a-to-b)
+    (is (equal "You can't go south from here."
+               (apeiron.core:room-exit-blocked-p b nil "south")))))
+
+(test connect-rooms!-one-way
+  "World-level connect-rooms! accepts and forwards :one-way."
+  (let* ((world (apeiron.core:new-world))
+         (a (apeiron.core:new-room :name "A"))
+         (b (apeiron.core:new-room :name "B")))
+    (apeiron.core:world-add-object! world a)
+    (apeiron.core:world-add-object! world b)
+    (let ((conn (apeiron.core:connect-rooms! world a b
+                                             :to "north" :from "south"
+                                             :one-way :a-to-b
+                                             :one-way-message
+                                             "The passage seals behind you.")))
+      (is (apeiron.core:connection-one-way-p conn))
+      (is (eq :a-to-b (apeiron.core:connection-one-way conn)))
+      (is (equal "The passage seals behind you."
+                 (apeiron.core:connection-one-way-message conn)))
+      (is (apeiron.core:connection-usable-p conn a))
+      (is (not (apeiron.core:connection-usable-p conn b))))))
+
+(test one-way-area-pathfinding
+  "Shortest path cannot cross a one-way passage in the wrong direction."
+  (let ((area (apeiron.core:new-area :name "Slope Zone"))
+        (top (apeiron.core:new-room :name "Top"))
+        (mid (apeiron.core:new-room :name "Middle"))
+        (bottom (apeiron.core:new-room :name "Bottom")))
+    ;; top -> mid is one-way down; mid <-> bottom is bidirectional
+    (apeiron.core:area-connect-rooms! area top mid
+                                      :to "down" :from "up"
+                                      :one-way :a-to-b)
+    (apeiron.core:area-connect-rooms! area mid bottom
+                                      :to "down" :from "up")
+    (is (equal (list top mid bottom)
+               (apeiron.core:area-shortest-path area top bottom)))
+    (is (equal (list bottom mid)
+               (apeiron.core:area-shortest-path area bottom mid)))
+    ;; cannot return through the one-way passage
+    (is (null (apeiron.core:area-shortest-path area bottom top)))
+    (is (null (apeiron.core:area-route area bottom top)))))
+
+(test one-way-area-reachability
+  "Reachability respects one-way passages."
+  (let ((area (apeiron.core:new-area :name "Slope Zone"))
+        (top (apeiron.core:new-room :name "Top"))
+        (mid (apeiron.core:new-room :name "Middle"))
+        (bottom (apeiron.core:new-room :name "Bottom")))
+    (apeiron.core:area-connect-rooms! area top mid
+                                      :to "down" :from "up"
+                                      :one-way :a-to-b)
+    (apeiron.core:area-connect-rooms! area mid bottom
+                                      :to "down" :from "up")
+    ;; down the slope: everything reachable (sorted by name)
+    (is (equal (list bottom mid top)
+               (sort (apeiron.core:area-reachable-rooms area top)
+                     #'string< :key #'apeiron.core:object-name)))
+    ;; up from the bottom: the one-way edge stops you (sorted by name)
+    (is (equal (list bottom mid)
+               (sort (apeiron.core:area-reachable-rooms area bottom)
+                     #'string< :key #'apeiron.core:object-name)))
+    (is (apeiron.core:area-reachable-p area top bottom))
+    (is (not (apeiron.core:area-reachable-p area bottom top)))))

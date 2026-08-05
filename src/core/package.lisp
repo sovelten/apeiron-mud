@@ -157,6 +157,10 @@
    #:connection-exit-blocked-message
    #:connection-set-challenge
    #:connection-blocked-message
+   #:connection-one-way
+   #:connection-one-way-message
+   #:connection-one-way-p
+   #:connection-usable-p
 
    ;; Area system
    #:mud-area

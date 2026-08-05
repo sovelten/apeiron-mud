@@ -54,16 +54,19 @@
 (defun room-exit-target (room direction)
   "Get the target room when moving in DIRECTION from ROOM.
 
-Returns the room at the other end of the matching Connection, or NIL."
+Returns the room at the other end of the matching Connection, or NIL.
+One-way connections only yield a target from their passable end."
   (let ((conn (connection-find room direction)))
-    (when conn
+    (when (and conn (connection-usable-p conn room))
       (connection-other-room conn room))))
 
 (defun room-exit-list (room)
-  "Return a list of (direction connection) for every exit in ROOM.
+  "Return a list of (direction connection) for every usable exit in ROOM.
 
-DIRECTION is a lowercase string, CONNECTION is the MUD-CONNECTION."
+DIRECTION is a lowercase string, CONNECTION is the MUD-CONNECTION.
+One-way connections are only listed from their passable end."
   (loop for conn in (room-connections room)
+        when (connection-usable-p conn room)
         collect (list (connection-direction-to conn room) conn)))
 
 (defun synonyms-for-room (conn room)
@@ -106,13 +109,18 @@ Examples:
 (defun room-exit-blocked-p (room character direction)
   "Return a blocking message if the character cannot use this exit yet.
 
-Three independent checks:
+Four independent checks:
+0. One-way — the connection cannot be traversed from this room
 1. Regular block — the connection is blocked for everyone (locked door)
 2. Challenge block — the connection requires a flag the character doesn't have (riddle)
 3. Flag gate — the room requires a flag the character doesn't have (defeat NPC)"
   (let* ((dir (string-downcase direction))
          (conn (connection-find room dir)))
     (or
+     ;; 0. One-way — wrong end of a one-way passage
+     (when (and conn (not (connection-usable-p conn room)))
+       (or (connection-one-way-message conn)
+           (format nil "You can't go ~A from here." direction)))
      ;; 1. Regular block — blocked for everyone
      (connection-exit-blocked-message room dir)
      ;; 2. Challenge block — stored on the connection, per-character

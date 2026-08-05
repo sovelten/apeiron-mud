@@ -17,6 +17,12 @@
 ;;;; Connections registered through an area are also pushed onto the
 ;;;; endpoints' ROOM-CONNECTIONS lists (like CONNECT-ROOMS! at the world
 ;;;; level), so the existing movement / exit code keeps working.
+;;;;
+;;;; One-way connections (CONNECTION-ONE-WAY set to :A-TO-B or :B-TO-A)
+;;;; are respected by the path-finding and reachability functions:
+;;;; edges are only crossed from their passable end.  CONNECTED-COMPONENTS
+;;;; still counts weakly (ignoring direction), matching the intuitive
+;;;; notion of "this area is one place even if some passages are one-way".
 
 (in-package #:apeiron.core)
 
@@ -96,13 +102,18 @@ Returns CONNECTION."
     connection))
 
 (defun area-connect-rooms! (area room-a room-b
-                           &key to from name blocked blocked-message)
+                           &key to from name blocked blocked-message
+                             one-way one-way-message)
   "Create a bidirectional Connection between ROOM-A and ROOM-B inside AREA.
 
 TO is the direction from ROOM-A to ROOM-B (e.g. \"north\"); FROM is the
 direction from ROOM-B to ROOM-A (e.g. \"south\").  Each accepts a string
 or a list of strings with synonyms (e.g. '(\"north\" \"n\")).  Neither may
 be NIL.  BLOCKED / BLOCKED-MESSAGE behave like CONNECT-ROOMS!.
+
+ONE-WAY restricts the passage to a single direction (:A-TO-B or :B-TO-A,
+default :BOTH); ONE-WAY-MESSAGE is the message shown when a character tries
+to traverse it the wrong way.
 
 Creates the MUD-CONNECTION, registers it in the area graph and returns it."
   (when (or (null to) (null from))
@@ -111,7 +122,9 @@ Creates the MUD-CONNECTION, registers it in the area graph and returns it."
    area
    (make-connection room-a to room-b from
                     :name name :blocked blocked
-                    :blocked-message blocked-message)))
+                    :blocked-message blocked-message
+                    :one-way one-way
+                    :one-way-message one-way-message)))
 
 (defun area-remove-connection! (area connection)
   "Remove CONNECTION from AREA: drop its graph edge and remove it from
@@ -180,27 +193,55 @@ rooms are added automatically).  Returns the MUD-AREA."
 
 ;; ─── Graph algorithms ──────────────────────────────────────────────────────
 
+(defun area-bfs-tree (area room)
+  "Breadth-first traversal of AREA starting at ROOM, respecting one-way
+connections (an edge is only crossed when its connection is usable from
+the room you are leaving).
+
+Returns a hash-table mapping each reachable vertex to its parent vertex
+(ROOM's vertex maps to :ROOT).  Returns an empty hash-table when ROOM is
+not part of the area."
+  (let* ((graph (area-graph area))
+         (start (cl-graph:find-vertex graph room nil))
+         (parents (make-hash-table :test #'eq))
+         (queue (list start)))
+    (when start
+      (setf (gethash start parents) :root)
+      (loop while queue
+            for current = (pop queue)
+            for current-room = (cl-graph:element current)
+            do (dolist (edge (cl-graph:edges current))
+                 (let* ((neighbor (cl-graph:other-vertex edge current))
+                        (conn (cl-graph:element edge)))
+                   (when (and (not (gethash neighbor parents))
+                              (or (null conn)
+                                  (connection-usable-p conn current-room)))
+                     (setf (gethash neighbor parents) current)
+                     (push neighbor queue))))))
+    parents))
+
 (defun area-shortest-path (area room-a room-b)
   "Return the shortest path from ROOM-A to ROOM-B as a list of rooms
 (inclusive), or NIL if ROOM-B is unreachable from ROOM-A.
 
-The path is shortest in the number of hops (all edges count equally).
-For ROOM-A = ROOM-B the trivial path (ROOM-A) is returned."
-  (let ((graph (area-graph area)))
-    (when (and (cl-graph:find-vertex graph room-a nil)
-               (cl-graph:find-vertex graph room-b nil))
+The path is shortest in the number of hops (all edges count equally) and
+respects one-way connections: a one-way passage can only be used from its
+passable end.  For ROOM-A = ROOM-B the trivial path (ROOM-A) is returned."
+  (let* ((graph (area-graph area))
+         (start (cl-graph:find-vertex graph room-a nil))
+         (target (cl-graph:find-vertex graph room-b nil)))
+    (when (and start target)
       (if (eq room-a room-b)
           (list room-a)
-          (let ((found nil)
-                (start (cl-graph:find-vertex graph room-a)))
-            (loop for depth from 1 below (length (cl-graph:vertexes graph))
-                  while (not found) do
-                    (cl-graph:map-shortest-paths
-                     graph start depth
-                     (lambda (path)
-                       (when (eq (cl-graph:element (car (last path))) room-b)
-                         (setf found (mapcar #'cl-graph:element path))))))
-            found)))))
+          (let ((parents (area-bfs-tree area room-a)))
+            (when (gethash target parents)
+              (let ((path nil)
+                    (v target))
+                (loop
+                  (push (cl-graph:element v) path)
+                  (if (eq v start)
+                      (return path)
+                      (setf v (gethash v parents)))))))))))
 
 (defun area-route (area room-a room-b)
   "Return the list of MUD-CONNECTIONs traversed by a shortest path from
@@ -220,11 +261,12 @@ in AREA."
 
 (defun area-reachable-rooms (area room)
   "Return every room reachable from ROOM via connections in AREA
-(including ROOM itself)."
-  (let ((vertex (cl-graph:find-vertex (area-graph area) room nil)))
-    (when vertex
-      (mapcar #'cl-graph:element
-              (cl-graph:get-transitive-closure (list vertex))))))
+(including ROOM itself), respecting one-way connections: a one-way
+passage can only be used from its passable end."
+  (let ((parents (area-bfs-tree area room)))
+    (mapcar #'cl-graph:element
+            (loop for vertex being the hash-keys of parents
+                  collect vertex))))
 
 (defun area-connected-components (area)
   "Return the number of connected components in AREA (0 when empty).
