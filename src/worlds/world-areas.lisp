@@ -25,7 +25,7 @@ character has FLAG.  MESSAGE is shown when they try to pass."
 
 (defun build-team-rocket-cavern ()
   "Build the Team Rocket cavern maze as a MUD-AREA with fights and
-challenges.  Returns (values AREA ENTRANCE-ROOM)."
+challenges.  The area's entrance is the cavern mouth.  Returns the area."
   (let ((area (new-area :name "Team Rocket Cavern")))
     (let* ((entrance (new-room
                       :name "Team Rocket Cavern Mouth"
@@ -172,13 +172,14 @@ challenges.  Returns (values AREA ENTRANCE-ROOM)."
       (container-add-object elite-patrol elite)
       (container-add-object boss-chamber boss)
 
-      (values area entrance))))
+      (area-set-entrance! area entrance)
+      area)))
 
 ;; ─── Desert Oasis Mall ───────────────────────────────────────────────────────
 
 (defun build-shopping-mall ()
-  "Build the Desert Oasis Mall as a MUD-AREA.
-Returns (values AREA ENTRANCE-ROOM)."
+  "Build the Desert Oasis Mall as a MUD-AREA.  The area's entrance is the
+main concourse.  Returns the area."
   (let ((area (new-area :name "Desert Oasis Mall")))
     (let ((mall (new-room
                  :name "Desert Oasis Mall"
@@ -199,13 +200,15 @@ Returns (values AREA ENTRANCE-ROOM)."
       (area-connect-north-south! area mall food-court)
       (area-connect-west-east! area mall arcade)
       (area-connect-west-east! area fashion mall)
-      (values area mall))))
+      (area-set-entrance! area mall)
+      area)))
 
 ;; ─── Apeiron Hub ─────────────────────────────────────────────────────────────
 
 (defun build-apeiron-hub ()
   "Build the Apeiron Hub area: the nexus, the four biome rooms, and the
-guestbook (placed in the nexus).  Returns (values AREA NEXUS-ROOM)."
+guestbook (placed in the nexus).  The area's entrance is the nexus.
+Returns the area."
   (let* ((nexus (new-room :name "Apeiron Nexus"
                           :description "You are in a place outside of time and space. All possibilities and all things conjoin here. You can go everywhere, do everything. Be everything. What will you do?"))
          (forest (new-room :name "Puzzling Forest"
@@ -227,29 +230,32 @@ guestbook (placed in the nexus).  Returns (values AREA NEXUS-ROOM)."
     (area-connect-west-east! area nexus desert)
     (area-connect-west-east! area swamp nexus)
     (area-connect-north-south! area nexus volcano)
-    (values area nexus)))
+    (area-set-entrance! area nexus)
+    area))
 
 ;; ─── Default world ───────────────────────────────────────────────────────────
 
 (defun new-default-world ()
   "Create the default Apeiron world with all areas (hub, mall, cavern),
-registered via WORLD-ADD-AREA! and linked to one another."
+registered via WORLD-ADD-AREA! and linked to one another.  Each area's
+entrance is used for the cross-area links and the world's starting room."
   (let ((world (make-instance 'mud-world)))
-    (multiple-value-bind (hub nexus) (build-apeiron-hub)
+    (let ((hub (build-apeiron-hub))
+          (mall (build-shopping-mall))
+          (cavern (build-team-rocket-cavern)))
       (world-add-area! world hub)
-      (multiple-value-bind (mall mall-concourse) (build-shopping-mall)
-        (world-add-area! world mall)
-        (multiple-value-bind (cavern cavern-mouth) (build-team-rocket-cavern)
-          (world-add-area! world cavern)
-          ;; Cross-area links
-          (let ((desert (area-find-room hub "A Sun-Bleached Desert")))
-            (setf (object-description desert)
-                  (concatenate 'string (object-description desert)
-                               " A shimmering glass door materializes from the heat haze — frosted letters read 'DESERT OASIS MALL'."))
-            ;; Desert door → shopping mall
-            (connect-rooms! world desert mall-concourse :to "door" :from "desert")
-            ;; Mall arcade → Team Rocket cavern maze
-            (connect-rooms! world (area-find-room mall "Arcade Zone") cavern-mouth
-                            :to "maintenance" :from "mall"))
-          (world-set-starting-room! world nexus))))
+      (world-add-area! world mall)
+      (world-add-area! world cavern)
+      ;; Cross-area links
+      (let ((desert (area-find-room hub "A Sun-Bleached Desert")))
+        (setf (object-description desert)
+              (concatenate 'string (object-description desert)
+                           " A shimmering glass door materializes from the heat haze — frosted letters read 'DESERT OASIS MALL'."))
+        ;; Desert door → shopping mall
+        (connect-rooms! world desert (area-entrance mall) :to "door" :from "desert")
+        ;; Mall arcade → Team Rocket cavern maze
+        (connect-rooms! world (area-find-room mall "Arcade Zone") (area-entrance cavern)
+                        :to "maintenance" :from "mall")
+        ;; Players start at the hub's entrance
+        (world-set-starting-room! world (area-entrance hub))))
     world))

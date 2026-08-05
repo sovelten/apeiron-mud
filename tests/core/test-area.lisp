@@ -460,3 +460,22 @@ Returns (values area tavern forest cave peak)."
     ;; nothing was registered
     (is (= 1 (apeiron.core:world-total-areas world)))
     (is (eq area-a (apeiron.core:world-area-of-room world room)))))
+
+(test area-entrance
+  "An area can have an optional entrance room."
+  ;; default: no entrance
+  (let ((area (apeiron.core:new-area :name "No Entrance")))
+    (is (null (apeiron.core:area-entrance area))))
+  ;; set/read via area-set-entrance!
+  (let ((area (apeiron.core:new-area :name "With Entrance"))
+        (room (apeiron.core:new-room :name "Front Door")))
+    (apeiron.core:area-add-room! area room)
+    (is (eq room (apeiron.core:area-set-entrance! area room)))
+    (is (eq room (apeiron.core:area-entrance area)))
+    ;; clear it
+    (apeiron.core:area-set-entrance! area nil)
+    (is (null (apeiron.core:area-entrance area))))
+  ;; :entrance initarg via new-area
+  (let* ((room (apeiron.core:new-room :name "Gate"))
+         (area (apeiron.core:new-area :name "Init Entrance" :entrance room)))
+    (is (eq room (apeiron.core:area-entrance area)))))

@@ -168,6 +168,8 @@
    #:new-area
    #:area-rooms
    #:area-connections
+   #:area-entrance
+   #:area-set-entrance!
    #:area-graph
    #:area-add-room!
    #:area-remove-room!

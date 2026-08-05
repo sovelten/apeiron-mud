@@ -429,6 +429,11 @@ deleted during world restore — only owned characters survive a crash."
            (is (= 3 (apeiron.core:world-total-rooms new-world)))
            (is (= 3 (apeiron.core:area-room-count restored)))
            (is (= 2 (apeiron.core:area-connection-count restored)))
+           ;; the entrance survived and points at the restored room
+           (is (typep (apeiron.core:area-entrance restored)
+                      'apeiron.persistence:persistent-room))
+           (is (equal "Cavern Entrance"
+                      (apeiron.core:object-name (apeiron.core:area-entrance restored))))
 
            ;; graph was rebuilt from the restored connections
            (let ((entrance (apeiron.core:area-find-room restored "Cavern Entrance"))

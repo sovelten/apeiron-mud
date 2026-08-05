@@ -36,6 +36,11 @@ convenience ID index; the graph is the authoritative room set.")
                 :accessor area-connections
                 :initform '()
                 :documentation "Flat list of MUD-CONNECTION objects in this area.")
+   (entrance :initarg :entrance
+             :accessor area-entrance
+             :initform nil
+             :documentation "Optional entrance room of the area (a MUD-ROOM),
+or NIL when the area has no designated entrance.")
    (graph :initarg :graph
           :accessor area-graph
           :initform (make-instance 'cl-graph:graph-container
@@ -48,10 +53,11 @@ and reachability queries can run on top of the plain room/connection data."))
 
 (defmethod print-object ((area mud-area) stream)
   (print-unreadable-object (area stream :type t)
-    (format stream "~A (~D rooms, ~D connections)"
+    (format stream "~A (~D rooms, ~D connections)~@[ — entrance: ~A~]"
             (object-name area)
             (area-room-count area)
-            (area-connection-count area))))
+            (area-connection-count area)
+            (and (area-entrance area) (object-name (area-entrance area))))))
 
 ;; ─── Construction ──────────────────────────────────────────────────────────
 
@@ -180,11 +186,18 @@ the room/connection lists.  Returns AREA."
      :if-duplicate-do :ignore))
   area)
 
-(defun new-area (&key name (rooms nil) (connections nil))
+(defun area-set-entrance! (area room)
+  "Set ROOM as the entrance of AREA, or clear it with NIL.
+
+ROOM should be one of the area's rooms (or NIL).  Returns ROOM."
+  (setf (area-entrance area) room))
+
+(defun new-area (&key name (rooms nil) (connections nil) (entrance nil))
   "Create a new empty area, optionally pre-populated with ROOMS (a list of
-MUD-ROOMs) and CONNECTIONS (a list of MUD-CONNECTIONs, whose endpoint
-rooms are added automatically).  Returns the MUD-AREA."
-  (let ((area (make-instance 'mud-area :name name)))
+MUD-ROOMs), CONNECTIONS (a list of MUD-CONNECTIONs, whose endpoint
+rooms are added automatically), and an optional ENTRANCE room.  Returns
+the MUD-AREA."
+  (let ((area (make-instance 'mud-area :name name :entrance entrance)))
     (dolist (room rooms)
       (area-add-room! area room))
     (dolist (connection connections)

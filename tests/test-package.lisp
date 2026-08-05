@@ -141,7 +141,8 @@ tests that need directional connections on the starting room."
 (defun test-world-with-area ()
   "Create a transient world containing one area: a three-room chain where
 the last hop (hall -> treasure) is one-way.  The area, its rooms and its
-connections are registered via WORLD-ADD-AREA!."
+connections are registered via WORLD-ADD-AREA!, and the cavern entrance
+is set to the entrance room."
   (let ((world (make-instance 'mud-world)))
     (let ((area (new-area :name "Test Cavern")))
       (let ((entrance (new-room :name "Cavern Entrance"))
@@ -152,6 +153,7 @@ connections are registered via WORLD-ADD-AREA!."
                              :to "east" :from "west"
                              :one-way :a-to-b
                              :one-way-message "The vault door slams shut behind you.")
+        (area-set-entrance! area entrance)
         (world-add-area! world area)
         (world-set-starting-room! world entrance)))
     world))
