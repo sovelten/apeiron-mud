@@ -141,6 +141,27 @@ Returns CONNECTION."
           (remove connection (room-connections room-b))))
   connection)
 
+(defun area-rebuild-graph! (area)
+  "Rebuild the area's cl-graph index from its ROOMS and CONNECTIONS slots.
+
+The graph is a derived index; this resets it to a fresh graph-container
+and re-adds every room as a vertex and every connection as an edge.  It
+is called automatically after a persistent restore (the graph is a
+transient slot and is not stored) and is useful after directly editing
+the room/connection lists.  Returns AREA."
+  (setf (area-graph area)
+        (make-instance 'cl-graph:graph-container :default-edge-type :undirected))
+  (dolist (room (loop for r being the hash-values of (area-rooms area)
+                      collect r))
+    (cl-graph:add-vertex (area-graph area) room))
+  (dolist (conn (area-connections area))
+    (cl-graph:add-edge-between-vertexes
+     (area-graph area) (connection-room-a conn) (connection-room-b conn)
+     :edge-type :undirected
+     :value conn
+     :if-duplicate-do :ignore))
+  area)
+
 (defun new-area (&key name (rooms nil) (connections nil))
   "Create a new empty area, optionally pre-populated with ROOMS (a list of
 MUD-ROOMs) and CONNECTIONS (a list of MUD-CONNECTIONs, whose endpoint

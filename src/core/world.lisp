@@ -20,7 +20,11 @@
    (rooms :initarg :rooms
           :accessor world-rooms
           :initform (make-hash-table :test #'eql)
-          :documentation "All rooms in the world, keyed by world-level ID."))
+          :documentation "All rooms in the world, keyed by world-level ID.")
+   (areas :initarg :areas
+          :accessor world-areas
+          :initform (make-hash-table :test #'eql)
+          :documentation "All areas in the world, keyed by world-level ID."))
   (:documentation "Configuration root for the MUD world.  Rooms, guestbooks,
    and other objects are stored as independent BKNR persistent objects."))
 
@@ -44,6 +48,9 @@ indices, and return the object."
   ;; Also register in rooms hash table if it's a room
   (when (typep object 'mud-room)
     (setf (gethash (object-id object) (world-rooms world)) object))
+  ;; Also register in areas hash table if it's an area
+  (when (typep object 'mud-area)
+    (setf (gethash (object-id object) (world-areas world)) object))
   ;; Also register in characters hash table if it's a character
   (when (typep object 'mud-character)
     (setf (gethash (object-id object) (world-characters world)) object))
@@ -143,7 +150,7 @@ it does not assign IDs or index into world tables."
 (defgeneric world-remove-object! (world object)
   (:documentation
    "Remove OBJECT from all world indices (world-objects, world-characters,
-world-rooms).  The default method handles hash-table removal; the
+world-rooms, world-areas).  The default method handles hash-table removal; the
 persistence layer specialises this to also destroy the BKNR object.
 Returns the removed OBJECT.")
   (:method (world object)
@@ -152,6 +159,8 @@ Returns the removed OBJECT.")
       (remhash (object-id object) (world-characters world)))
     (when (typep object 'mud-room)
       (remhash (object-id object) (world-rooms world)))
+    (when (typep object 'mud-area)
+      (remhash (object-id object) (world-areas world)))
     (log-message "~A removed from world indices" (object-name object))
     object))
 
@@ -232,6 +241,56 @@ Returns an empty list when no objects match."
 (defun world-total-rooms (world)
   "Return the number of rooms in the world."
   (hash-table-count (world-rooms world)))
+
+;; ─── World-level area management ─────────────────────────────────────────
+
+(defun world-add-area! (world area)
+  "Register AREA and everything in it (rooms and connections) in WORLD.
+
+Each room and connection in the area is registered with the world
+(assigning world-level IDs and materializing them for persistent worlds),
+then the area itself is registered and indexed in WORLD-AREAS.  The call
+is idempotent: objects that are already registered are simply re-indexed.
+Returns AREA."
+  (dolist (room (area-room-list area))
+    (create-object! world room))
+  (dolist (conn (area-connections area))
+    (create-object! world conn))
+  (create-object! world area)
+  area)
+
+(defun world-remove-area! (world area)
+  "Remove AREA from WORLD's indices (not its rooms or connections, which
+may be shared with other areas).  Returns AREA."
+  (world-remove-object! world area))
+
+(defun world-area-by-id (world area-id)
+  "Look up an area in the world by its world-level ID."
+  (gethash area-id (world-areas world)))
+
+(defun world-all-areas (world)
+  "Return the list of all areas registered in the world."
+  (loop for area being the hash-values of (world-areas world)
+        collect area))
+
+(defun world-total-areas (world)
+  "Return the number of areas registered in the world."
+  (hash-table-count (world-areas world)))
+
+(defun world-area-with-name (world name)
+  "Return the first area in WORLD with the given NAME (case-insensitive),
+or NIL."
+  (loop for area being the hash-values of (world-areas world)
+        when (string-equal (object-name area) name)
+        return area))
+
+(defun world-area-of-room (world room)
+  "Return the first area in WORLD that contains ROOM, or NIL.
+
+A room may belong to more than one area; the first one found is returned."
+  (loop for area being the hash-values of (world-areas world)
+        when (area-room-p area room)
+        return area))
 
 (defgeneric create-object! (world object)
   (:documentation "Register OBJECT in WORLD, materializing it for persistent worlds.

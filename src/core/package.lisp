@@ -186,6 +186,7 @@
    #:area-reachable-rooms
    #:area-connected-components
    #:area-connected-graph-p
+   #:area-rebuild-graph!
 
    ;; Guestbook
    #:mud-guestbook
@@ -288,10 +289,18 @@
    #:world-characters
    #:world-objects
    #:world-rooms
+   #:world-areas
    #:get-config-key
    #:world-gen-id!
    #:world-add-object!
    #:world-remove-object!
+   #:world-add-area!
+   #:world-remove-area!
+   #:world-area-by-id
+   #:world-all-areas
+   #:world-total-areas
+   #:world-area-with-name
+   #:world-area-of-room
    #:world-set-starting-room!
    #:starting-room
    #:place-character!

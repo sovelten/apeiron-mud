@@ -353,3 +353,64 @@ Returns (values area tavern forest cave peak)."
                      #'string< :key #'apeiron.core:object-name)))
     (is (apeiron.core:area-reachable-p area top bottom))
     (is (not (apeiron.core:area-reachable-p area bottom top)))))
+
+;; ─── World areas ────────────────────────────────────────────────────────────
+
+(test world-add-area!
+  "world-add-area! registers the area plus its rooms and connections,
+  and the world-level area queries work."
+  (let ((world (apeiron.core:new-world))
+        (area (apeiron.core:new-area :name "Cavern")))
+    (let ((entrance (apeiron.core:new-room :name "Entrance"))
+          (treasure (apeiron.core:new-room :name "Treasure")))
+      (apeiron.core:area-connect-rooms! area entrance treasure
+                                        :to "east" :from "west")
+      (apeiron.core:world-add-area! world area)
+      (is (= 1 (apeiron.core:world-total-areas world)))
+      (is (eq area (apeiron.core:world-area-by-id world
+                                                  (apeiron.core:object-id area))))
+      (is (eq area (apeiron.core:world-area-with-name world "cavern")))
+      (is (eq area (apeiron.core:world-area-of-room world entrance)))
+      (is (eq area (apeiron.core:world-area-of-room world treasure)))
+      ;; rooms and the connection are registered in the world too
+      (is (= 2 (apeiron.core:world-total-rooms world)))
+      (is (eq entrance (apeiron.core:world-room-by-id world
+                                                      (apeiron.core:object-id entrance))))
+      (is (member area (apeiron.core:world-all-areas world)))
+      ;; idempotent — re-adding does not duplicate anything
+      (apeiron.core:world-add-area! world area)
+      (is (= 1 (apeiron.core:world-total-areas world)))
+      (is (= 2 (apeiron.core:world-total-rooms world)))
+      (is (= 1 (length (apeiron.core:room-connections entrance)))))))
+
+(test world-remove-area!
+  "Removing an area unindexes it but keeps its rooms."
+  (let ((world (apeiron.core:new-world))
+        (area (apeiron.core:new-area :name "Cavern")))
+    (let ((entrance (apeiron.core:new-room :name "Entrance")))
+      (apeiron.core:area-add-room! area entrance)
+      (apeiron.core:world-add-area! world area)
+      (is (= 1 (apeiron.core:world-total-areas world)))
+      (is (= 1 (apeiron.core:world-total-rooms world)))
+      (apeiron.core:world-remove-area! world area)
+      (is (zerop (apeiron.core:world-total-areas world)))
+      (is (= 1 (apeiron.core:world-total-rooms world))
+          "Rooms should survive area removal"))))
+
+(test area-rebuild-graph!
+  "area-rebuild-graph! reconstructs the graph from the stored slots."
+  (let ((area (apeiron.core:new-area :name "Rebuild"))
+        (a (apeiron.core:new-room :name "A"))
+        (b (apeiron.core:new-room :name "B"))
+        (c (apeiron.core:new-room :name "C")))
+    (apeiron.core:area-connect-rooms! area a b :to "north" :from "south")
+    (apeiron.core:area-connect-rooms! area b c :to "east" :from "west")
+    (is (= 3 (apeiron.core:area-room-count area)))
+    (is (= 2 (apeiron.core:area-connection-count area)))
+    ;; nuke the graph as a persistent restore would (unbound transient slot)
+    (slot-makunbound area 'apeiron.core::graph)
+    (apeiron.core:area-rebuild-graph! area)
+    (is (= 3 (apeiron.core:area-room-count area)))
+    (is (= 2 (apeiron.core:area-connection-count area)))
+    (is (equal (list a b c)
+               (apeiron.core:area-shortest-path area a c)))))
