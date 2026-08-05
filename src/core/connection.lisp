@@ -123,6 +123,34 @@ call CONNECT-ROOMS (in world.lisp) for that."
   "Return the primary direction name from a direction SPEC (string or list)."
   (if (listp spec) (first spec) spec))
 
+;; ─── Standard cardinal directions ──────────────────────────────────────────
+
+(defparameter *cardinal-synonyms*
+  '(("north" "n")
+    ("south" "s")
+    ("east"  "e")
+    ("west"  "w"))
+  "Standard single-letter synonyms for the four cardinal directions, used
+by CARDINAL-SPEC and the CONNECT-*/AREA-CONNECT-* cardinal helpers.")
+
+(defun cardinal-spec (direction)
+  "Return the standard direction spec for a cardinal DIRECTION: the
+direction name plus its conventional single-letter synonym.
+
+  (cardinal-spec \"north\") => (\"north\" \"n\")
+  (cardinal-spec \"south\") => (\"south\" \"s\")
+  (cardinal-spec \"east\")  => (\"east\" \"e\")
+  (cardinal-spec \"west\")  => (\"west\" \"w\")
+
+Signals an error for non-cardinal directions.  The result can be passed
+directly as the :TO / :FROM argument of CONNECT-ROOMS!."
+  (let ((spec (assoc (string-downcase direction) *cardinal-synonyms*
+                     :test #'string=)))
+    (unless spec
+      (error "cardinal-spec: ~S is not a cardinal direction (north/south/east/west)."
+             direction))
+    (list (first spec) (second spec))))
+
 (defun add-synonym (direction-or-connection &rest args)
   "Add synonyms to a direction spec or to an existing connection.
 

@@ -104,17 +104,19 @@ Returns the registered MUD-CONNECTION instance."))
 (defun connect-north-south! (world north-room south-room &rest args)
   "Connect NORTH-ROOM (left arg) south to SOUTH-ROOM (right arg).
 From SOUTH-ROOM you go north to NORTH-ROOM.
-Synonyms: \"s\" from north-room, \"n\" from south-room."
+Standard cardinal synonyms are added: \"s\" from north-room, \"n\" from
+south-room."
   (apply #'connect-rooms! world north-room south-room
-         :to (add-synonym "south" "s") :from (add-synonym "north" "n")
+         :to (cardinal-spec "south") :from (cardinal-spec "north")
          args))
 
 (defun connect-west-east! (world west-room east-room &rest args)
   "Connect WEST-ROOM (left arg) east to EAST-ROOM (right arg).
 From EAST-ROOM you go west to WEST-ROOM.
-Synonyms: \"e\" from west-room, \"w\" from east-room."
+Standard cardinal synonyms are added: \"e\" from west-room, \"w\" from
+east-room."
   (apply #'connect-rooms! world west-room east-room
-         :to (add-synonym "east" "e") :from (add-synonym "west" "w")
+         :to (cardinal-spec "east") :from (cardinal-spec "west")
          args))
 
 (defun world-set-starting-room! (world room)
@@ -245,15 +247,34 @@ Returns an empty list when no objects match."
 ;; ─── World-level area management ─────────────────────────────────────────
 
 (defun world-add-area! (world area)
-  "Register AREA and everything in it (rooms and connections) in WORLD.
+  "Register AREA and everything in it (rooms, contained objects, and
+connections) in WORLD.
 
 Each room and connection in the area is registered with the world
 (assigning world-level IDs and materializing them for persistent worlds),
-then the area itself is registered and indexed in WORLD-AREAS.  The call
-is idempotent: objects that are already registered are simply re-indexed.
+as is every non-character object contained in the area's rooms (NPCs,
+guestbooks, items).  The area itself is then registered and indexed in
+WORLD-AREAS.  The call is idempotent: objects that are already registered
+are simply re-indexed.
+
+A room may belong to at most one area: if any room in AREA already belongs
+to a different area of WORLD, an error is signaled before anything is
+registered.
+
 Returns AREA."
+  ;; Enforce the one-area-per-room invariant before mutating anything.
+  (dolist (room (area-room-list area))
+    (let ((owner (world-area-of-room world room)))
+      (when (and owner (not (eq owner area)))
+        (error "world-add-area!: room ~A already belongs to area ~A; a room can only belong to one area."
+               (object-name room) (object-name owner)))))
+  ;; Rooms, then everything inside them, then connections, then the area.
   (dolist (room (area-room-list area))
     (create-object! world room))
+  (dolist (room (area-room-list area))
+    (dolist (obj (container-all-objects room))
+      (unless (typep obj 'mud-character)
+        (create-object! world obj))))
   (dolist (conn (area-connections area))
     (create-object! world conn))
   (create-object! world area)
@@ -285,9 +306,10 @@ or NIL."
         return area))
 
 (defun world-area-of-room (world room)
-  "Return the first area in WORLD that contains ROOM, or NIL.
+  "Return the area in WORLD that contains ROOM, or NIL.
 
-A room may belong to more than one area; the first one found is returned."
+The one-area-per-room invariant (enforced by WORLD-ADD-AREA!) guarantees
+a room belongs to at most one area, so this is unambiguous."
   (loop for area being the hash-values of (world-areas world)
         when (area-room-p area room)
         return area))

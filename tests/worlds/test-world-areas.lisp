@@ -107,3 +107,38 @@
     (is (null (apeiron.core:room-exit-blocked-p gallery character "east")))
     ;; Character's flag should be set
     (is (apeiron.core:object-get-property character "solved-meowth-riddle"))))
+
+(test default-world-areas
+  "The default world is organized into three areas (hub, mall, cavern),
+  each room belongs to exactly one area, and cross-area links work."
+  (let* ((world (apeiron.persistence:world-restore-or-initialize
+                 :force-new t
+                 :initializer #'apeiron.worlds:new-default-world)))
+    (is (= 3 (apeiron.core:world-total-areas world)))
+    (let ((hub (apeiron.core:world-area-with-name world "Apeiron Hub"))
+          (mall (apeiron.core:world-area-with-name world "Desert Oasis Mall"))
+          (cavern (apeiron.core:world-area-with-name world "Team Rocket Cavern")))
+      (is (not (null hub)))
+      (is (not (null mall)))
+      (is (not (null cavern)))
+      (is (= 5 (apeiron.core:area-room-count hub)))
+      (is (= 4 (apeiron.core:area-room-count mall)))
+      (is (= 11 (apeiron.core:area-room-count cavern)))
+      ;; world-area-of-room resolves each room to exactly one area
+      (is (eq hub (apeiron.core:world-area-of-room
+                   world (apeiron.core:area-find-room hub "A Sun-Bleached Desert"))))
+      (is (eq mall (apeiron.core:world-area-of-room
+                    world (apeiron.core:area-find-room mall "Arcade Zone"))))
+      (is (eq cavern (apeiron.core:world-area-of-room
+                      world (apeiron.core:area-find-room cavern "Grunt Patrol Route"))))
+      ;; areas do not share rooms
+      (is (null (intersection (apeiron.core:area-room-list hub)
+                              (apeiron.core:area-room-list mall))))
+      (is (null (intersection (apeiron.core:area-room-list mall)
+                              (apeiron.core:area-room-list cavern))))
+      ;; cross-area links survived the area-based build
+      (let ((desert (apeiron.core:area-find-room hub "A Sun-Bleached Desert")))
+        (is (not (null (apeiron.core:room-exit-target desert "door")))))
+      (let ((arcade (apeiron.core:area-find-room mall "Arcade Zone")))
+        (is (eq (apeiron.core:area-find-room cavern "Team Rocket Cavern Mouth")
+                (apeiron.core:room-exit-target arcade "maintenance")))))))

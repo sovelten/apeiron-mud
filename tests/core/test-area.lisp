@@ -414,3 +414,49 @@ Returns (values area tavern forest cave peak)."
     (is (= 2 (apeiron.core:area-connection-count area)))
     (is (equal (list a b c)
                (apeiron.core:area-shortest-path area a c)))))
+
+(test cardinal-connection-helpers
+  "The standard cardinal helpers add the conventional single-letter
+  synonyms (n/s/e/w) and connect rooms in the right directions."
+  (let ((area (apeiron.core:new-area :name "Cardinals"))
+        (north (apeiron.core:new-room :name "North"))
+        (south (apeiron.core:new-room :name "South"))
+        (west (apeiron.core:new-room :name "West"))
+        (east (apeiron.core:new-room :name "East")))
+    (apeiron.core:area-connect-north-south! area north south)
+    (apeiron.core:area-connect-west-east! area west east)
+    ;; primary directions work
+    (is (eq south (apeiron.core:room-exit-target north "south")))
+    (is (eq north (apeiron.core:room-exit-target south "north")))
+    (is (eq east (apeiron.core:room-exit-target west "east")))
+    (is (eq west (apeiron.core:room-exit-target east "west")))
+    ;; single-letter synonyms work too
+    (is (eq south (apeiron.core:room-exit-target north "s")))
+    (is (eq north (apeiron.core:room-exit-target south "n")))
+    (is (eq east (apeiron.core:room-exit-target west "e")))
+    (is (eq west (apeiron.core:room-exit-target east "w")))
+    ;; exits list shows the cardinal directions compactly
+    (is (equal (list "south")
+               (mapcar #'first (apeiron.core:room-exit-list north))))
+    (is (equal (list "east")
+               (mapcar #'first (apeiron.core:room-exit-list west)))))
+  ;; cardinal-spec validates its input
+  (is (equal '("north" "n") (apeiron.core:cardinal-spec "north")))
+  (is (equal '("south" "s") (apeiron.core:cardinal-spec "SOUTH")))
+  (signals error (apeiron.core:cardinal-spec "sideways")))
+
+(test one-area-per-room-invariant
+  "A room cannot belong to more than one area in a world."
+  (let ((world (apeiron.core:new-world))
+        (area-a (apeiron.core:new-area :name "Area A"))
+        (area-b (apeiron.core:new-area :name "Area B"))
+        (room (apeiron.core:new-room :name "Shared Room")))
+    (apeiron.core:area-add-room! area-a room)
+    (apeiron.core:world-add-area! world area-a)
+    (is (eq area-a (apeiron.core:world-area-of-room world room)))
+    ;; Adding a second area that claims the same room is rejected
+    (apeiron.core:area-add-room! area-b room)
+    (signals error (apeiron.core:world-add-area! world area-b))
+    ;; nothing was registered
+    (is (= 1 (apeiron.core:world-total-areas world)))
+    (is (eq area-a (apeiron.core:world-area-of-room world room)))))

@@ -126,6 +126,24 @@ Creates the MUD-CONNECTION, registers it in the area graph and returns it."
                     :one-way one-way
                     :one-way-message one-way-message)))
 
+(defun area-connect-north-south! (area north-room south-room &rest args)
+  "Connect NORTH-ROOM (left arg) south to SOUTH-ROOM (right arg) inside AREA.
+From SOUTH-ROOM you go north to NORTH-ROOM.
+Standard cardinal synonyms are added: \"s\" from north-room, \"n\" from
+south-room."
+  (apply #'area-connect-rooms! area north-room south-room
+         :to (cardinal-spec "south") :from (cardinal-spec "north")
+         args))
+
+(defun area-connect-west-east! (area west-room east-room &rest args)
+  "Connect WEST-ROOM (left arg) east to EAST-ROOM (right arg) inside AREA.
+From EAST-ROOM you go west to WEST-ROOM.
+Standard cardinal synonyms are added: \"e\" from west-room, \"w\" from
+east-room."
+  (apply #'area-connect-rooms! area west-room east-room
+         :to (cardinal-spec "east") :from (cardinal-spec "west")
+         args))
+
 (defun area-remove-connection! (area connection)
   "Remove CONNECTION from AREA: drop its graph edge and remove it from
 AREA-CONNECTIONS and both endpoints' ROOM-CONNECTIONS lists.

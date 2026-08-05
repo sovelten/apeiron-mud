@@ -161,6 +161,7 @@
    #:connection-one-way-message
    #:connection-one-way-p
    #:connection-usable-p
+   #:cardinal-spec
 
    ;; Area system
    #:mud-area
@@ -172,6 +173,8 @@
    #:area-remove-room!
    #:area-register-connection!
    #:area-connect-rooms!
+   #:area-connect-north-south!
+   #:area-connect-west-east!
    #:area-remove-connection!
    #:area-room-p
    #:area-find-room
