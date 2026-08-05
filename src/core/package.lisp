@@ -136,6 +136,8 @@
    #:new-room
    #:room-exits
    #:room-connections
+   #:room-area
+   #:room-exit-connections
    #:room-exit-target
    #:room-exit-blocked-p
    #:room-exit-list

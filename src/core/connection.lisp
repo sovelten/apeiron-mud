@@ -249,14 +249,15 @@ synonym for the connection end that leads out of ROOM."
 (defun connection-find (room direction)
   "Find a connection from ROOM in the given DIRECTION, or nil.
 
-Searches the room's connections list for a connection that has
+Searches the room's exit connections (area connections first, then the
+room's own, see ROOM-EXIT-CONNECTIONS) for a connection that has
 this room and direction (including direction synonyms).
 Returns the connection if found."
   (find-if (lambda (c)
              (and (or (eq room (connection-room-a c))
                       (eq room (connection-room-b c)))
                   (connection-direction-matches c room direction)))
-           (room-connections room)))
+           (room-exit-connections room)))
 
 (defun connection-exit-blocked-message (room direction)
   "Return a blocking message if a connection in this direction is blocked, or nil.

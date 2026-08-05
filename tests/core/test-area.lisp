@@ -61,8 +61,9 @@ Returns (values area tavern forest cave peak)."
     (is (null (apeiron.core:area-find-room area 999)))))
 
 (test area-connect-rooms!
-  "Connecting rooms creates a connection, a graph edge, and links both
-  rooms' ROOM-CONNECTIONS lists so movement code keeps working."
+  "Connecting rooms creates a connection, a graph edge, and sets the
+  rooms' ROOM-AREA back-reference; movement code finds the exit through
+  the area."
   (multiple-value-bind (area tavern forest cave peak)
       (test-area-chain)
     (declare (ignore cave peak))
@@ -72,7 +73,11 @@ Returns (values area tavern forest cave peak)."
     (is (= 2 (length (apeiron.core:area-room-connections area forest))))
     (is (equal (list forest)
                (apeiron.core:area-adjacent-rooms area tavern)))
-    ;; Legacy room lookup still works through the linked lists
+    ;; rooms point back at their area
+    (is (eq area (apeiron.core:room-area tavern)))
+    (is (eq area (apeiron.core:room-area forest)))
+    ;; area connections are found through room-exit-connections
+    (is (= 1 (length (apeiron.core:room-exit-connections tavern))))
     (is (eq forest (apeiron.core:room-exit-target tavern "north")))
     (is (eq tavern (apeiron.core:room-exit-target forest "south")))
     (is (null (apeiron.core:room-exit-target tavern "east")))))
@@ -101,10 +106,13 @@ Returns (values area tavern forest cave peak)."
       (is (= 1 (apeiron.core:area-connection-count area)))
       (is (equal (list forest) (apeiron.core:area-adjacent-rooms area tavern)))
       (is (eq conn (first (apeiron.core:area-room-connections area tavern))))
+      ;; the connection stays in the room's own list (created by
+      ;; connect-rooms!) but room-exit-connections dedupes area + own
+      (is (= 1 (length (apeiron.core:room-exit-connections tavern))))
       ;; Idempotent re-registration does not duplicate
       (apeiron.core:area-register-connection! area conn)
       (is (= 1 (apeiron.core:area-connection-count area)))
-      (is (= 1 (length (apeiron.core:room-connections tavern)))))))
+      (is (= 1 (length (apeiron.core:room-exit-connections tavern)))))))
 
 (test new-area-with-rooms-and-connections
   "new-area can pre-populate from room and connection lists."
@@ -122,7 +130,7 @@ Returns (values area tavern forest cave peak)."
         (is (= 1 (apeiron.core:area-connection-count area)))))))
 
 (test area-remove-connection!
-  "Removing a connection drops the edge and cleans the linked lists."
+  "Removing a connection drops the edge and the area's reference to it."
   (multiple-value-bind (area tavern forest cave peak)
       (test-area-chain)
     (declare (ignore cave peak))
@@ -130,8 +138,9 @@ Returns (values area tavern forest cave peak)."
       (apeiron.core:area-remove-connection! area conn)
       (is (= 2 (apeiron.core:area-connection-count area)))
       (is (null (apeiron.core:area-room-connections area tavern)))
-      (is (null (apeiron.core:room-connections tavern)))
-      (is (null (member conn (apeiron.core:room-connections forest)))))))
+      ;; the exit is gone from the area-aware lookup too
+      (is (null (member conn (apeiron.core:room-exit-connections tavern))))
+      (is (null (member conn (apeiron.core:room-exit-connections forest)))))))
 
 (test area-remove-room!
   "Removing a room also removes its incident connections."
@@ -381,7 +390,10 @@ Returns (values area tavern forest cave peak)."
       (apeiron.core:world-add-area! world area)
       (is (= 1 (apeiron.core:world-total-areas world)))
       (is (= 2 (apeiron.core:world-total-rooms world)))
-      (is (= 1 (length (apeiron.core:room-connections entrance)))))))
+      ;; the area connection is found through the area, not duplicated
+      ;; into the room's own connections list
+      (is (zerop (length (apeiron.core:room-connections entrance))))
+      (is (= 1 (length (apeiron.core:room-exit-connections entrance)))))))
 
 (test world-remove-area!
   "Removing an area unindexes it but keeps its rooms."
@@ -479,3 +491,41 @@ Returns (values area tavern forest cave peak)."
   (let* ((room (apeiron.core:new-room :name "Gate"))
          (area (apeiron.core:new-area :name "Init Entrance" :entrance room)))
     (is (eq room (apeiron.core:area-entrance area)))))
+
+(test room-area-back-reference
+  "area-add-room! sets the room's ROOM-AREA; area-remove-room! clears it."
+  (let ((area (apeiron.core:new-area :name "Zone"))
+        (room (apeiron.core:new-room :name "Lobby")))
+    (is (null (apeiron.core:room-area room)))
+    (apeiron.core:area-add-room! area room)
+    (is (eq area (apeiron.core:room-area room)))
+    (apeiron.core:area-remove-room! area room)
+    (is (null (apeiron.core:room-area room)))))
+
+(test room-exit-connections
+  "Exits are the union of area connections (preferred) and the room's own
+  connections, with a fallback for rooms outside any area."
+  (let ((area (apeiron.core:new-area :name "Zone"))
+        (hub (apeiron.core:new-room :name "Hub"))
+        (spoke (apeiron.core:new-room :name "Spoke")))
+    (apeiron.core:area-connect-rooms! area hub spoke
+                                      :to "north" :from "south")
+    ;; rooms outside an area fall back to their own connections
+    (let ((lonely (apeiron.core:new-room :name "Lonely"))
+          (other (apeiron.core:new-room :name "Other")))
+      (let ((world (apeiron.core:new-world)))
+        (apeiron.core:connect-rooms! world lonely other :to "east" :from "west")
+        (is (null (apeiron.core:room-area lonely)))
+        (is (= 1 (length (apeiron.core:room-exit-connections lonely))))
+        (is (eq other (apeiron.core:room-exit-target lonely "east")))))
+    ;; area room: area connection preferred, cross-area added on top
+    (let ((world (apeiron.core:new-world)))
+      (apeiron.core:world-add-area! world area)
+      (let ((outside (apeiron.core:new-room :name "Outside")))
+        (apeiron.core:connect-rooms! world hub outside :to "door" :from "portal")
+        (is (eq area (apeiron.core:room-area hub)))
+        (is (= 2 (length (apeiron.core:room-exit-connections hub))))
+        (is (eq spoke (apeiron.core:room-exit-target hub "north")))
+        (is (eq outside (apeiron.core:room-exit-target hub "door")))
+        ;; room's own list holds only the cross-area connection
+        (is (= 1 (length (apeiron.core:room-connections hub))))))))

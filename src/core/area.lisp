@@ -63,8 +63,10 @@ and reachability queries can run on top of the plain room/connection data."))
 
 (defun area-add-room! (area room)
   "Add ROOM to AREA (idempotent).  Registers the room as a vertex of the
-area's graph and in the rooms ID index, then returns ROOM."
+area's graph and in the rooms ID index, and sets the room's ROOM-AREA
+back-reference to AREA.  Returns ROOM."
   (setf (gethash (object-id room) (area-rooms area)) room)
+  (setf (room-area room) area)
   (cl-graph:add-vertex (area-graph area) room)
   room)
 
@@ -72,7 +74,8 @@ area's graph and in the rooms ID index, then returns ROOM."
   "Remove ROOM from AREA along with every connection incident to it.
 The room and its connections are removed from the graph, the rooms index
 and the connections list; the endpoints' ROOM-CONNECTIONS lists are also
-cleaned up.  Returns ROOM."
+cleaned up, and the room's ROOM-AREA back-reference is cleared.
+Returns ROOM."
   (remhash (object-id room) (area-rooms area))
   ;; Drop incident connections from the flat list and the other rooms.
   (dolist (conn (area-room-connections area room))
@@ -81,16 +84,19 @@ cleaned up.  Returns ROOM."
   (let ((vertex (cl-graph:find-vertex (area-graph area) room nil)))
     (when vertex
       (cl-graph:delete-vertex (area-graph area) vertex)))
+  (setf (room-area room) nil)
   room)
 
 (defun area-register-connection! (area connection)
   "Register an existing MUD-CONNECTION in AREA.
 
-Both endpoint rooms are added to the area (as vertices), an undirected
-edge carrying CONNECTION is added to the graph, and the connection is
-pushed onto AREA-CONNECTIONS and the endpoints' ROOM-CONNECTIONS lists
-so the existing exit/movement code can find it.  Idempotent per room
-pair: an area holds at most one connection between two rooms.
+Both endpoint rooms are added to the area (as vertices, setting their
+ROOM-AREA back-reference), an undirected edge carrying CONNECTION is
+added to the graph, and the connection is pushed onto AREA-CONNECTIONS.
+The connection is deliberately NOT pushed onto the rooms' CONNECTIONS
+lists: area connections live in the area and are found through
+ROOM-EXIT-CONNECTIONS.  Idempotent per room pair: an area holds at most
+one connection between two rooms.
 
 Returns CONNECTION."
   (let ((room-a (connection-room-a connection))
@@ -103,8 +109,6 @@ Returns CONNECTION."
      :value connection
      :if-duplicate-do :ignore)
     (pushnew connection (area-connections area))
-    (pushnew connection (room-connections room-a))
-    (pushnew connection (room-connections room-b))
     connection))
 
 (defun area-connect-rooms! (area room-a room-b
@@ -152,7 +156,8 @@ east-room."
 
 (defun area-remove-connection! (area connection)
   "Remove CONNECTION from AREA: drop its graph edge and remove it from
-AREA-CONNECTIONS and both endpoints' ROOM-CONNECTIONS lists.
+AREA-CONNECTIONS.  The endpoints' ROOM-CONNECTIONS lists are also cleaned
+up as a legacy safeguard (older worlds stored area connections there).
 Returns CONNECTION."
   (let ((room-a (connection-room-a connection))
         (room-b (connection-room-b connection)))
@@ -172,11 +177,14 @@ The graph is a derived index; this resets it to a fresh graph-container
 and re-adds every room as a vertex and every connection as an edge.  It
 is called automatically after a persistent restore (the graph is a
 transient slot and is not stored) and is useful after directly editing
-the room/connection lists.  Returns AREA."
+the room/connection lists.  Each room's ROOM-AREA back-reference is also
+restored, so areas restored from older snapshots (whose rooms predate the
+back-reference) still find their connections.  Returns AREA."
   (setf (area-graph area)
         (make-instance 'cl-graph:graph-container :default-edge-type :undirected))
   (dolist (room (loop for r being the hash-values of (area-rooms area)
                       collect r))
+    (setf (room-area room) area)
     (cl-graph:add-vertex (area-graph area) room))
   (dolist (conn (area-connections area))
     (cl-graph:add-edge-between-vertexes

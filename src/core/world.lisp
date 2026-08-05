@@ -308,11 +308,18 @@ or NIL."
 (defun world-area-of-room (world room)
   "Return the area in WORLD that contains ROOM, or NIL.
 
-The one-area-per-room invariant (enforced by WORLD-ADD-AREA!) guarantees
-a room belongs to at most one area, so this is unambiguous."
-  (loop for area being the hash-values of (world-areas world)
-        when (area-room-p area room)
-        return area))
+Uses the room's ROOM-AREA back-reference when it points at an area
+registered in WORLD (the common case); otherwise falls back to scanning
+the world's areas.  The one-area-per-room invariant (enforced by
+WORLD-ADD-AREA!) guarantees a room belongs to at most one area, so this
+is unambiguous."
+  (let ((area (room-area room)))
+    (if (and area
+             (eq area (world-area-by-id world (object-id area))))
+        area
+        (loop for candidate being the hash-values of (world-areas world)
+              when (area-room-p candidate room)
+              return candidate))))
 
 (defgeneric create-object! (world object)
   (:documentation "Register OBJECT in WORLD, materializing it for persistent worlds.
