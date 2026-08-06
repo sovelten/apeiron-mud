@@ -140,8 +140,6 @@
    #:character-hp
    #:character-max-hp
    #:character-ensure-combat-stats
-   #:build-shopping-mall
-   #:build-team-rocket-cavern
 
    ;; Room system
    #:mud-room
