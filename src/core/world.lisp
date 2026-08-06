@@ -1,5 +1,24 @@
 (in-package #:apeiron.core)
 
+(named-readtables:in-readtable pythonic-string-syntax)
+
+(defsection @world (:title "World")
+  """The *world* is the root object of an Apeiron game. It owns every
+  room, area, character and item, assigns world-level IDs, and is the
+  object that the persistence layer stores (see `apeiron/persistence`).
+
+  Create a world with NEW-WORLD, add content with WORLD-ADD-OBJECT!
+  and connect rooms with CONNECT-ROOMS!. See also @COMMANDS for the
+  player-facing command layer. The full API of this package is
+  generated automatically in the manual's API reference."""
+  (new-world function)
+  (world-add-object! function)
+  (connect-rooms! generic-function)
+  (place-character! function)
+  (world-broadcast function)
+  (create-object! generic-function)
+  (@commands section))
+
 (defclass mud-world ()
   ((id-counter :initarg :id-counter
                :accessor world-id-counter

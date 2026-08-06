@@ -1,5 +1,23 @@
 (in-package #:apeiron.core)
 
+(named-readtables:in-readtable pythonic-string-syntax)
+
+(defsection @commands (:title "Commands")
+  """The command system turns raw player input into handler calls.
+  Every command is registered in *COMMANDS* by DEFINE-COMMAND, parsed
+  by PARSE-COMMAND, and dispatched by PROCESS-COMMAND.
+
+  While a command runs, the eval helpers ME, HERE and WORLD are bound
+  to the current character, room and world, which also makes them
+  handy inside the in-game `eval` command."""
+  (*commands* variable)
+  (define-command macro)
+  (parse-command function)
+  (process-command function)
+  (me function)
+  (here function)
+  (world function))
+
 ;; Command processor
 (defvar *commands* (make-hash-table :test #'equal)
   "Hash table of command handlers")

@@ -1,0 +1,53 @@
+# Regenerate the Apeiron HTML documentation and publish it to GitHub Pages.
+#
+# This is a custom workflow rather than the turnkey `40ants/build-docs` action
+# on purpose: that action regenerates README.md from the manual, and Apeiron's
+# hand-written README.md (quick start, in-game tutorials) must be preserved.
+#
+# After the first run, enable Pages in the repo settings with
+# "Deploy from a branch" -> "GitHub Actions" as the source.
+#
+# To regenerate locally instead: `sbcl --load run-docs.lisp`
+
+name: Docs
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Common Lisp
+        uses: 40ants/setup-lisp@v4
+
+      - name: Generate documentation
+        run: sbcl --non-interactive --load run-docs.lisp
+
+      - name: Upload static site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

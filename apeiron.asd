@@ -25,6 +25,11 @@
                "deeds"
                "ironclad"
                "log4cl"
+               ;; Lightweight doc-system core: only the DEFSECTION macro
+               ;; and its readtable helpers. The heavy renderer
+               ;; (40ants-doc-full) is loaded exclusively by the
+               ;; apeiron/docs system, never by the server.
+               "40ants-doc"
                "str")
   :components ((:module "src/core"
                 :components
@@ -107,12 +112,12 @@
                 ((:file "package")
                  (:file "constants")
                  (:file "session-telnet")
-                 (:file "network" :depends-on ("session-telnet"))))))
+                 (:file "main" :depends-on ("session-telnet"))))))
 
 ;; Convenience meta-system — loads everything
 (defsystem "apeiron"
   :version "0.0.1"
-  :description "Apeiron MUD — a MUD server written in Common Lisp, inspired by DGD and LMUD."
+  :description "Apeiron MUD — a MUD server written in Common Lisp"
   :author "Sophia Velten"
   :license "MIT"
   :depends-on ("apeiron/core"

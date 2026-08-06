@@ -13,6 +13,18 @@
         #:apeiron.core.utils
         #:bordeaux-threads
         #:cl-csv)
+  ;; Documentation (40ANTS-DOC): only the light core is needed to
+  ;; compile the DEFSECTION forms embedded in the source; the heavy
+  ;; renderer lives in the apeiron/docs system. See apeiron-docs.asd.
+  (:import-from #:40ants-doc
+                #:defsection
+                #:section)
+  (:import-from #:40ants-doc/locatives
+                #:variable
+                #:macro
+                #:generic-function)
+  (:import-from #:pythonic-string-reader
+                #:pythonic-string-syntax)
   (:export
    ;; Core version / debug
    #:*mud-version*
