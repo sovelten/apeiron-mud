@@ -1,0 +1,19 @@
+# Dependencies needed to build the documentation with the
+# `40ants/build-docs@v1` GitHub Action (installed by Qlot).
+# The action appends docs-builder and other build helpers to this file
+# automatically. Add any new Quicklisp dependency of apeiron here.
+
+40ants-doc
+bknr.datastore
+bknr.indices
+bknr.utils
+bordeaux-threads
+cl+ssl
+cl-csv
+cl-graph
+deeds
+flexi-streams
+ironclad
+log4cl
+str
+usocket
