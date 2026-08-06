@@ -94,8 +94,9 @@
   :components ((:module "src/worlds"
                 :components
                 ((:file "package")
-                 (:file "apeiron" :depends-on ("package"))
-                 (:file "world-areas" :depends-on ("apeiron"))))))
+                 (:file "poke-land" :depends-on ("package"))
+                 (:file "eridu" :depends-on ("package"))
+                 (:file "apeiron" :depends-on ("package" "poke-land" "eridu"))))))
 
 (defsystem "apeiron/server"
   :version "0.0.1"

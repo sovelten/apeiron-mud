@@ -150,4 +150,4 @@ Find a room by name and place the puzzle there:
 
 ## Persistence
 
-Wordle puzzles are fully persistent. The word list and max guesses are saved to the BKNR datastore. Per-character guess state and the daily word are ephemeral (the puzzle recalculates its daily word on server restart). If you want a permanent fixed word, pass `:target-word` explicitly when creating the puzzle. To add a puzzle to the default world permanently, include it in the world builder function in `src/worlds/world-areas.lisp`.
+Wordle puzzles are fully persistent. The word list and max guesses are saved to the BKNR datastore. Per-character guess state and the daily word are ephemeral (the puzzle recalculates its daily word on server restart). If you want a permanent fixed word, pass `:target-word` explicitly when creating the puzzle. To add a puzzle to the default world permanently, include it in the world builder function in `src/worlds/apeiron.lisp`.

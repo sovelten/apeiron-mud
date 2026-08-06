@@ -140,8 +140,6 @@
    #:character-hp
    #:character-max-hp
    #:character-ensure-combat-stats
-   #:build-shopping-mall
-   #:build-team-rocket-cavern
 
    ;; Room system
    #:mud-room
@@ -155,6 +153,7 @@
    #:room-exit-list
    #:format-exit-direction
    #:synonyms-for-room
+   #:set-flag-gate
 
    ;; Connection system
    #:mud-connection
