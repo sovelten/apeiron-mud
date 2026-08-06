@@ -64,11 +64,28 @@ and reachability queries can run on top of the plain room/connection data."))
 
 ;; ─── Construction ──────────────────────────────────────────────────────────
 
+(defun area-rooms-normalized (area)
+  "Return AREA's rooms as a list, migrating an old-format hash-table in
+place if one was restored from a pre-refactor snapshot.
+
+Before the list refactor, AREA-ROOMS was a hash-table keyed by OBJECT-ID.
+Persistent snapshots taken under that layout restore the slot as a
+hash-table; the new list-based code would choke on it.  This converts
+the stored value once, then returns the list."
+  (let ((rooms (area-rooms area)))
+    (when (hash-table-p rooms)
+      (setf (area-rooms area)
+            (loop for v being the hash-values of rooms collect v)))
+    (area-rooms area)))
+
 (defun area-add-room! (area room)
   "Add ROOM to AREA (idempotent per object identity).  Registers the room
 as a vertex of the area's graph and in the rooms list, and sets the room's
 ROOM-AREA back-reference to AREA.  Returns ROOM."
-  (pushnew room (area-rooms area) :test #'eq)
+  ;; Normalize any legacy hash-table first, then push onto the list.
+  (let ((rooms (area-rooms-normalized area)))
+    (pushnew room rooms :test #'eq)
+    (setf (area-rooms area) rooms))
   (setf (room-area room) area)
   (cl-graph:add-vertex (area-graph area) room)
   room)
@@ -80,7 +97,7 @@ and the connections list; the endpoints' ROOM-CONNECTIONS lists are also
 cleaned up, and the room's ROOM-AREA back-reference is cleared.
 Returns ROOM."
   (setf (area-rooms area)
-        (remove room (area-rooms area) :test #'eq))
+        (remove room (area-rooms-normalized area) :test #'eq))
   ;; Drop incident connections from the flat list and the other rooms.
   (dolist (conn (area-room-connections area room))
     (area-remove-connection! area conn))
@@ -186,7 +203,7 @@ restored, so areas restored from older snapshots (whose rooms predate the
 back-reference) still find their connections.  Returns AREA."
   (setf (area-graph area)
         (make-instance 'cl-graph:graph-container :default-edge-type :undirected))
-  (dolist (room (area-rooms area))
+  (dolist (room (area-rooms-normalized area))
     (setf (room-area room) area)
     (cl-graph:add-vertex (area-graph area) room))
   (dolist (conn (area-connections area))
@@ -195,6 +212,11 @@ back-reference) still find their connections.  Returns AREA."
      :edge-type :undirected
      :value conn
      :if-duplicate-do :ignore))
+  ;; The graph is the authoritative room set.  The ROOMS list may be
+  ;; incomplete in restored snapshots (the pre-refactor hash collapsed
+  ;; rooms sharing OBJECT-ID -1 into one entry), so re-sync it from the
+  ;; rebuilt graph to keep AREA-ROOMS and the graph consistent.
+  (setf (area-rooms area) (area-room-list area))
   area)
 
 (defun area-set-entrance! (area room)
@@ -225,12 +247,13 @@ the MUD-AREA."
   "Find a room in AREA by world-level ID (an integer) or by name
 (a string, case-insensitive).  Returns the room or NIL.
 
-Linear scan over the rooms list in both cases (areas are small and this
-is not a hot path)."
+Integer lookups scan the rooms list (with legacy hash migration);
+name lookups scan the graph-derived room list, which is authoritative
+and complete even when a restored snapshot's ROOMS slot was incomplete."
   (etypecase id-or-name
-    (integer (find id-or-name (area-rooms area)
+    (integer (find id-or-name (area-rooms-normalized area)
                    :key #'object-id :test #'eql))
-    (string  (find id-or-name (area-rooms area)
+    (string  (find id-or-name (area-room-list area)
                    :test (lambda (name room)
                            (string-equal name (object-name room)))))))
 
