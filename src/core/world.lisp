@@ -263,11 +263,9 @@ Returns an empty list when no objects match."
   "Return the number of rooms in the world."
   (hash-table-count (world-rooms world)))
 
-;; ─── World-level area management ─────────────────────────────────────────
-
-(defun world-add-area! (world area)
-  "Register AREA and everything in it (rooms, contained objects, and
-connections) in WORLD.
+(defgeneric world-add-area! (world area)
+  (:documentation "Register AREA and everything in it (rooms, contained
+objects, and connections) in WORLD.
 
 Each room and connection in the area is registered with the world
 (assigning world-level IDs and materializing them for persistent worlds),
@@ -280,7 +278,14 @@ A room may belong to at most one area: if any room in AREA already belongs
 to a different area of WORLD, an error is signaled before anything is
 registered.
 
-Returns AREA."
+The generic function is specialized on WORLD so persistent worlds can
+materialize the whole closure into the datastore in a single transaction
+before indexing it.  Returns AREA."))
+
+
+(defmethod world-add-area! ((world mud-world) area)
+  "Transient worlds: assign world-level IDs and index everything, with no
+persistence concerns.  See WORLD-ADD-AREA!."
   ;; Enforce the one-area-per-room invariant before mutating anything.
   (dolist (room (area-room-list area))
     (let ((owner (world-area-of-room world room)))

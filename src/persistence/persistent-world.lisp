@@ -129,6 +129,56 @@ directly without re-materialization."
       (bknr.datastore:delete-object object)))
   object)
 
+(defmethod world-add-area! ((world persistent-world) area)
+  "Register AREA and everything in it with a persistent WORLD.
+
+Materializes the whole area closure (rooms, contained objects,
+connections, and the area itself) into the BKNR datastore in ONE
+transaction before indexing it in the world.
+
+CREATE-OBJECT! per object would be the wrong tool here: it materializes
+each object and then touches every persistent slot to force it into the
+transaction log.  Rooms carry a ROOM-AREA back-reference to the area, so
+if rooms are materialized before the area, that touch tries to
+ENCODE-OBJECT a still-transient MUD-AREA — which has no encoder and
+fails.  Materializing everything together (as MATERIALIZE-WORLD does)
+defers slot encoding until every object is persistent.
+
+Enforces the one-area-per-room invariant first.  Returns AREA."
+  ;; Enforce the one-area-per-room invariant before mutating anything.
+  (dolist (room (area-room-list area))
+    (let ((owner (world-area-of-room world room)))
+      (when (and owner (not (eq owner area)))
+        (error "world-add-area!: room ~A already belongs to area ~A; a room can only belong to one area."
+               (object-name room) (object-name owner)))))
+  (bknr.datastore:with-transaction ("add-area")
+    ;; Materialize rooms and their contents and connections FIRST, then
+    ;; the area.  The area's ROOMS slot is encoded into the transaction
+    ;; log when the area is materialized, so by then every room must
+    ;; already be a persistent store-object — otherwise ENCODE-OBJECT
+    ;; gets a still-transient MUD-ROOM and fails.
+    (dolist (room (area-room-list area))
+      (materialize-object room))
+    (dolist (room (area-room-list area))
+      (dolist (obj (container-all-objects room))
+        (unless (typep obj 'mud-character)
+          (materialize-object obj))))
+    (dolist (conn (area-connections area))
+      (materialize-object conn))
+    (materialize-object area))
+  ;; Now index everything in the world (IDs are already assigned by BKNR;
+  ;; WORLD-ADD-OBJECT! registers into the world's hash tables).
+  (dolist (room (area-room-list area))
+    (world-add-object! world room))
+  (dolist (room (area-room-list area))
+    (dolist (obj (container-all-objects room))
+      (unless (typep obj 'mud-character)
+        (world-add-object! world obj))))
+  (dolist (conn (area-connections area))
+    (world-add-object! world conn))
+  (world-add-object! world area)
+  area)
+
 ;; ─── Store lifecycle ────────────────────────────────────────────────────────
 
 (defvar *store-directory*
