@@ -22,6 +22,8 @@
   (:use #:cl #:40ants-doc)
   (:import-from #:pythonic-string-reader
                 #:pythonic-string-syntax)
+  (:import-from #:40ants-doc/locatives
+                #:include)
   (:export #:@index
            #:@readme))
 
@@ -144,9 +146,17 @@
   sections live next to the code that implements them, and the API
   reference is generated automatically from the exported symbols.
 
-  See the README for a quick start and the command reference; the
-  tutorials (secret room, Wordle) live in the
-  [Tutorials][tutorials] section of this manual."""
+  See the README for a quick start and the command reference."""
+  (@getting-started section)
+  (@architecture section)
+  (@features section)
+  (@development section)
   (apeiron.core::@world section)
   (apeiron.core::@commands section)
+  (@tutorial-secret-room section)
+  (@tutorial-wordle section)
+  (@deployment section)
+  (@troubleshooting section)
+  (@dependencies section)
+  (@mcp section)
   (@api section))

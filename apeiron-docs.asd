@@ -26,4 +26,6 @@
                "40ants-doc-full"
                "40ants-doc/autodoc")
   :components ((:module "docs"
-                :components ((:file "apeiron-docs")))))
+                :components ((:file "apeiron-docs")
+                             (:file "apeiron-manual"
+                                    :depends-on ("apeiron-docs"))))))
