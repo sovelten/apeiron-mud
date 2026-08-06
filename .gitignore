@@ -1,21 +1,8 @@
 # Generated documentation — run `sbcl --load run-docs.lisp` to regenerate.
-# The source for these is docs/apeiron-docs.lisp + the embedded sections
-# in src/core/*.lisp; the generated site is published to GitHub Pages by
-# .github/workflows/docs.yml.
-docs/apeiron-manual/
-docs/doctools.js
-docs/highlight.min.css
-docs/highlight.min.js
-docs/jquery.js
-docs/language_data.js
-docs/METADATA
-docs/references.json
-docs/search/
-docs/searchindex.js
-docs/searchtools.js
-docs/theme.css
-docs/toc.js
-docs/underscore.js
+# The source is docs/apeiron-docs.lisp + the embedded sections in
+# src/core/*.lisp; the generated site is published to GitHub Pages by
+# .github/workflows/docs.yml (docs/build/ -> gh-pages branch).
+docs/build/
 
 # Compiled artifacts
 *.fasl
