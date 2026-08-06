@@ -95,7 +95,8 @@
                 :components
                 ((:file "package")
                  (:file "poke-land" :depends-on ("package"))
-                 (:file "apeiron" :depends-on ("package" "poke-land"))))))
+                 (:file "eridu" :depends-on ("package"))
+                 (:file "apeiron" :depends-on ("package" "poke-land" "eridu"))))))
 
 (defsystem "apeiron/server"
   :version "0.0.1"

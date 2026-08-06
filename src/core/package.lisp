@@ -153,6 +153,7 @@
    #:room-exit-list
    #:format-exit-direction
    #:synonyms-for-room
+   #:set-flag-gate
 
    ;; Connection system
    #:mud-connection

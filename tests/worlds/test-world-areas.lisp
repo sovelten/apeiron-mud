@@ -112,21 +112,24 @@
     (is (apeiron.core:object-get-property character "solved-meowth-riddle"))))
 
 (test default-world-areas
-  "The default world is organized into three areas (hub, mall, cavern),
-  each room belongs to exactly one area, and cross-area links work."
+  "The default world is organized into four areas (hub, mall, cavern,
+  eridu), each room belongs to exactly one area, and cross-area links work."
   (let* ((world (apeiron.persistence:world-restore-or-initialize
                  :force-new t
                  :initializer #'apeiron.worlds:new-default-world)))
-    (is (= 3 (apeiron.core:world-total-areas world)))
+    (is (= 4 (apeiron.core:world-total-areas world)))
     (let ((hub (apeiron.core:world-area-with-name world "Apeiron Hub"))
           (mall (apeiron.core:world-area-with-name world "Desert Oasis Mall"))
-          (cavern (apeiron.core:world-area-with-name world "Team Rocket Cavern")))
+          (cavern (apeiron.core:world-area-with-name world "Team Rocket Cavern"))
+          (eridu (apeiron.core:world-area-with-name world "Eridu, the First City")))
       (is (not (null hub)))
       (is (not (null mall)))
       (is (not (null cavern)))
+      (is (not (null eridu)))
       (is (= 4 (apeiron.core:area-room-count hub)))
       (is (= 4 (apeiron.core:area-room-count mall)))
       (is (= 11 (apeiron.core:area-room-count cavern)))
+      (is (= 18 (apeiron.core:area-room-count eridu)))
       ;; world-area-of-room resolves each room to exactly one area
       (is (eq hub (apeiron.core:world-area-of-room
                    world (apeiron.core:area-find-room hub "Apeiron Nexus"))))
@@ -134,15 +137,76 @@
                     world (apeiron.core:area-find-room mall "Arcade Zone"))))
       (is (eq cavern (apeiron.core:world-area-of-room
                       world (apeiron.core:area-find-room cavern "Grunt Patrol Route"))))
+      (is (eq eridu (apeiron.core:world-area-of-room
+                     world (apeiron.core:area-find-room eridu "Marsh Causeway"))))
       ;; areas do not share rooms
       (is (null (intersection (apeiron.core:area-room-list hub)
                               (apeiron.core:area-room-list mall))))
       (is (null (intersection (apeiron.core:area-room-list mall)
                               (apeiron.core:area-room-list cavern))))
+      (is (null (intersection (apeiron.core:area-room-list cavern)
+                              (apeiron.core:area-room-list eridu))))
       ;; cross-area links survived the area-based build
       (let ((nexus (apeiron.core:area-find-room hub "Apeiron Nexus")))
         (is (eq (apeiron.core:area-find-room mall "Desert Oasis Mall")
-                (apeiron.core:room-exit-target nexus "pl"))))
+                (apeiron.core:room-exit-target nexus "pl")))
+        (is (eq (apeiron.core:area-find-room eridu "Marsh Causeway")
+                (apeiron.core:room-exit-target nexus "Eridu")))
+        (is (eq (apeiron.core:area-find-room eridu "Marsh Causeway")
+                (apeiron.core:room-exit-target nexus "ed"))))
       (let ((arcade (apeiron.core:area-find-room mall "Arcade Zone")))
         (is (eq (apeiron.core:area-find-room cavern "Team Rocket Cavern Mouth")
                 (apeiron.core:room-exit-target arcade "maintenance")))))))
+
+(test eridu-first-city
+  "Eridu, the first city of Sumer, is reachable from the nexus, contains
+  the full temple precinct, and its riddles and fight-gates work."
+  (let* ((world (apeiron.persistence:world-restore-or-initialize
+                 :force-new t
+                 :initializer #'apeiron.worlds:new-default-world))
+         (all-rooms (apeiron.core:world-all-rooms world))
+         (nexus (apeiron.core:starting-room world))
+         (eridu (apeiron.core:world-area-with-name world "Eridu, the First City"))
+         (causeway (apeiron.core:area-find-room eridu "Marsh Causeway"))
+         (market (apeiron.core:area-find-room eridu "Market Square of Eridu"))
+         (e-abzu (apeiron.core:area-find-room eridu "E-Abzu, Temple of Enki"))
+         (npcs (remove-if-not (lambda (obj) (typep obj 'apeiron.core:mud-npc))
+                              (apeiron.core:world-all-objects world))))
+    ;; The nexus portal leads to Eridu's entrance
+    (is (not (null eridu)))
+    (is (eq causeway (apeiron.core:room-exit-target nexus "Eridu")))
+    (is (eq causeway (apeiron.core:room-exit-target nexus "ed")))
+    (is (eq nexus (apeiron.core:room-exit-target causeway "nexus")))
+    ;; The city is a fully connected area
+    (is (= 18 (apeiron.core:area-room-count eridu)))
+    (is (apeiron.core:area-connected-graph-p eridu))
+    (is (>= (length npcs) 8))
+    (is (not (null market)))
+    (is (not (null e-abzu)))
+    ;; The riddle on the way into the sacred precinct
+    (let* ((stream (make-string-output-stream))
+           (character (apeiron.core:new-character "Pilgrim" (make-instance 'apeiron.core:stream-session
+                                                                         :stream stream))))
+      (apeiron.core:object-move character market)
+      (is (not (null (apeiron.core:room-exit-blocked-p market character "north"))))
+      (apeiron.core:process-command world character "answer eridu")
+      (is (null (apeiron.core:room-exit-blocked-p market character "north")))
+      (is (apeiron.core:object-get-property character "solved-eridu-riddle")))
+    ;; The fight gate into the Abzu: the goat-fish must fall first
+    (let* ((stream (make-string-output-stream))
+           (character (apeiron.core:new-character "Wanderer" (make-instance 'apeiron.core:stream-session
+                                                                           :stream stream))))
+      (apeiron.core:object-move character e-abzu)
+      (let ((goat (find-if (lambda (obj)
+                             (and (typep obj 'apeiron.core:mud-npc)
+                                  (search "goat-fish" (string-downcase (apeiron.core:object-name obj)))))
+                           (apeiron.core:container-all-objects e-abzu))))
+        (is (not (null goat)))
+        ;; Blocked until the guardian is defeated
+        (is (not (null (apeiron.core:room-exit-blocked-p e-abzu character "north"))))
+        (loop repeat 20
+              until (apeiron.core:npc-defeated-p goat)
+              do (apeiron.core:combat-attack-npc world character goat))
+        (is (apeiron.core:npc-defeated-p goat))
+        (is (apeiron.core:object-get-property character "beat-suhur-mashu"))
+        (is (null (apeiron.core:room-exit-blocked-p e-abzu character "north")))))))

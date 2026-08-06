@@ -44,23 +44,28 @@ entrance is the nexus.  Returns the area."
 ;; ─── Default world ───────────────────────────────────────────────────────────
 
 (defun new-default-world ()
-  "Create the default Apeiron world with all areas (hub, mall, cavern),
-registered via WORLD-ADD-AREA! and linked to one another.  The nexus acts
-as a hub to the other areas/universes: each has a named portal direction
-from the nexus (e.g. 'Poké Land' leads to the shopping mall).  Each
-area's entrance is used for the cross-area links and the world's starting
-room."
+  "Create the default Apeiron world with all areas (hub, mall, cavern,
+eridu), registered via WORLD-ADD-AREA! and linked to one another.  The
+nexus acts as a hub to the other areas/universes: each has a named portal
+direction from the nexus (e.g. 'Poké Land' leads to the shopping mall,
+'Eridu' leads to the first city of Sumer).  Each area's entrance is used
+for the cross-area links and the world's starting room."
   (let ((world (make-instance 'mud-world)))
     (let ((hub (build-apeiron-hub))
           (mall (build-shopping-mall))
-          (cavern (build-team-rocket-cavern)))
+          (cavern (build-team-rocket-cavern))
+          (eridu (build-eridu)))
       (world-add-area! world hub)
       (world-add-area! world mall)
       (world-add-area! world cavern)
+      (world-add-area! world eridu)
       ;; Cross-area links — the nexus is a hub to other areas/universes
       ;; Nexus → shopping mall, portal named "Poké Land" (pl)
       (connect-rooms! world (area-entrance hub) (area-entrance mall)
                       :to '("Poké Land" "pl") :from "nexus")
+      ;; Nexus → Eridu, portal named "Eridu" (ed)
+      (connect-rooms! world (area-entrance hub) (area-entrance eridu)
+                      :to '("Eridu" "ed") :from "nexus")
       ;; Mall arcade → Team Rocket cavern maze
       (connect-rooms! world (area-find-room mall "Arcade Zone") (area-entrance cavern)
                       :to "maintenance" :from "mall")

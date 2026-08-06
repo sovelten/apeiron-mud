@@ -162,3 +162,12 @@ Four independent checks:
          (or (object-get-property room (format nil "gate-~A-message" dir))
              (format nil "Something blocks the ~A exit. You are not ready to pass."
                      direction)))))))
+
+(defun set-flag-gate (room exit-direction flag &optional message)
+  "Set a flag-based gate on ROOM: the EXIT-DIRECTION is blocked until the
+character has FLAG.  MESSAGE is shown when they try to pass."
+  (object-set-property room (format nil "gate-~A" (string-downcase exit-direction)) flag)
+  (when message
+    (object-set-property room
+                         (format nil "gate-~A-message" (string-downcase exit-direction))
+                         message)))

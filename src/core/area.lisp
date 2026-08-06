@@ -10,9 +10,10 @@
 ;;;; connections between them: AREA-ROOM-LIST / AREA-ROOM-COUNT derive
 ;;;; from the graph's vertices, and AREA-ROOM-CONNECTIONS /
 ;;;; AREA-ADJACENT-ROOMS from a vertex's incident edges / neighbours.
-;;;; The ROOMS hash-table (keyed by world-level object ID) is kept as a
-;;;; convenience ID index, and CONNECTIONS as a flat list for callers
-;;;; that want to iterate connections directly.
+;;;; The ROOMS slot is a flat list keyed by object identity (so rooms
+;;;; can be added before world registration assigns OBJECT-IDs), and
+;;;; CONNECTIONS a flat list for callers that want to iterate
+;;;; connections directly.
 ;;;;
 ;;;; Connections registered through an area are also pushed onto the
 ;;;; endpoints' ROOM-CONNECTIONS lists (like CONNECT-ROOMS! at the world
@@ -29,9 +30,11 @@
 (defclass mud-area (mud-object)
   ((rooms :initarg :rooms
           :accessor area-rooms
-          :initform (make-hash-table :test #'eql)
-          :documentation "Rooms in the area, keyed by world-level ID.  A
-convenience ID index; the graph is the authoritative room set.")
+          :initform nil
+          :documentation "Rooms in the area, as a list.  A list (rather
+than a hash keyed by OBJECT-ID) so that rooms which have not yet been
+registered with a world — and therefore share the unset OBJECT-ID -1 —
+can still coexist in one area.  The graph is the authoritative room set.")
    (connections :initarg :connections
                 :accessor area-connections
                 :initform '()
@@ -62,21 +65,22 @@ and reachability queries can run on top of the plain room/connection data."))
 ;; ─── Construction ──────────────────────────────────────────────────────────
 
 (defun area-add-room! (area room)
-  "Add ROOM to AREA (idempotent).  Registers the room as a vertex of the
-area's graph and in the rooms ID index, and sets the room's ROOM-AREA
-back-reference to AREA.  Returns ROOM."
-  (setf (gethash (object-id room) (area-rooms area)) room)
+  "Add ROOM to AREA (idempotent per object identity).  Registers the room
+as a vertex of the area's graph and in the rooms list, and sets the room's
+ROOM-AREA back-reference to AREA.  Returns ROOM."
+  (pushnew room (area-rooms area) :test #'eq)
   (setf (room-area room) area)
   (cl-graph:add-vertex (area-graph area) room)
   room)
 
 (defun area-remove-room! (area room)
   "Remove ROOM from AREA along with every connection incident to it.
-The room and its connections are removed from the graph, the rooms index
+The room and its connections are removed from the graph, the rooms list
 and the connections list; the endpoints' ROOM-CONNECTIONS lists are also
 cleaned up, and the room's ROOM-AREA back-reference is cleared.
 Returns ROOM."
-  (remhash (object-id room) (area-rooms area))
+  (setf (area-rooms area)
+        (remove room (area-rooms area) :test #'eq))
   ;; Drop incident connections from the flat list and the other rooms.
   (dolist (conn (area-room-connections area room))
     (area-remove-connection! area conn))
@@ -182,8 +186,7 @@ restored, so areas restored from older snapshots (whose rooms predate the
 back-reference) still find their connections.  Returns AREA."
   (setf (area-graph area)
         (make-instance 'cl-graph:graph-container :default-edge-type :undirected))
-  (dolist (room (loop for r being the hash-values of (area-rooms area)
-                      collect r))
+  (dolist (room (area-rooms area))
     (setf (room-area room) area)
     (cl-graph:add-vertex (area-graph area) room))
   (dolist (conn (area-connections area))
@@ -220,10 +223,14 @@ the MUD-AREA."
 
 (defun area-find-room (area id-or-name)
   "Find a room in AREA by world-level ID (an integer) or by name
-(a string, case-insensitive).  Returns the room or NIL."
+(a string, case-insensitive).  Returns the room or NIL.
+
+Linear scan over the rooms list in both cases (areas are small and this
+is not a hot path)."
   (etypecase id-or-name
-    (integer (gethash id-or-name (area-rooms area)))
-    (string  (find id-or-name (area-room-list area)
+    (integer (find id-or-name (area-rooms area)
+                   :key #'object-id :test #'eql))
+    (string  (find id-or-name (area-rooms area)
                    :test (lambda (name room)
                            (string-equal name (object-name room)))))))
 

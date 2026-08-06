@@ -13,7 +13,7 @@
   (let ((room (apeiron.core:new-room))
         (obj (apeiron.core:new-room)))
     (apeiron.core:container-add-object room obj)
-    (is (= 1 (hash-table-count (apeiron.core:container-contents room))))))
+    (is (= 1 (length (apeiron.core:container-contents room))))))
 
 (test find-character-in-room
   "Test finding a character in a room by name (case-insensitive)"
