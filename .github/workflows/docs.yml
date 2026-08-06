@@ -1,13 +1,12 @@
 # Regenerate the Apeiron HTML documentation and publish it to GitHub Pages.
 #
-# This is a custom workflow rather than the turnkey `40ants/build-docs` action
-# on purpose: that action regenerates README.md from the manual, and Apeiron's
-# hand-written README.md (quick start, in-game tutorials) must be preserved.
+# Uses plain SBCL + Quicklisp — the same environment as the local
+# `sbcl --load run-docs.lisp` workflow — instead of the Roswell-based
+# 40ants/setup-lisp action (which requires a LISP env var, a qlfile and
+# Qlot, i.e. a different environment than development).
 #
 # After the first run, enable Pages in the repo settings with
 # "Deploy from a branch" -> "GitHub Actions" as the source.
-#
-# To regenerate locally instead: `sbcl --load run-docs.lisp`
 
 name: Docs
 
@@ -31,8 +30,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Common Lisp
-        uses: 40ants/setup-lisp@v4
+      - name: Install SBCL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sbcl
+
+      - name: Install Quicklisp
+        run: |
+          curl -sL https://beta.quicklisp.org/quicklisp.lisp -o /tmp/quicklisp.lisp
+          sbcl --non-interactive --load /tmp/quicklisp.lisp --eval '(quicklisp-quickstart:install)'
+          sbcl --non-interactive --load /tmp/quicklisp.lisp --eval '(ql-util:without-prompting (ql:add-to-init-file))'
 
       - name: Generate documentation
         run: sbcl --non-interactive --load run-docs.lisp
