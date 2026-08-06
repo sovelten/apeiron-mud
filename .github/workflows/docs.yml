@@ -37,9 +37,10 @@ jobs:
 
       - name: Install Quicklisp
         run: |
-          curl -sL https://beta.quicklisp.org/quicklisp.lisp -o /tmp/quicklisp.lisp
-          sbcl --non-interactive --load /tmp/quicklisp.lisp --eval '(quicklisp-quickstart:install)'
-          sbcl --non-interactive --load /tmp/quicklisp.lisp --eval '(ql-util:without-prompting (ql:add-to-init-file))'
+          if [ ! -f "$HOME/quicklisp/setup.lisp" ]; then
+            curl -sL https://beta.quicklisp.org/quicklisp.lisp -o /tmp/quicklisp.lisp
+            sbcl --non-interactive --load /tmp/quicklisp.lisp --eval '(quicklisp-quickstart:install)'
+          fi
 
       - name: Generate documentation
         run: sbcl --non-interactive --load run-docs.lisp
