@@ -1,17 +1,22 @@
-*.FASL
+# Generated documentation — run `sbcl --load run-docs.lisp` to regenerate.
+# The source for these is docs/apeiron-docs.lisp + the embedded sections
+# in src/core/*.lisp; the generated site is published to GitHub Pages by
+# .github/workflows/docs.yml.
+docs/apeiron-manual/
+docs/doctools.js
+docs/highlight.min.css
+docs/highlight.min.js
+docs/jquery.js
+docs/language_data.js
+docs/METADATA
+docs/references.json
+docs/search/
+docs/searchindex.js
+docs/searchtools.js
+docs/theme.css
+docs/toc.js
+docs/underscore.js
+
+# Compiled artifacts
 *.fasl
-*.lisp-temp
-*.dfsl
-*.pfsl
-*.d64fsl
-*.p64fsl
-*.lx64fsl
-*.lx32fsl
-*.dx64fsl
-*.dx32fsl
-*.fx64fsl
-*.fx32fsl
-*.sx64fsl
-*.sx32fsl
-*.wx64fsl
-*.wx32fsl
+*.fas

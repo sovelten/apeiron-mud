@@ -23,8 +23,7 @@ for the given WORLD: NAME, PLAYERS, and UPTIME."
   (lambda ()
     (let ((vars (list (cons "NAME" *mud-name*)
                       (cons "PLAYERS" (princ-to-string (world-total-characters world)))
-                      (cons "UPTIME" (princ-to-string (floor (- (get-universal-time)
-                                                                *server-start-time*)))))))
+                      (cons "UPTIME" (princ-to-string *server-start-time*)))))
       (log-message "[MSSP] mssp-info-fn called: returning ~D vars (NAME=~S PLAYERS=~S UPTIME=~S)"
                    (length vars) *mud-name* (world-total-characters world)
                    (floor (- (get-universal-time) *server-start-time*)))
