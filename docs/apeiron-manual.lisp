@@ -147,6 +147,16 @@
   3. **Hot Reloading** — no need to ever shut the server down for
      maintenance (WIP).""")
 
+(defsection @protocols (:title "Protocols")
+  """- **Telnet (RFC 854)** — network protocol for player connections, with
+    option negotiation, line editing and echo control
+    (see `apeiron/telnet`).
+  - **MSSP** — MUD Server Status Protocol: advertises server details
+    (name, players, game type, ...) to directory services.
+  - **TLS** — secure transport for telnet connections (via `cl+ssl`).
+  - **ANSI SGR colors** — colour output for the client (toggle with
+    `toggle-colors`).""")
+
 (defsection @development (:title "Development Guide")
   """### Adding a New Command
 
@@ -345,3 +355,24 @@
 
   See [mcp/README.md](https://github.com/sovelten/apeiron-mud/blob/main/mcp/README.md)
   for setup and usage.""")
+
+(defsection @command-reference (:title "Command Reference")
+  """| Command | Usage | Description |
+  |---------|-------|-------------|
+  | `look` | `look` | Examine current room |
+  | `go` | `go <direction>` | Move (north/south/east/west) |
+  | `exits` | `exits` | List available exits |
+  | `inventory` | `inventory` | View carried items |
+  | `examine` | `examine <name>` | Examine an object or NPC |
+  | `attack` | `attack <name>` | Attack an NPC |
+  | `say` | `say <message>` | Speak to other characters in room |
+  | `shout` | `shout <message>` | Broadcast to all characters |
+  | `tell` | `tell <name> <message>` | Private message to a character or object |
+  | `read` | `read <name>` | Read a readable object (guestbook, sign, etc.) |
+  | `write` | `write <name>` | Write a message on a writable object |
+  | `answer` | `answer <text>` | Answer a challenge/puzzle |
+  | `status` | `status` | Show your HP and stats |
+  | `help` | `help` | List all commands |
+  | `toggle-colors` | `toggle-colors` | Toggle ANSI color output |
+  | `eval` | `eval <sexpr>` | Run arbitrary lisp code (admin only!) |
+  | `quit` | `quit` | Disconnect |""")

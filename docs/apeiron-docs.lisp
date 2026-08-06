@@ -11,6 +11,10 @@
 ;;;;   - the root manual section must be called `@index`;
 ;;;;   - a section named `@readme` becomes the generated README.md.
 ;;;;
+;;;; DRY: @readme and @index reference the SAME content sections
+;;;; (defined in docs/apeiron-manual.lisp) — the README is generated
+;;;; from those sections too, so there is a single source of truth.
+;;;;
 ;;;; FUTURE IDEA (flagged, not now): docs-builder discovers packages by
 ;;;; the package-inferred, slash-named convention (foo/bar). Apeiron
 ;;;; uses classic dot-named packages (apeiron.core), so this file
@@ -67,69 +71,20 @@
   `apeiron.core` package (and its small `apeiron.core.utils` helper
   package).")
 
+;;; The landing README.md. All substantive content is REFERENCED from
+;;; the shared sections in docs/apeiron-manual.lisp (single source of
+;;; truth — the manual renders the same sections).
 (defsection @readme (:title "Apeiron" :export t)
   """Apeiron is a MUD server written in Common Lisp, inspired by
   Dworkin's Game Driver (DGD) and LMUD, with the reckless capability of
   running Lisp code inside the game world.
 
-  [![CI](https://github.com/sovelten/apeiron-mud/actions/workflows/test.yml/badge.svg)](https://github.com/sovelten/apeiron-mud/actions/workflows/test.yml)
-
-  ## Quick Start
-
-  ### Prerequisites
-
-  - **SBCL** 2.0+
-  - **Quicklisp**
-
-  ### Start the Server
-
-  ```lisp
-  (push #p"./" asdf:*central-registry*)
-  (ql:quickload :apeiron)
-  (apeiron.server:start-mud-server)
-  ```
-
-  Or load run-mud.lisp:
-
-  ```bash
-  sbcl --load run-mud.lisp
-  ```
-
-  ### Connect as a Player
-
-  ```bash
-  telnet localhost 8888
-  ```
-
-  ### Stop the Server
-
-  ```lisp
-  (apeiron.server:stop-mud-server)
-  ```
-
-  ## Commands
-
-  | Command | Usage | Description |
-  |---------|-------|-------------|
-  | `look` | `look` | Examine current room |
-  | `go` | `go <direction>` | Move (north/south/east/west) |
-  | `exits` | `exits` | List available exits |
-  | `inventory` | `inventory` | View carried items |
-  | `examine` | `examine <name>` | Examine an object or NPC |
-  | `attack` | `attack <name>` | Attack an NPC |
-  | `say` | `say <message>` | Speak to other characters in room |
-  | `shout` | `shout <message>` | Broadcast to all characters |
-  | `tell` | `tell <name> <message>` | Private message to a character or object |
-  | `read` | `read <name>` | Read a readable object (guestbook, sign, etc.) |
-  | `write` | `write <name>` | Write a message on a writable object |
-  | `answer` | `answer <text>` | Answer a challenge/puzzle |
-  | `status` | `status` | Show your HP and stats |
-  | `help` | `help` | List all commands |
-  | `toggle-colors` | `toggle-colors` | Toggle ANSI color output |
-  | `eval` | `eval <sexpr>` | Run arbitrary lisp code (admin only!) |
-  | `quit` | `quit` | Disconnect |
-
-  ## Documentation
+  [![CI](https://github.com/sovelten/apeiron-mud/actions/workflows/test.yml/badge.svg)](https://github.com/sovelten/apeiron-mud/actions/workflows/test.yml)"""
+  (@getting-started section)
+  (@architecture section)
+  (@protocols section)
+  (@command-reference section)
+  """## Documentation
 
   - Full manual (generated from the source with 40ANTS-DOC):
     https://sovelten.github.io/apeiron-mud/
@@ -149,8 +104,10 @@
   See the README for a quick start and the command reference."""
   (@getting-started section)
   (@architecture section)
+  (@protocols section)
   (@features section)
   (@development section)
+  (@command-reference section)
   (apeiron.core::@world section)
   (apeiron.core::@commands section)
   (@tutorial-secret-room section)

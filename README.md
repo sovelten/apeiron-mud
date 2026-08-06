@@ -8,9 +8,9 @@ running Lisp code inside the game world.
 
 [![](https://github.com/sovelten/apeiron-mud/actions/workflows/test.yml/badge.svg)][b83b]
 
-<a id="quick-start"></a>
+<a id="x-28APEIRON-DOCS-3A-40GETTING-STARTED-2040ANTS-DOC-2FLOCATIVES-3ASECTION-29"></a>
 
-## Quick Start
+## Getting Started
 
 <a id="prerequisites"></a>
 
@@ -23,6 +23,8 @@ running Lisp code inside the game world.
 
 ### Start the Server
 
+In `SBCL`:
+
 ```lisp
 (push #p"./" asdf:*central-registry*)
 (ql:quickload :apeiron)
@@ -33,23 +35,125 @@ Or load run-mud.lisp:
 ```bash
 sbcl --load run-mud.lisp
 ```
+You should see:
+
+```
+[INFO] Initializing world...
+[INFO] World initialized with 2 rooms
+[INFO] MUD Server started on 127.0.0.1:8888
+```
 <a id="connect-as-a-player"></a>
 
 ### Connect as a Player
 
+In another terminal:
+
 ```bash
 telnet localhost 8888
+```
+<a id="example-session"></a>
+
+### Example Session
+
+Using eval to create a room and connect it:
+
+```
+What is your name?
+> Frodo
+
+=== The Prancing Pony ===
+
+You see:
+  - Frodo (ID: 4)
+
+Exits: west
+
+Welcome to the MUD!
+> eval (world-add-object! (world) (new-room :name "Rivendell"))
+#<MUD-ROOM Rivendell (ID: 8)>
+> eval (connect-rooms! (world) (here) "east" (world-object-with-name (world) "Rivendell") "west")
+#<MUD-CONNECTION passage between The Prancing Pony and Rivendell (ID: 9)>
+> look
+
+=== The Prancing Pony ===
+
+You see:
+  - Frodo (ID: 4)
+
+Exits: west, east
+
+> go east
+You go east.
+
+=== Rivendell ===
+
+You see:
+  - Frodo (ID: 4)
+
+Exits: west
+
+> say Where are all the elves?
+You say: Where are all the elves?
 ```
 <a id="stop-the-server"></a>
 
 ### Stop the Server
 
+In the `SBCL` `REPL`:
+
 ```lisp
 (apeiron.server:stop-mud-server)
 ```
-<a id="commands"></a>
+This:
+1. Sets `*server-running*` to `NIL`
+2. Closes the server socket
+3. Waits for acceptance thread to exit
+4. Disconnects all characters
 
-## Commands
+<a id="x-28APEIRON-DOCS-3A-40ARCHITECTURE-2040ANTS-DOC-2FLOCATIVES-3ASECTION-29"></a>
+
+## Architecture
+
+```
+       apeiron/core
+     /     |        \
+worlds  persistence  telnet
+     \     |         /
+         server
+           |
+       apeiron (meta)
+```
+Core is the shared foundation. Worlds and persistence build on it
+independently (no dependency between them). Telnet is standalone.
+The server layer wires everything together.
+
+<a id="key-design-principles"></a>
+
+### Key Design Principles
+
+1. **Persistent Objects** — game objects are persisted and changes are
+   logged to enable recovery (using `BKNR`.Datastore).
+2. **All power to the user** — you can eval Lisp code directly within
+   the game (could/should be restricted to admins in the future).
+3. **Hot Reloading** — no need to ever shut the server down for
+   maintenance (`WIP`).
+
+<a id="x-28APEIRON-DOCS-3A-40PROTOCOLS-2040ANTS-DOC-2FLOCATIVES-3ASECTION-29"></a>
+
+## Protocols
+
+* **Telnet (`RFC` 854)** — network protocol for player connections, with
+  option negotiation, line editing and echo control
+  (see `apeiron/telnet`).
+* **`MSSP`** — `MUD` Server Status Protocol: advertises server details
+  (name, players, game type, ...) to directory services.
+* **`TLS`** — secure transport for telnet connections (via `cl+ssl`).
+* **`ANSI` `SGR` colors** — colour output for the client (toggle with
+  `toggle-colors`).
+
+<a id="x-28APEIRON-DOCS-3A-40COMMAND-REFERENCE-2040ANTS-DOC-2FLOCATIVES-3ASECTION-29"></a>
+
+## Command Reference
 
 | Command | Usage | Description |
 | --- | --- | --- |
