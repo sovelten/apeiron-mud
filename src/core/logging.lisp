@@ -34,8 +34,7 @@ Behaviour is driven by *RUN-MODE*:
   (ensure-directories-exist
    (merge-pathnames "mud.log" log-directory))
 
-  (let* ((log-file (merge-pathnames "mud.log" log-directory))
-         (level (ecase *run-mode* (:debug :debug) ((:prod :test) :info))))
+  (let ((log-file (merge-pathnames "mud.log" log-directory)))
 
     ;; ── Clean slate + file appender ─────────────────────────────────────
     ;; The :SANE call clears all existing appenders and creates a single
