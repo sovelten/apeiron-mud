@@ -2,6 +2,11 @@
 
 ;; Room class - a specialized mud-object
 
+;; AREA-ROOM-CONNECTIONS is defined in area.lisp, which loads after this
+;; file (AREA depends on ROOM).  Declare it up front so compiling
+;; ROOM-EXIT-CONNECTIONS does not warn about the forward reference.
+(declaim (ftype function area-room-connections))
+
 (defclass mud-room (mud-object container-mixin)
   ((connections :initarg :connections
                 :accessor room-connections
@@ -77,6 +82,31 @@ list.  The result is deduplicated."
                                    (room-connections room))
                            :test #'eq)
         (room-connections room))))
+
+(defun connection-find (room direction)
+  "Find a connection from ROOM in the given DIRECTION, or nil.
+
+Searches the room's exit connections (area connections first, then the
+room's own, see ROOM-EXIT-CONNECTIONS) for a connection that has
+this room and direction (including direction synonyms).
+Returns the connection if found."
+  (find-if (lambda (c)
+             (and (or (eq room (connection-room-a c))
+                      (eq room (connection-room-b c)))
+                  (connection-direction-matches c room direction)))
+           (room-exit-connections room)))
+
+(defun connection-exit-blocked-message (room direction)
+  "Return a blocking message if a connection in this direction is blocked, or nil.
+
+When the connection has a custom BLOCKED-MESSAGE (e.g. a riddle question)
+that is returned; otherwise a generic \"X is blocked\" message is used."
+  (let ((conn (connection-find room direction)))
+    (when (and conn (connection-blocked-p conn))
+      (or (connection-blocked-message conn)
+          (format nil "~A is blocked. You cannot go ~A."
+                  (object-name conn)
+                  direction)))))
 
 (defun room-exit-list (room)
   "Return a list of (direction connection) for every usable exit in ROOM.
