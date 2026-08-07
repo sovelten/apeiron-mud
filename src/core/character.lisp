@@ -33,6 +33,13 @@ If the character has no session (e.g. disconnected), the message is silently dro
       (let ((*colorize* (session-use-colors session)))
         (mud-write session message :newline newline)))))
 
+(defun find-character-in-room (room character-name)
+  "Find a character in a room by name."
+  (loop for obj in (container-all-objects room)
+        when (and (typep obj 'mud-character)
+                  (string-equal (object-name obj) character-name))
+        return obj))
+
 (defmethod object-describe ((obj mud-character))
   "Bright green for character characters."
   (bright-green (format nil "~A (ID: ~D)" (object-name obj) (object-id obj))))

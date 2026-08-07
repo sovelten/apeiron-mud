@@ -54,13 +54,6 @@ incident to it and its own CONNECTIONS list (see ROOM-EXIT-CONNECTIONS)."))
                  
                  :location nil))
 
-(defun find-character-in-room (room character-name)
-  "Find a character in a room by name."
-  (loop for obj in (container-all-objects room)
-        when (and (typep obj 'mud-character)
-                  (string-equal (object-name obj) character-name))
-        return obj))
-
 (defun room-exit-target (room direction)
   "Get the target room when moving in DIRECTION from ROOM.
 
