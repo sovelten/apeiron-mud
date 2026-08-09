@@ -7,6 +7,10 @@
             :accessor character-session
             :initform nil
             :documentation "The session controlling this character")
+   (limbs :initarg :limbs
+            :accessor character-limbs
+            :initform nil
+            :documentation "The character limbs (hands, head(s) etc.")
    (owner :initarg :owner
           :accessor character-owner
           :initform nil
@@ -14,6 +18,10 @@
 NIL for guest characters.  Stored as a plain string so it survives
 BKNR restarts without needing an object reference."))
   (:documentation "A character in the MUD"))
+
+(defgeneric wear (character object &optional limb)
+  "Try to wear object. Optional limb-name: head, left hand etc.
+   If absent, try to wear on first fitting limb or fail")
 
 (defun new-character (name session &key owner)
   (let ((character (make-instance 'mud-character

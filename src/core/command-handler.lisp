@@ -429,32 +429,6 @@ Debug helpers: (d obj), (slots-of obj), (props obj), (inv obj), (loc obj), (obj-
     (world-remove-character! world character)
     (session-disconnect session)))
 
-;; ─── Speech handling ──────────────────────────────────────────────────────
-;; Objects can implement HANDLE-TELL to respond when spoken/told to.
-
-(defgeneric handle-tell (object speaker message)
-  (:documentation "Called when SPEAKER directs MESSAGE at OBJECT.
-  Returns non-NIL if the speech was handled, NIL otherwise.")
-  (:method (object speaker message)
-    (declare (ignore object speaker message))
-    nil))
-
-(defgeneric handle-read (object reader)
-  (:documentation "Called when READER tries to read OBJECT.
-  Should display the readable content to the reader and return non-NIL.
-  Returns NIL if the object has nothing readable.")
-  (:method (object reader)
-    (declare (ignore object reader))
-    nil))
-
-(defgeneric handle-write (object writer message)
-  (:documentation "Called when WRITER tries to write MESSAGE on OBJECT.
-  Should record the message and return non-NIL.
-  Returns NIL if the object is not writable.")
-  (:method (object writer message)
-    (declare (ignore object writer message))
-    nil))
-
 (define-command "tell" (world character args)
   "Send a private message to a character or speak to an object in the room, e.g. 'tell bob hello'."
   (declare (ignore world))

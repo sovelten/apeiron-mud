@@ -21,6 +21,10 @@
             :accessor object-aliases
             :initform nil
             :documentation "List of alternative name strings for matching")
+   (keywords :initarg :keywords
+             :accessor object-keywords
+             :initform nil
+             :documentation "List of keywords representing the object")
    (properties :initarg :properties
                :accessor object-properties
                :initform (make-hash-table :test #'equal)
@@ -89,3 +93,48 @@ case-insensitive) or any alias (exact, case-insensitive). Returns NIL for empty 
     (format stream "~A (ID: ~D)"
             (object-name obj)
             (object-id obj))))
+
+
+;; ─── Command processing handling ──────────────────────────────────────────────────────
+;; Responses to commands that objects can implement.
+;; By convention, for tell command, use handle-tell etc.
+;; Command-handler should call appropriate handler if eligible.
+
+(defgeneric handle-tell (object speaker message)
+  (:documentation "Called when SPEAKER directs MESSAGE at OBJECT.
+  Returns non-NIL if the speech was handled, NIL otherwise.")
+  (:method (object speaker message)
+    (declare (ignore object speaker message))
+    nil))
+
+(defgeneric handle-read (object reader)
+  (:documentation "Called when READER tries to read OBJECT.
+  Should display the readable content to the reader and return non-NIL.
+  Returns NIL if the object has nothing readable.")
+  (:method (object reader)
+    (declare (ignore object reader))
+    nil))
+
+(defgeneric handle-write (object writer message)
+  (:documentation "Called when WRITER tries to write MESSAGE on OBJECT.
+  Should record the message and return non-NIL.
+  Returns NIL if the object is not writable.")
+  (:method (object writer message)
+    (declare (ignore object writer message))
+    nil))
+
+(defgeneric handle-hold (object writer)
+  (:documentation "Called when WRITER tries to hold OBJECT.
+  Should record the message and return non-NIL.
+  Returns NIL if the object is not writable.")
+  (:method (object writer)
+    (declare (ignore object writer message))
+    nil))
+
+(defgeneric handle-wear (object writer)
+  (:documentation "Called when WRITER tries to wear OBJECT.
+  Should record the message and return non-NIL.
+  Returns NIL if the object is not writable.")
+  (:method (object writer)
+    (declare (ignore object writer message))
+    nil))
