@@ -21,6 +21,10 @@
             :accessor object-aliases
             :initform nil
             :documentation "List of alternative name strings for matching")
+   (keywords :initarg :keywords
+             :accessor object-keywords
+             :initform nil
+             :documentation "List of keywords representing the object")
    (properties :initarg :properties
                :accessor object-properties
                :initform (make-hash-table :test #'equal)
@@ -41,11 +45,16 @@ The default method modifies the hash-table in-place.
 Specialized methods on persistent objects should also ensure the slot
 is written so BKNR's transaction logging captures the change."))
 
-(defun new-object (&key (name "object") (location nil))
-  "Create a new MUD object."
+(defun new-object (&key (name "object") (location nil)
+                        (description "") (aliases nil) (keywords nil))
+  "Create a new MUD object.  KEYWORDS control which body slots the object
+can be worn/held in (see WEAR and ITEM-FITS-SLOT-P)."
   (make-instance 'mud-object
                  :name name
-                 :location location))
+                 :location location
+                 :description description
+                 :aliases aliases
+                 :keywords keywords))
 
 (defun object-name-matches (obj name)
   "Return non-NIL if NAME matches the object's primary name (exact or whole-word,
@@ -89,3 +98,48 @@ case-insensitive) or any alias (exact, case-insensitive). Returns NIL for empty 
     (format stream "~A (ID: ~D)"
             (object-name obj)
             (object-id obj))))
+
+
+;; ─── Command processing handling ──────────────────────────────────────────────────────
+;; Responses to commands that objects can implement.
+;; By convention, for tell command, use handle-tell etc.
+;; Command-handler should call appropriate handler if eligible.
+
+(defgeneric handle-tell (object speaker message)
+  (:documentation "Called when SPEAKER directs MESSAGE at OBJECT.
+  Returns non-NIL if the speech was handled, NIL otherwise.")
+  (:method (object speaker message)
+    (declare (ignore object speaker message))
+    nil))
+
+(defgeneric handle-read (object reader)
+  (:documentation "Called when READER tries to read OBJECT.
+  Should display the readable content to the reader and return non-NIL.
+  Returns NIL if the object has nothing readable.")
+  (:method (object reader)
+    (declare (ignore object reader))
+    nil))
+
+(defgeneric handle-write (object writer message)
+  (:documentation "Called when WRITER tries to write MESSAGE on OBJECT.
+  Should record the message and return non-NIL.
+  Returns NIL if the object is not writable.")
+  (:method (object writer message)
+    (declare (ignore object writer message))
+    nil))
+
+(defgeneric handle-hold (object writer)
+  (:documentation "Called when WRITER holds OBJECT in a hand.
+  Should record the message and return non-NIL.
+  Returns NIL if the object has nothing to say.")
+  (:method (object writer)
+    (declare (ignore object writer))
+    nil))
+
+(defgeneric handle-wear (object writer)
+  (:documentation "Called when WRITER wears OBJECT on their body (e.g. a hat
+on the head).  Should record the message and return non-NIL.
+  Returns NIL if the object has nothing to say.")
+  (:method (object writer)
+    (declare (ignore object writer))
+    nil))
