@@ -18,6 +18,14 @@
   ()
   (:transient-slots session))
 
+(defwrapping-persistent-class persistent-head (head)
+  ()
+  (:transient-slots))
+
+(defwrapping-persistent-class persistent-hand (hand)
+  ()
+  (:transient-slots))
+
 (defwrapping-persistent-class persistent-guestbook (mud-guestbook persistent-object)
   ()
   (:transient-slots entries))
@@ -57,6 +65,17 @@ values so they don't cause SLOT-UNBOUND errors on access."
           (initfn (sb-mop:slot-definition-initfunction slotd)))
       (when (and initfn (not (slot-boundp obj name)))
         (setf (slot-value obj name) (funcall initfn))))))
+
+(defmethod bknr.datastore:initialize-transient-instance :after ((obj persistent-character))
+  "Make sure a restored character's limbs are persistent store-objects.
+
+Characters saved before the limbs feature had no stored LIMBS value, so
+the PERSISTENT-OBJECT method above filled the slot with fresh transient
+limbs from the initform.  Converting them in place here means wearing and
+removing items afterwards is tracked by the datastore."
+  (dolist (limb (character-limbs obj))
+    (unless (typep limb 'bknr.datastore:store-object)
+      (materialize-object limb))))
 
 (defmethod bknr.datastore:initialize-transient-instance :after ((area persistent-area))
   "Rebuild the area's cl-graph index from its restored rooms and
@@ -274,6 +293,18 @@ logging)."
       (bknr.indices:index-add (bknr.indices::index-holder-index holder) obj))
     obj))
 
+(defmethod materialize-object ((obj mud-character))
+  "Materialize a character's limbs first, then the character itself.
+
+The limbs (head/hand instances) are plain transient objects whose ITEM
+slots must be persisted.  Converting them to PERSISTENT-HEAD /
+PERSISTENT-HAND store-objects before the character's LIMBS slot is
+encoded lets BKNR track what the character wears."
+  (dolist (limb (character-limbs obj))
+    (unless (typep limb 'bknr.datastore:store-object)
+      (materialize-object limb)))
+  (call-next-method))
+
 (defun materialize-world (transient-world)
   "Convert TRANSIENT-WORLD into a persistent world in-place.
 
@@ -297,13 +328,22 @@ Returns TRANSIENT-WORLD (now a persistent-world)."
 ;; ─── World restore / initialize ─────────────────────────────────────────────
 
 (defun default-transient-world ()
-  "Create a bare transient world with the five hub rooms and a guestbook.
+  "Create a bare transient world with the nexus room, a guestbook, and
+some starter equipment (a wizard hat and a rusty sword).
 
 Used as the fallback when WORLD-RESTORE-OR-INITIALIZE is called
 without :TRANSIENT-WORLD."
   (let ((world (make-instance 'mud-world)))
     (let ((nexus (new-room :name "Apeiron Nexus"
                            :description "You are in a place outside of time and space. All possibilities and all things conjoin here. You can go everywhere, do everything. Be everything. What will you do?")))
+      (container-add-object nexus (new-object :name "a wizard hat"
+                                              :description "A pointy, midnight-blue wizard hat, dusted with tiny silver stars that seem to twinkle."
+                                              :keywords '("hat" "wizard")
+                                              :aliases '("hat" "wizard hat")))
+      (container-add-object nexus (new-object :name "a rusty sword"
+                                              :description "A battered blade, its edge nicked and its grip wrapped in frayed leather."
+                                              :keywords '("weapon" "sword")
+                                              :aliases '("sword")))
       (world-add-object! world nexus)
       (world-set-starting-room! world nexus))
     world))

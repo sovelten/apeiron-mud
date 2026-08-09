@@ -8,3 +8,5 @@
 
 (ql:quickload :apeiron)
 (ql:quickload :apeiron-test)
+
+;; (cl-mcp:initialize-pool) to reinitialize-pool if something goes wrong with cl-mcp (I think)

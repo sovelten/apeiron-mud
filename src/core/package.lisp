@@ -117,6 +117,7 @@
    #:object-describe
    #:object-location
    #:object-aliases
+   #:object-keywords
    #:object-name-matches
    #:object-properties
    #:object-get-property
@@ -288,6 +289,13 @@
    #:new-character
    #:character-session
    #:character-owner
+   #:character-limbs
+   #:wear
+   #:unequip
+   #:character-worn-items
+   #:find-limb-by-name
+   #:find-limb-holding
+   #:default-character-limbs
    #:container-contents
    #:container-add-object
    #:container-remove-object
@@ -295,6 +303,21 @@
    #:container-object-by-id
    #:container-objects-matching
    #:character-send-message
+
+   ;; Equipment / body slots
+   #:item-slot-mixin
+   #:head
+   #:hand
+   #:make-head
+   #:make-hand
+   #:item-slot
+   #:item-slot-name
+   #:item-slot-keywords
+   #:item-slot-add
+   #:item-slot-remove
+   #:item-slot-empty-p
+   #:item-slot-occupied-p
+   #:item-fits-slot-p
 
    ;; World
    #:mud-world
@@ -379,6 +402,8 @@
    #:handle-tell
    #:handle-read
    #:handle-write
+   #:handle-hold
+   #:handle-wear
 
    ;; Hot reload
    #:reload-apeiron

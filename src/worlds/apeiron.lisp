@@ -28,10 +28,20 @@ entrance is the nexus.  Returns the area."
                           :description "Stagnant water laps at gnarled tree roots as thick mist curls around your ankles. The air is heavy with the smell of decay and damp earth. Somewhere in the distance, a bullfrog croaks and something large splashes."))
          (volcano (new-room :name "A Rumbling Volcano"
                             :description "The ground trembles beneath your feet. Glowing lava flows through cracks in the black, jagged rock, casting an eerie red glow across the cavern. Heat shimmers violently and the air reeks of sulphur. The mountain groans above you."))
+         (wizard-hat (new-object :name "a wizard hat"
+                                 :description "A pointy, midnight-blue wizard hat, dusted with tiny silver stars that seem to twinkle."
+                                 :keywords '("hat" "wizard")
+                                 :aliases '("hat" "wizard hat")))
+         (rusty-sword (new-object :name "a rusty sword"
+                                  :description "A battered blade, its edge nicked and its grip wrapped in frayed leather."
+                                  :keywords '("weapon" "sword")
+                                  :aliases '("sword")))
          (guestbook (new-guestbook :name "an oak guestbook"))
          (area (new-area :name "Apeiron Hub")))
-    ;; Place the guestbook in the nexus
+    ;; Place the guestbook and the starter equipment in the nexus
     (container-add-object nexus guestbook)
+    (container-add-object nexus wizard-hat)
+    (container-add-object nexus rusty-sword)
     ;; Connect the nexus (hub) to the biomes
     ;; Forest uses a custom named connection: "Puzzling Forest" with synonym "pf"
     (area-connect-rooms! area nexus forest

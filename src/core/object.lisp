@@ -45,11 +45,16 @@ The default method modifies the hash-table in-place.
 Specialized methods on persistent objects should also ensure the slot
 is written so BKNR's transaction logging captures the change."))
 
-(defun new-object (&key (name "object") (location nil))
-  "Create a new MUD object."
+(defun new-object (&key (name "object") (location nil)
+                        (description "") (aliases nil) (keywords nil))
+  "Create a new MUD object.  KEYWORDS control which body slots the object
+can be worn/held in (see WEAR and ITEM-FITS-SLOT-P)."
   (make-instance 'mud-object
                  :name name
-                 :location location))
+                 :location location
+                 :description description
+                 :aliases aliases
+                 :keywords keywords))
 
 (defun object-name-matches (obj name)
   "Return non-NIL if NAME matches the object's primary name (exact or whole-word,
@@ -124,17 +129,17 @@ case-insensitive) or any alias (exact, case-insensitive). Returns NIL for empty 
     nil))
 
 (defgeneric handle-hold (object writer)
-  (:documentation "Called when WRITER tries to hold OBJECT.
+  (:documentation "Called when WRITER holds OBJECT in a hand.
   Should record the message and return non-NIL.
-  Returns NIL if the object is not writable.")
+  Returns NIL if the object has nothing to say.")
   (:method (object writer)
-    (declare (ignore object writer message))
+    (declare (ignore object writer))
     nil))
 
 (defgeneric handle-wear (object writer)
-  (:documentation "Called when WRITER tries to wear OBJECT.
-  Should record the message and return non-NIL.
-  Returns NIL if the object is not writable.")
+  (:documentation "Called when WRITER wears OBJECT on their body (e.g. a hat
+on the head).  Should record the message and return non-NIL.
+  Returns NIL if the object has nothing to say.")
   (:method (object writer)
-    (declare (ignore object writer message))
+    (declare (ignore object writer))
     nil))

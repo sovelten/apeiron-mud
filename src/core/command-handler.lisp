@@ -312,6 +312,117 @@ Debug helpers: (d obj), (slots-of obj), (props obj), (inv obj), (loc obj), (obj-
                                                (format nil "  - ~A" (object-describe obj)))
                                              inv))))))
 
+
+(defun wear-result-message (item limb reason &optional requested-limb)
+  "Build the player-facing message for a WEAR result.
+ITEM is the item attempted, LIMB the limb equipped (or NIL on failure),
+REASON one of the WEAR result keywords, REQUESTED-LIMB the limb name the
+player asked for (for :no-such-limb)."
+  (ecase reason
+    (:ok
+     (let ((verb (if (typep limb 'hand) "hold" "wear"))
+           (prep (if (typep limb 'hand) "in" "on")))
+       (format nil "You ~A ~A ~A your ~A."
+               verb (object-name item) prep (item-slot-name limb))))
+    (:no-such-limb
+     (format nil "You don't have a ~A to wear that on." requested-limb))
+    (:no-fitting-limb
+     (format nil "You can't wear ~A — nothing fits it." (object-name item)))
+    (:keywords-dont-match
+     (format nil "~A doesn't belong on your ~A."
+             (object-name item) (item-slot-name limb)))
+    (:occupied
+     (format nil "Your ~A already holds ~A."
+             (item-slot-name limb) (object-name (item-slot limb))))
+    (:not-in-inventory
+     (format nil "You aren't carrying ~A." (object-name item)))))
+
+
+(define-command "wear" (world character args)
+  "Wear or hold an item you are carrying, e.g. 'wear wizard hat', 'wear sword on left hand'."
+  (declare (ignore world))
+  (if (zerop (length args))
+      (character-send-message character "Wear what? Usage: wear <item> [on <limb>]")
+      (let* ((on-pos (search " on " args))
+             (item-name (if on-pos
+                            (string-trim '(#\Space #\Tab) (subseq args 0 on-pos))
+                            args))
+             (limb-name (and on-pos
+                             (string-trim '(#\Space #\Tab) (subseq args (+ on-pos 4)))))
+             (item (first (container-objects-matching character item-name))))
+        (if (null item)
+            (character-send-message
+             character
+             (format nil "You aren't carrying ~A." item-name))
+            (multiple-value-bind (limb reason) (wear character item limb-name)
+              (character-send-message
+               character
+               (wear-result-message item limb reason limb-name))
+              (when (eq reason :ok)
+                ;; Give the item a chance to react to being worn/held.
+                (funcall (if (typep limb 'hand) #'handle-hold #'handle-wear)
+                         item character)))))))
+
+
+(define-command "remove" (world character args)
+  "Remove an equipped item and put it in your inventory, e.g. 'remove hat'."
+  (declare (ignore world))
+  (if (zerop (length args))
+      (character-send-message character "Remove what? Usage: remove <item>")
+      (let ((pair (find-if (lambda (pair) (object-name-matches (cdr pair) args))
+                           (character-worn-items character))))
+        (if (null pair)
+            (character-send-message
+             character
+             (format nil "You aren't wearing or holding ~A." args))
+            (progn
+              (unequip character (cdr pair))
+              (character-send-message
+               character
+               (format nil "You remove ~A from your ~A."
+                       (object-name (cdr pair))
+                       (item-slot-name (car pair)))))))))
+
+
+(define-command "get" (world character args)
+  "Pick up an object from the room, e.g. 'get hat'.  'take' is an alias."
+  (declare (ignore world))
+  (if (zerop (length args))
+      (character-send-message character "Get what? Usage: get <item>")
+      (let* ((room (object-location character))
+             (target (first (container-objects-matching room args))))
+        (cond
+          ((null target)
+           (character-send-message character (format nil "You don't see ~A here." args)))
+          ((typep target 'mud-character)
+           (character-send-message character "You can't pick that up."))
+          (t
+           (container-remove-object room target)
+           (container-add-object character target)
+           (character-send-message
+            character
+            (format nil "You pick up ~A." (object-name target))))))))
+
+
+(define-command "drop" (world character args)
+  "Put down an object from your inventory into the room, e.g. 'drop hat'."
+  (declare (ignore world))
+  (if (zerop (length args))
+      (character-send-message character "Drop what? Usage: drop <item>")
+      (let* ((room (object-location character))
+             (target (first (container-objects-matching character args))))
+        (if (null target)
+            (character-send-message character (format nil "You aren't carrying ~A." args))
+            (progn
+              (container-remove-object character target)
+              (container-add-object room target)
+              (character-send-message
+               character
+               (format nil "You drop ~A." (object-name target))))))))
+
+;; 'take' is an alias for 'get'
+(setf (gethash "take" *commands*) (gethash "get" *commands*))
+
 (define-command "say" (world character args)
   "Say something aloud to everyone in the current room, e.g. 'say Hello!'."
   (declare (ignore world))

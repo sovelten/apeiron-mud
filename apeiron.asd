@@ -41,6 +41,7 @@
                  (:file "colors" :depends-on ("package"))
                  (:file "object" :depends-on ("utils"))
                  (:file "container" :depends-on ("object"))
+                 (:file "human" :depends-on ("object"))
                  (:file "connection" :depends-on ("object"))
                  (:file "room" :depends-on ("object" "container" "connection"))
                  (:file "guestbook" :depends-on ("object" "character"))
@@ -50,7 +51,7 @@
                  (:file "combat" :depends-on ("npc" "character"))
                  (:file "session" :depends-on ("utils"))
                  (:file "account" :depends-on ("utils" "constants"))
-                 (:file "character" :depends-on ("object" "session" "container" "account"))
+                 (:file "character" :depends-on ("object" "session" "container" "account" "human"))
                  (:file "command-handler" :depends-on ("session"))
                  (:file "world" :depends-on ("room" "connection" "guestbook" "character"))))))
 
