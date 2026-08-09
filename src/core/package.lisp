@@ -348,6 +348,7 @@
    #:displace-character!
    #:world-total-characters
    #:world-remove-character!
+   #:drop-character-items!
    #:character-by-id
    #:characters
    #:find-character-in-room

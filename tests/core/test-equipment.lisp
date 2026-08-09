@@ -322,6 +322,41 @@ limb is reported."
         (is (search "wizard hat"
                     (string-downcase (apeiron.core:object-name (cdar worn)))))))))
 
+(test guest-removal-drops-items-and-deletes-limbs
+  "Removing a guest character drops worn and carried items into the room
+and deletes the character's persistent limbs (no leaked store-objects)."
+  (let* ((world (apeiron.persistence:world-restore-or-initialize :force-new t))
+         (room (apeiron.core:starting-room world))
+         (guest (apeiron.core:new-character
+                 "GuestCleanup"
+                 (make-instance 'apeiron.core:stream-session
+                                :stream (make-string-output-stream)
+                                :use-colors nil)))
+         (hat (apeiron.core:new-object :name "a hat" :keywords '("hat")))
+         (apple (apeiron.core:new-object :name "an apple")))
+    (apeiron.core:create-object! world guest)
+    (apeiron.core:create-object! world hat)
+    (apeiron.core:create-object! world apple)
+    (apeiron.core:place-character! world guest)
+    (apeiron.core:container-add-object guest hat)
+    (apeiron.core:container-add-object guest apple)
+    (apeiron.core:wear guest hat)
+    ;; Guest limbs are persistent store-objects
+    (is (typep (first (apeiron.core:character-limbs guest))
+               (find-class (find-symbol "PERSISTENT-HEAD" :apeiron.persistence))))
+    ;; Remove the guest: drop items, delete character and limbs
+    (apeiron.core:world-remove-character! world guest)
+    ;; Character is gone from the room
+    (is (null (apeiron.core:find-character-in-room room "GuestCleanup")))
+    ;; Worn + carried items were dropped into the room
+    (is (find hat (apeiron.core:container-all-objects room)))
+    (is (find apple (apeiron.core:container-all-objects room)))
+    ;; No persistent limb store-objects leaked
+    (is (null (bknr.datastore:store-objects-with-class
+               (find-symbol "PERSISTENT-HEAD" :apeiron.persistence))))
+    (is (null (bknr.datastore:store-objects-with-class
+               (find-symbol "PERSISTENT-HAND" :apeiron.persistence))))))
+
 (test default-world-has-starter-equipment
   "The default transient world starts with a wearable hat and a weapon."
   (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))

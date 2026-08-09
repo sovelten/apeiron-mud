@@ -18,7 +18,7 @@ left hand, and a right hand."
           :accessor character-limbs
           :initform (default-character-limbs)
           :documentation "The character limbs (hands, head(s) etc.), a list
-of ITEM-SLOT-MIXIN objects (see HUMAN).  Each limb's ITEM slot holds what
+of ITEM-SLOT-MIXIN objects (see EQUIPMENT).  Each limb's ITEM slot holds what
 is currently worn/held there.  On persistent characters the limbs are
 materialized into the datastore so their ITEM slots persist.")
    (owner :initarg :owner

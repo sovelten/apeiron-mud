@@ -194,18 +194,39 @@ touch world indices — use WORLD-REMOVE-OBJECT! for that."
       (container-remove-object room character))
     (setf (object-location character) nil)))
 
+(defun drop-character-items! (character)
+  "Unequip everything CHARACTER is wearing and drop all carried items
+into their current room (if any), so the items survive the character's
+removal.  Used when removing guest characters."
+  (let ((room (object-location character)))
+    ;; Unequip worn items back into the inventory
+    (dolist (pair (copy-list (character-worn-items character)))
+      (unequip character (cdr pair)))
+    ;; Drop everything now carried into the room
+    (let ((items (copy-list (container-all-objects character))))
+      (dolist (item items)
+        (container-remove-object character item)
+        (when room
+          (container-add-object room item))))
+    (values)))
+
 (defun world-remove-character! (world character)
   "Remove a character from the world.
 Owned characters (with a non-nil OWNER) are displaced from their room
 but kept in world indices. Guest characters (no owner) are completely
-removed"
+removed: their worn and carried items are first dropped into the room
+(see DROP-CHARACTER-ITEMS!), then the character is removed from the
+indices and destroyed."
   (let ((name (object-name character)))
-    (displace-character! character)
     (if (character-owner character)
         ;; Owned: stay in world indices
-        (log-message "~A displaced from world" name)
-        ;; Guest: remove from indices
         (progn
+          (displace-character! character)
+          (log-message "~A displaced from world" name))
+        ;; Guest: drop items, remove from indices and destroy
+        (progn
+          (drop-character-items! character)
+          (displace-character! character)
           (world-remove-object! world character)
           (log-message "~A removed from world" name)))))
 

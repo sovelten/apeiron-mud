@@ -140,11 +140,19 @@ directly without re-materialization."
   object)
 
 (defmethod world-remove-object! ((world persistent-world) object)
-  "Remove OBJECT from world indices and destroy it in the BKNR datastore."
+  "Remove OBJECT from world indices and destroy it in the BKNR datastore.
+When OBJECT is a character, its persistent limb store-objects are
+destroyed too (a character owns its limbs), preventing leaked limbs."
   (bknr.datastore:with-transaction ("remove-object")
     (call-next-method)
     (when (and (typep object 'bknr.datastore:store-object)
                (not (bknr.indices:object-destroyed-p object)))
+      ;; A character's limbs are owned store-objects: delete them along
+      ;; with the character, otherwise they leak in the datastore.
+      (when (typep object 'mud-character)
+        (dolist (limb (character-limbs object))
+          (when (typep limb 'bknr.datastore:store-object)
+            (bknr.datastore:delete-object limb))))
       (bknr.datastore:delete-object object)))
   object)
 
@@ -389,6 +397,9 @@ When FORCE-NEW is true any existing store data is wiped first."
                          (bknr.datastore:store-objects-with-class
                           'persistent-object))))
             (dolist (g guests)
+              ;; Drop the guest's worn/carried items into their room
+              ;; before destroying them, so the items are not orphaned.
+              (drop-character-items! g)
               (world-remove-object! world g)))
           ;; Populate world indices and rebuild room contents from
           ;; surviving BKNR objects.
