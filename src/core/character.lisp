@@ -98,6 +98,25 @@ in limb order."
         when item
           collect (cons limb item)))
 
+(defun character-admin-p (character)
+  "Return T if CHARACTER's owning account is an administrator.
+Guest characters (no owner) are never administrators."
+  (let ((owner (character-owner character)))
+    (and owner
+         (let ((account (find-account owner)))
+           (and account (account-admin account))))))
+
+(defun character-wearing-keywords-p (character keywords)
+  "Return T if CHARACTER is currently wearing or holding an item whose
+keywords include every keyword in KEYWORDS (case-insensitive)."
+  (loop for pair in (character-worn-items character)
+        for item = (cdr pair)
+        thereis (and item
+                     (every (lambda (kw)
+                              (member kw (object-keywords item)
+                                      :test #'string-equal))
+                            keywords))))
+
 (defmethod wear ((character mud-character) object &optional limb)
   "Equip OBJECT on CHARACTER — see the WEAR generic documentation."
   (let* ((requested-name (when (stringp limb) limb))

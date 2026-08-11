@@ -16,7 +16,8 @@
   (process-command function)
   (me function)
   (here function)
-  (world function))
+  (world function)
+  (eval-allowed-p function))
 
 ;; Command processor
 (defvar *commands* (make-hash-table :test #'equal)
@@ -262,31 +263,44 @@ Examples:
     (integer (world-object-by-id *eval-world* spec))
     (string  (first (world-objects-matching *eval-world* spec)))))
 
+(defun eval-allowed-p (character)
+  "Return T if CHARACTER may use the in-game `eval` command: either
+their owning account is an administrator, or they are wearing an
+object with both the \"hat\" and \"wizard\" keywords."
+  (or (character-admin-p character)
+      (character-wearing-keywords-p character '("hat" "wizard"))))
+
 (define-command "eval" (world character args)
   "Evaluate Lisp code and send output to the character.
 Use (me) for the current character, (here) for current room, (world) for the world.
-Debug helpers: (d obj), (slots-of obj), (props obj), (inv obj), (loc obj), (obj-type obj), (obj-find name-or-id)"
+Debug helpers: (d obj), (slots-of obj), (props obj), (inv obj), (loc obj), (obj-type obj), (obj-find name-or-id)
+Only administrators (admin accounts) or characters wearing a wizard hat
+(an object with both the \"hat\" and \"wizard\" keywords) may use this command."
   (declare (ignore world))
-  (let ((code-str args))
-    (if (zerop (length code-str))
-        (character-send-message character "Eval what? Usage: eval <code>")
-        (let ((*eval-world* world)
-              (*eval-character* character)
-              (*eval-location* (object-location character))
-              (*package* (eval-context-package)))
-          (handler-case
-              (let* ((form (read-from-string code-str))
-                     (room (object-location character))
-                     (result (eval form)))
-                (loop for obj in (container-all-objects room) do
-                  (when (and (typep obj 'mud-character)
-                             (not (eq obj character)))
-                    (character-send-message obj
-                                         (format nil "~A casts the spell: ~A"
-                                                 (object-name character) form))))
-                (character-send-message character (format nil "~A" result)))
-            (error (e)
-              (character-send-message character (format nil "Error: ~A" e))))))))
+  (if (not (eval-allowed-p character))
+      (character-send-message
+       character
+       "Only administrators or characters wearing a wizard hat may use eval.")
+      (let ((code-str args))
+        (if (zerop (length code-str))
+            (character-send-message character "Eval what? Usage: eval <code>")
+            (let ((*eval-world* world)
+                  (*eval-character* character)
+                  (*eval-location* (object-location character))
+                  (*package* (eval-context-package)))
+              (handler-case
+                  (let* ((form (read-from-string code-str))
+                         (room (object-location character))
+                         (result (eval form)))
+                    (loop for obj in (container-all-objects room) do
+                      (when (and (typep obj 'mud-character)
+                                 (not (eq obj character)))
+                        (character-send-message obj
+                                             (format nil "~A casts the spell: ~A"
+                                                     (object-name character) form))))
+                    (character-send-message character (format nil "~A" result)))
+                (error (e)
+                  (character-send-message character (format nil "Error: ~A" e)))))))))
 
 (define-command "exits" (world character args)
   "List the visible exits from the current room."

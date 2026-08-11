@@ -2,6 +2,13 @@
 
 (in-suite core-suite)
 
+(defun ensure-admin-account (name)
+  "Return the admin account named NAME, registering it if needed.
+Used by tests that exercise the `eval` command, which requires an
+admin account or a wizard hat."
+  (or (find-account name)
+      (register-account name "pw" :admin t)))
+
 (test command-processing-look
   "Test the look command"
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
@@ -90,37 +97,117 @@
       (is (not (null character))))))
 
 (test command-processing-eval
-  "Test the eval command"
-  (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
-    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
-                                     :stream (make-string-output-stream))))
-          (captured-messages '()))
-      (apeiron.core:create-object! world character)
-      (apeiron.core:place-character! world character)
-      (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
-        (unwind-protect
-             (progn
-               (setf (fdefinition 'apeiron.core:character-send-message)
-                     (lambda (p msg &key newline)
-                       (declare (ignore p newline))
-                       (push msg captured-messages)))
-               
-               ;; Test 1: No arguments
-               (setf captured-messages '())
-               (apeiron.core:process-command world character "eval")
-               (is (equal '("Eval what? Usage: eval <code>") captured-messages))
-               
-               ;; Test 2: Simple sum
+  "Test the eval command — only admins or wizard-hat wearers may use it."
+  (let* ((world (apeiron.core:new-world))
+         (room (apeiron.core:new-room :name "Test Room"))
+         (character (apeiron.core:new-character
+                     "TestCharacter"
+                     (make-instance 'apeiron.core:stream-session
+                                    :stream (make-string-output-stream))))
+         (captured-messages '()))
+    (apeiron.core:world-add-object! world room)
+    (apeiron.core:world-set-starting-room! world room)
+    (apeiron.core:create-object! world character)
+    (apeiron.core:place-character! world character)
+    (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
+      (unwind-protect
+           (progn
+             (setf (fdefinition 'apeiron.core:character-send-message)
+                   (lambda (p msg &key newline)
+                     (declare (ignore p newline))
+                     (push msg captured-messages)))
+
+             ;; Test 1: Guest without a wizard hat is denied
+             (setf captured-messages '())
+             (apeiron.core:process-command world character "eval (+ 3 4)")
+             (is (= 1 (length captured-messages)))
+             (is (search "Only administrators" (car captured-messages)))
+
+             ;; Test 2: Give the guest a wizard hat — eval now works
+             (let ((hat (apeiron.core:new-object
+                         :name "a wizard hat"
+                         :description "A pointy, midnight-blue wizard hat."
+                         :keywords '("hat" "wizard")
+                         :aliases '("hat" "wizard hat"))))
+               (apeiron.core:container-add-object character hat)
+               (apeiron.core:wear character hat)
                (setf captured-messages '())
                (apeiron.core:process-command world character "eval (+ 3 4)")
                (is (equal '("7") captured-messages))
-               
-               ;; Test 3: Error handling
+
+               ;; Test 3: Error handling still works with the hat
                (setf captured-messages '())
                (apeiron.core:process-command world character "eval (/ 1 0)")
                (is (= 1 (length captured-messages)))
-               (is (search "Error" (car captured-messages))))
-                         (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))
+               (is (search "Error" (car captured-messages)))))
+         (setf (fdefinition 'apeiron.core:character-send-message) original-send-message)))))
+
+(test eval-permission-helpers
+  "Test character-admin-p, character-wearing-keywords-p, and eval-allowed-p."
+  (let* ((guest-session (make-instance 'stream-session
+                                       :stream (make-string-output-stream)))
+         (guest (new-character "Guest" guest-session))
+         (wizard-hat (new-object
+                      :name "a wizard hat"
+                      :keywords '("hat" "wizard")))
+         (plain-hat (new-object
+                     :name "a plain hat"
+                     :keywords '("hat"))))
+    ;; Guest has no account and nothing worn — not allowed
+    (is (null (character-admin-p guest)))
+    (is (null (character-wearing-keywords-p guest '("hat" "wizard"))))
+    (is (null (eval-allowed-p guest)))
+    ;; Wearing an item with both "hat" and "wizard" keywords → allowed
+    (container-add-object guest wizard-hat)
+    (wear guest wizard-hat)
+    (is (character-wearing-keywords-p guest '("hat" "wizard")))
+    (is (eval-allowed-p guest))
+    ;; An item with only "hat" (no "wizard") does not qualify
+    (let* ((other-session (make-instance 'stream-session
+                                         :stream (make-string-output-stream)))
+           (other (new-character "Other" other-session)))
+      (container-add-object other plain-hat)
+      (wear other plain-hat)
+      (is (character-wearing-keywords-p other '("hat")))
+      (is (null (character-wearing-keywords-p other '("hat" "wizard"))))
+      (is (null (eval-allowed-p other))))
+    ;; An admin-owned character is allowed without any hat
+    (let* ((admin-account (register-account "HelperAdmin" "pw" :admin t))
+           (admin-char (new-character
+                        "Admin"
+                        (make-instance 'stream-session
+                                       :stream (make-string-output-stream))
+                        :owner (account-name admin-account))))
+      (is (character-admin-p admin-char))
+      (is (eval-allowed-p admin-char)))))
+
+(test command-processing-eval-admin
+  "Test that a character owned by an admin account may use eval."
+  (let* ((world (apeiron.core:new-world))
+         (room (apeiron.core:new-room :name "Test Room"))
+         (account (apeiron.core:register-account "EvalAdmin" "password" :admin t))
+         (character (apeiron.core:new-character
+                     "AdminChar"
+                     (make-instance 'apeiron.core:stream-session
+                                    :stream (make-string-output-stream))
+                     :owner (apeiron.core:account-name account)))
+         (captured-messages '()))
+    (apeiron.core:world-add-object! world room)
+    (apeiron.core:world-set-starting-room! world room)
+    (apeiron.core:create-object! world character)
+    (apeiron.core:place-character! world character)
+    (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
+      (unwind-protect
+           (progn
+             (setf (fdefinition 'apeiron.core:character-send-message)
+                   (lambda (p msg &key newline)
+                     (declare (ignore p newline))
+                     (push msg captured-messages)))
+             ;; Admin can eval without wearing a wizard hat
+             (setf captured-messages '())
+             (apeiron.core:process-command world character "eval (+ 3 4)")
+             (is (equal '("7") captured-messages)))
+        (setf (fdefinition 'apeiron.core:character-send-message) original-send-message)))))
 
 (test command-processing-shout
   "Test the shout command — broadcasts to all characters."
@@ -466,9 +553,11 @@
 (test command-processing-eval-d
   "Test the eval d helper — describe object returning a string"
   (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
-    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
+    (let* ((account (ensure-admin-account "EvalHelperAdmin"))
+           (character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
-                                                                           :use-colors nil)))
+                                                                           :use-colors nil)
+                                                  :owner (apeiron.core:account-name account)))
           (captured '()))
       (apeiron.core:create-object! world character)
       (apeiron.core:place-character! world character)
@@ -489,9 +578,11 @@
 (test command-processing-eval-slots-of
   "Test the eval slots-of helper — describe slots returning a string"
   (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
-    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
+    (let* ((account (ensure-admin-account "EvalHelperAdmin"))
+           (character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
-                                                                           :use-colors nil)))
+                                                                           :use-colors nil)
+                                                  :owner (apeiron.core:account-name account)))
           (captured '()))
       (apeiron.core:create-object! world character)
       (apeiron.core:place-character! world character)
@@ -511,9 +602,11 @@
 (test command-processing-eval-props
   "Test the eval props helper — show object properties returning a string"
   (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
-    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
+    (let* ((account (ensure-admin-account "EvalHelperAdmin"))
+           (character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
-                                                                           :use-colors nil)))
+                                                                           :use-colors nil)
+                                                  :owner (apeiron.core:account-name account)))
           (captured '()))
       (apeiron.core:create-object! world character)
       (apeiron.core:place-character! world character)
@@ -538,9 +631,11 @@
 (test command-processing-eval-inv
   "Test the eval inv helper — show container contents returning a string"
   (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
-    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
+    (let* ((account (ensure-admin-account "EvalHelperAdmin"))
+           (character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
-                                                                           :use-colors nil)))
+                                                                           :use-colors nil)
+                                                  :owner (apeiron.core:account-name account)))
           (captured '()))
       (apeiron.core:create-object! world character)
       (apeiron.core:place-character! world character)
@@ -566,9 +661,11 @@
 (test command-processing-eval-loc
   "Test the eval loc helper — show location chain returning a string"
   (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
-    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
+    (let* ((account (ensure-admin-account "EvalHelperAdmin"))
+           (character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
-                                                                           :use-colors nil)))
+                                                                           :use-colors nil)
+                                                  :owner (apeiron.core:account-name account)))
           (captured '()))
       (apeiron.core:create-object! world character)
       (apeiron.core:place-character! world character)
@@ -589,9 +686,11 @@
 (test command-processing-eval-obj-type
   "Test the eval obj-type helper — show type name returning a string"
   (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
-    (let ((character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
+    (let* ((account (ensure-admin-account "EvalHelperAdmin"))
+           (character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
-                                                                           :use-colors nil)))
+                                                                           :use-colors nil)
+                                                  :owner (apeiron.core:account-name account)))
           (captured '()))
       (apeiron.core:create-object! world character)
       (apeiron.core:place-character! world character)

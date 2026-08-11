@@ -12,7 +12,9 @@
                                 :email "test@example.com")))
     (is (equal "TestPlayer" (account-name account)))
     (is (equal "dummy-hash" (account-password-hash account)))
-    (is (equal "test@example.com" (account-email account)))))
+    (is (equal "test@example.com" (account-email account)))
+    (is (null (account-admin account))
+        "Admin should default to NIL")))
     ;; No account-character slot — only character has owner reference
 
 ;; ─── Password hashing ───────────────────────────────────────────────────────
@@ -62,6 +64,19 @@
         "Account should exist after registration")
     (is (= (1+ old-count) (hash-table-count *accounts*))
         "Account count should increase by one")))
+
+(test register-account-admin
+  "Test that an account can be registered with the admin flag"
+  (let ((account (register-account "AdminPlayer" "password" :admin t)))
+    (is (not (null account))
+        "Register should return an account")
+    (is (account-admin account)
+        "Admin flag should be set on the account")
+    (is (eq account (find-account "AdminPlayer"))
+        "Admin account should be findable"))
+  (let ((account (register-account "NormalPlayer" "password")))
+    (is (null (account-admin account))
+        "Admin should default to NIL for normal accounts")))
 
 (test register-account-duplicate
   "Test that registering the same name twice signals an error"
@@ -146,7 +161,7 @@
   ;; Clear accounts for a clean test
   (clrhash *accounts*)
   ;; Register some accounts
-  (register-account "Persist1" "pw1" :email "p1@test.com")
+  (register-account "Persist1" "pw1" :email "p1@test.com" :admin t)
   (register-account "Persist2" "pw2")
   (let ((count (hash-table-count *accounts*))
         (original-hash (account-password-hash (find-account "Persist1"))))
@@ -166,6 +181,10 @@
         "Persist2 should exist after reload")
     (is (equal "p1@test.com" (account-email (find-account "Persist1")))
         "Email should survive round-trip")
+    (is (account-admin (find-account "Persist1"))
+        "Admin flag should survive round-trip")
+    (is (null (account-admin (find-account "Persist2")))
+        "Non-admin should stay NIL after round-trip")
     (is (equal original-hash (account-password-hash (find-account "Persist1")))
         "Password hash should survive round-trip")
     ;; Passwords should still verify
@@ -173,6 +192,30 @@
         "Password should still verify after reload")
     (is (not (null (authenticate-account "Persist2" "pw2")))
         "Password should still verify after reload")))
+
+(test load-accounts-backwards-compatible-without-admin
+  "Test that loading an accounts.dat written before the :admin field
+existed still works (admin defaults to NIL)."
+  (clrhash *accounts*)
+  ;; Write an old-format accounts.dat without the :admin key.
+  (ensure-directories-exist *data-directory*)
+  (with-open-file (stream (apeiron.core::accounts-file-path)
+                          :direction :output
+                          :if-exists :supersede
+                          :if-does-not-exist :create)
+    (prin1 (list (list :name "LegacyPlayer"
+                       :password-hash "salt:key"
+                       :email "legacy@example.com"))
+           stream)
+    (terpri stream))
+  (load-accounts)
+  (let ((account (find-account "LegacyPlayer")))
+    (is (not (null account))
+        "Legacy account should load")
+    (is (equal "LegacyPlayer" (account-name account)))
+    (is (equal "legacy@example.com" (account-email account)))
+    (is (null (account-admin account))
+        "Admin should default to NIL when missing from old file")))
 
 ;; ─── Character-account association ──────────────────────────────────────────
 
