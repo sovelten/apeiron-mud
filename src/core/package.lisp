@@ -274,6 +274,7 @@
    #:account-name
    #:account-password-hash
    #:account-email
+   #:account-admin
    #:find-account
    #:account-exists-p
    #:register-account
@@ -293,6 +294,8 @@
    #:wear
    #:unequip
    #:character-worn-items
+   #:character-wearing-keywords-p
+   #:character-admin-p
    #:find-limb-by-name
    #:find-limb-holding
    #:default-character-limbs
@@ -373,6 +376,7 @@
    #:here
    #:*eval-world*
    #:world
+   #:eval-allowed-p
    #:create-object!
 
    ;; Event system

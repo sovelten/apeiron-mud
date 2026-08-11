@@ -18,7 +18,12 @@
    (email :initarg :email
           :accessor account-email
           :initform nil
-          :documentation "Email address for password recovery."))
+          :documentation "Email address for password recovery.")
+   (admin :initarg :admin
+          :accessor account-admin
+          :initform nil
+          :documentation "When true, this account is an administrator.
+Admin-owned characters may use the in-game `eval` command."))
   (:documentation "A player account for the MUD.
 
 Accounts are independent of the BKNR persistence layer and are stored
@@ -44,14 +49,19 @@ an OWNER reference (a string matching the account name)."))
   "Serialize ACCOUNT to a property list suitable for file storage."
   (list :name (account-name account)
         :password-hash (account-password-hash account)
-        :email (account-email account)))
+        :email (account-email account)
+        :admin (account-admin account)))
 
 (defun %plist-to-account (plist)
   "Deserialize a property list back into a MUD-ACCOUNT instance."
   (make-instance 'mud-account
                  :name (getf plist :name)
                  :password-hash (getf plist :password-hash)
-                 :email (getf plist :email)))
+                 :email (getf plist :email)
+                 ;; Backwards compatible: accounts.dat files written before
+                 ;; the :admin field existed simply lack the key, so GETF
+                 ;; returns NIL and the slot's :initform nil applies.
+                 :admin (getf plist :admin)))
 
 (defun save-accounts ()
   "Write all accounts to the accounts data file.
@@ -142,10 +152,12 @@ Matching is case-insensitive."
   (let ((key (string-downcase (string-trim '(#\Space #\Tab) name))))
     (gethash key *accounts*)))
 
-(defun register-account (name password &key email)
+(defun register-account (name password &key email admin)
   "Register a new account with NAME and PASSWORD.
 Signals an error if an account with the same name already exists.
 EMAIL is optional and stored for password recovery.
+ADMIN, when true, marks the account as an administrator (allowing the
+owner's characters to use the in-game `eval` command).
 Returns the newly created MUD-ACCOUNT."
   (let ((key (string-downcase (string-trim '(#\Space #\Tab) name)))
         (clean-name (string-trim '(#\Space #\Tab) name)))
@@ -159,7 +171,8 @@ Returns the newly created MUD-ACCOUNT."
                                   :name clean-name
                                   :password-hash (hash-password password)
                                   :email (when email
-                                           (string-trim '(#\Space #\Tab) email)))))
+                                           (string-trim '(#\Space #\Tab) email))
+                                  :admin admin)))
       (setf (gethash key *accounts*) account)
       (save-accounts)
       (log-message "Registered new account: ~A" clean-name)
