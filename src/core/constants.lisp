@@ -10,7 +10,7 @@
 (defparameter *debug-mode* t)
 
 ;; Command constants
-(defconstant +max-command-length+ 256)
+(defconstant +max-command-length+ 1000)
 
 ;; ─── Run mode ────────────────────────────────────────────────────────────
 

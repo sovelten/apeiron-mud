@@ -14,6 +14,35 @@
     (apeiron.core:object-set-property obj "test-prop" "test-value")
     (is (equal (apeiron.core:object-get-property obj "test-prop") "test-value"))))
 
+(test add-keyword
+  "Test add-keyword adds a keyword to an object"
+  (let ((obj (apeiron.core:new-object)))
+    (apeiron.core:add-keyword obj "sword")
+    (is (equal (apeiron.core:object-keywords obj) '("sword")))
+    (apeiron.core:add-keyword obj "shield")
+    (is (equal (apeiron.core:object-keywords obj) '("shield" "sword")))))
+
+(test add-keyword-ignores-duplicates
+  "Test add-keyword ignores existing keywords, case-insensitively"
+  (let ((obj (apeiron.core:new-object :keywords '("sword"))))
+    (apeiron.core:add-keyword obj "sword")
+    (apeiron.core:add-keyword obj "SWORD")
+    (is (equal (apeiron.core:object-keywords obj) '("sword")))))
+
+(test remove-keyword
+  "Test remove-keyword removes a keyword from an object"
+  (let ((obj (apeiron.core:new-object :keywords '("sword" "shield"))))
+    (apeiron.core:remove-keyword obj "sword")
+    (is (equal (apeiron.core:object-keywords obj) '("shield")))
+    (apeiron.core:remove-keyword obj "shield")
+    (is (null (apeiron.core:object-keywords obj)))))
+
+(test remove-keyword-missing
+  "Test remove-keyword is a no-op when the keyword is not present"
+  (let ((obj (apeiron.core:new-object :keywords '("sword"))))
+    (apeiron.core:remove-keyword obj "shield")
+    (is (equal (apeiron.core:object-keywords obj) '("sword")))))
+
 (test print-object-mud-object
       "Test print-object for mud-object"
       (let* ((obj (apeiron.core:new-object :name "Test Object"))

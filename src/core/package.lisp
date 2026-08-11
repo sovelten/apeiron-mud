@@ -118,6 +118,8 @@
    #:object-location
    #:object-aliases
    #:object-keywords
+   #:add-keyword
+   #:remove-keyword
    #:object-name-matches
    #:object-properties
    #:object-get-property

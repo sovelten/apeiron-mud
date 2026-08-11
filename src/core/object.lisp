@@ -34,19 +34,31 @@
 (defgeneric object-describe (obj)
   (:documentation
    "Get a description of an object with type-based ANSI coloring.
-Specialized methods on subclasses provide appropriate coloring."))
+Specialized methods on subclasses provide appropriate coloring.")
+  (:method ((obj mud-object))
+    "Default: no color."
+    (format nil "~A (ID: ~D)" (object-name obj) (object-id obj))))
 
 (defgeneric object-set-property (obj property-name value)
   (:documentation
-   "Set a property value on an object.
+   "Set a property value on an object. ")
+  (:method (obj property-name value)
+    "Default: modify the properties hash-table in-place."
+    (setf (gethash property-name (object-properties obj)) value)))
 
-The default method modifies the hash-table in-place.
+(defgeneric add-keyword (obj k)
+  (:documentation "Add new keyword, ignore if existing")
+  (:method (obj k)
+    (pushnew k (object-keywords obj) :test #'string-equal)))
 
-Specialized methods on persistent objects should also ensure the slot
-is written so BKNR's transaction logging captures the change."))
+(defgeneric remove-keyword (obj k)
+  (:documentation "Remove keyword, ignore if not present")
+  (:method (obj k)
+    (setf (object-keywords obj)
+          (remove k (object-keywords obj) :test #'string-equal))))
 
 (defun new-object (&key (name "object") (location nil)
-                        (description "") (aliases nil) (keywords nil))
+                     (description "") (aliases nil) (keywords nil))
   "Create a new MUD object.  KEYWORDS control which body slots the object
 can be worn/held in (see WEAR and ITEM-FITS-SLOT-P)."
   (make-instance 'mud-object
@@ -71,10 +83,6 @@ case-insensitive) or any alias (exact, case-insensitive). Returns NIL for empty 
   "Get a property value from an object."
   (gethash property-name (object-properties obj)))
 
-(defmethod object-set-property (obj property-name value)
-  "Default: modify the properties hash-table in-place."
-  (setf (gethash property-name (object-properties obj)) value))
-
 (defun object-move (obj new-location)
   "Move an object to a new location."
   (let ((old-location (object-location obj)))
@@ -87,10 +95,6 @@ case-insensitive) or any alias (exact, case-insensitive). Returns NIL for empty 
     (when (typep new-location 'mud-room)
       (container-add-object new-location obj))
     t))
-
-(defmethod object-describe ((obj mud-object))
-  "Default: no color."
-  (format nil "~A (ID: ~D)" (object-name obj) (object-id obj)))
 
 ;; Print object in REPL with useful information
 (defmethod print-object ((obj mud-object) stream)
