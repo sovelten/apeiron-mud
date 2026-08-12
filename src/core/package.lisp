@@ -184,6 +184,7 @@
    #:new-area
    #:area-rooms
    #:area-connections
+   #:area-world
    #:area-entrance
    #:area-set-entrance!
    #:area-graph

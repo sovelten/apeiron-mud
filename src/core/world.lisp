@@ -181,6 +181,7 @@ Returns the removed OBJECT.")
     (when (typep object 'mud-room)
       (remhash (object-id object) (world-rooms world)))
     (when (typep object 'mud-area)
+      (setf (area-world object) nil)
       (remhash (object-id object) (world-areas world)))
     (log-message "~A removed from world indices" (object-name object))
     object))
@@ -323,6 +324,9 @@ persistence concerns.  See WORLD-ADD-AREA!."
   (dolist (conn (area-connections area))
     (create-object! world conn))
   (create-object! world area)
+  ;; Record the owning world so incremental AREA-ADD-ROOM! /
+  ;; AREA-REGISTER-CONNECTION! calls can register new content with it.
+  (setf (area-world area) world)
   area)
 
 (defun world-remove-area! (world area)

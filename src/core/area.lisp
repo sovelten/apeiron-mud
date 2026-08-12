@@ -27,6 +27,12 @@
 
 (in-package #:apeiron.core)
 
+;; CREATE-OBJECT! is defined in world.lisp, which loads after this file
+;; (AREA comes before WORLD in the ASDF components).  Declare it up front
+;; so compiling AREA-ADD-ROOM! and AREA-REGISTER-CONNECTION! does not
+;; warn about the forward reference.
+(declaim (ftype function create-object!))
+
 (defclass mud-area (mud-object)
   ((rooms :initarg :rooms
           :accessor area-rooms
@@ -39,6 +45,14 @@ can still coexist in one area.  The graph is the authoritative room set.")
                 :accessor area-connections
                 :initform '()
                 :documentation "Flat list of MUD-CONNECTION objects in this area.")
+   (world :initarg :world
+          :accessor area-world
+          :initform nil
+          :documentation "The MUD-WORLD this area is registered with, or NIL
+while the area is still being built transiently.  Set by WORLD-ADD-AREA!.
+AREA-ADD-ROOM! and AREA-REGISTER-CONNECTION! use it to register
+incrementally added rooms/connections with the world (materializing them
+into the datastore for persistent worlds), mirroring WORLD-CONNECT-ROOMS!.")
    (entrance :initarg :entrance
              :accessor area-entrance
              :initform nil
@@ -67,7 +81,16 @@ and reachability queries can run on top of the plain room/connection data."))
 (defun area-add-room! (area room)
   "Add ROOM to AREA (idempotent per object identity).  Registers the room
 as a vertex of the area's graph and in the rooms list, and sets the room's
-ROOM-AREA back-reference to AREA.  Returns ROOM."
+ROOM-AREA back-reference to AREA.  Returns ROOM.
+
+When AREA is already registered with a world (AREA-WORLD non-NIL), ROOM
+is registered with that world via CREATE-OBJECT! first — the same path
+WORLD-CONNECT-ROOMS! uses — so for persistent worlds an incrementally
+added room is materialized into the datastore instead of being left as a
+transient MUD-ROOM that BKNR cannot encode.  CREATE-OBJECT! is a harmless
+re-registration for rooms that are already registered."
+  (when (area-world area)
+    (create-object! (area-world area) room))
   (let ((rooms (area-rooms area)))
     (pushnew room rooms :test #'eq)
     (setf (area-rooms area) rooms))
@@ -104,11 +127,19 @@ lists: area connections live in the area and are found through
 ROOM-EXIT-CONNECTIONS.  Idempotent per room pair: an area holds at most
 one connection between two rooms.
 
+When AREA is registered with a world (AREA-WORLD non-NIL), CONNECTION
+is registered with that world via CREATE-OBJECT! before being stored —
+mirroring WORLD-CONNECT-ROOMS! — so for persistent worlds a connection
+created here (e.g. through AREA-CONNECT-ROOMS!) is materialized into
+the datastore instead of remaining a transient MUD-CONNECTION.
+
 Returns CONNECTION."
   (let ((room-a (connection-room-a connection))
         (room-b (connection-room-b connection)))
     (area-add-room! area room-a)
     (area-add-room! area room-b)
+    (when (area-world area)
+      (create-object! (area-world area) connection))
     (cl-graph:add-edge-between-vertexes
      (area-graph area) room-a room-b
      :edge-type :undirected

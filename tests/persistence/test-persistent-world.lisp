@@ -451,3 +451,73 @@ deleted during world restore — only owned characters survive a crash."
        (when (boundp 'bknr.datastore:*store*)
          (ignore-errors (bknr.datastore:close-store))
          (makunbound 'bknr.datastore:*store*)))))
+
+(test incremental-area-building-on-persistent-world
+  "An already-registered persistent area can be extended incrementally:
+  AREA-ADD-ROOM! with a fresh transient room and AREA-CONNECT-NORTH-SOUTH!
+  with a fresh connection must register those objects with the world
+  (materializing them for the datastore) instead of leaving them transient
+  and tripping BKNR's ENCODE-OBJECT.  Regression test: the room and the
+  connection used to be stored into the persistent area's slots while still
+  plain MUD-ROOM / MUD-CONNECTION instances, which has no ENCODE-OBJECT
+  method and failed with 'no applicable method'."
+  (unwind-protect
+       (let* ((world (apeiron.persistence:world-restore-or-initialize
+                      :force-new t
+                      :initializer (lambda ()
+                                     (let ((w (apeiron.core:new-world)))
+                                       (let ((r (apeiron.core:new-room :name "Bare Nexus")))
+                                         (apeiron.core:world-add-object! w r)
+                                         (apeiron.core:world-set-starting-room! w r))
+                                       w))))
+              (area (apeiron.core:new-area :name "Vila Incremental")))
+         ;; Register an EMPTY area, then extend it incrementally — exactly
+         ;; the in-game eval workflow that used to fail.
+         (apeiron.core:world-add-area! world area)
+         (is (= 1 (apeiron.core:world-total-areas world)))
+         (is (eq world (apeiron.core:area-world area)))
+         (let ((entrada (apeiron.core:new-room :name "Entrada"
+                                               :description "A portal into Vila."))
+               (pracinha (apeiron.core:new-room :name "Pracinha"
+                                                :description "A small square.")))
+           ;; Fresh transient rooms — no prior CREATE-OBJECT! — must be
+           ;; materialized by AREA-ADD-ROOM! itself.
+           (apeiron.core:area-add-room! area entrada)
+           (apeiron.core:area-add-room! area pracinha)
+           (is (typep entrada 'apeiron.persistence:persistent-room))
+           (is (typep pracinha 'apeiron.persistence:persistent-room))
+           (is (eq area (apeiron.core:world-area-of-room world entrada)))
+           ;; The connection created from scratch by the cardinal helper
+           ;; must be materialized too (like WORLD-CONNECT-ROOMS!).
+           (apeiron.core:area-connect-north-south! area entrada pracinha)
+           (is (= 2 (apeiron.core:area-room-count area)))
+           (is (= 1 (apeiron.core:area-connection-count area)))
+           (let ((conn (first (apeiron.core:area-room-connections area entrada))))
+             (is (not (null conn)))
+             (is (typep conn 'apeiron.persistence:persistent-connection)))
+           ;; Movement through the area works immediately.
+           (is (eq pracinha (apeiron.core:room-exit-target entrada "south")))
+           (is (eq entrada (apeiron.core:room-exit-target pracinha "north")))
+           ;; The incrementally added content survives a snapshot + restart.
+           (apeiron.persistence:sync-world)
+           (bknr.datastore:close-store)
+           (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
+                  (restored (apeiron.core:world-area-with-name
+                             new-world "Vila Incremental")))
+             (is (not (null restored)))
+             (is (= 2 (apeiron.core:area-room-count restored)))
+             (is (= 1 (apeiron.core:area-connection-count restored)))
+             (is (eq new-world (apeiron.core:area-world restored))
+                 "Restored area must know its world again")
+             (let ((restored-entrada (apeiron.core:area-find-room restored "Entrada"))
+                   (restored-pracinha (apeiron.core:area-find-room restored "Pracinha")))
+               (is (typep restored-entrada 'apeiron.persistence:persistent-room))
+               (is (typep restored-pracinha 'apeiron.persistence:persistent-room))
+               (is (eq restored-pracinha
+                       (apeiron.core:room-exit-target restored-entrada "south"))
+                   "Connection must survive the restart")))))
+    ;; ---- Cleanup ----------------------------------------------------
+    (ignore-errors
+     (when (boundp 'bknr.datastore:*store*)
+       (ignore-errors (bknr.datastore:close-store))
+       (makunbound 'bknr.datastore:*store*)))))

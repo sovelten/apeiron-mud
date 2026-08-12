@@ -204,6 +204,9 @@ Enforces the one-area-per-room invariant first.  Returns AREA."
   (dolist (conn (area-connections area))
     (world-add-object! world conn))
   (world-add-object! world area)
+  ;; Record the owning world so incremental AREA-ADD-ROOM! /
+  ;; AREA-REGISTER-CONNECTION! calls can register new content with it.
+  (setf (area-world area) world)
   area)
 
 ;; ─── Store lifecycle ────────────────────────────────────────────────────────
@@ -407,7 +410,13 @@ When FORCE-NEW is true any existing store data is wiped first."
             (dolist (obj (bknr.datastore:store-objects-with-class
                           'persistent-object))
               (unless (bknr.indices:object-destroyed-p obj)
-                (world-add-object! world obj)))
+                (world-add-object! world obj)
+                ;; Restore the area→world back-reference so incremental
+                ;; AREA-ADD-ROOM! / AREA-REGISTER-CONNECTION! calls work
+                ;; after a restart.  Also covers areas whose snapshot
+                ;; predates the WORLD slot (which restores as NIL).
+                (when (typep obj 'persistent-area)
+                  (setf (area-world obj) world))))
             (dolist (obj (bknr.datastore:store-objects-with-class
                           'persistent-object))
               (unless (bknr.indices:object-destroyed-p obj)
