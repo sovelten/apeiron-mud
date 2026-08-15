@@ -197,11 +197,59 @@ close/reopen cycles that trigger BKNR transaction log replay warnings."
   (bknr.datastore:snapshot)
   t)
 
+(defun persistent-class-schema (class)
+  "Return a canonical fingerprint of CLASS's persistent schema: its
+name, the name and transient flag of every effective slot, and its
+direct superclasses.  Used by SAFE-UPDATE to detect whether a reload
+changed the datastore schema."
+  (list (class-name class)
+        (mapcar (lambda (slotd)
+                  (list (sb-mop:slot-definition-name slotd)
+                        (bknr.datastore::transient-slot-p slotd)))
+                (sb-mop:class-slots class))
+        (mapcar #'class-name (sb-mop:class-direct-superclasses class))))
+
+(defun persistent-class-schemas (&optional (registry *persistent-class-registry*))
+  "Fingerprints of every persistent class declared in REGISTRY (default
+*PERSISTENT-CLASS-REGISTRY*), sorted by class name so two snapshots of
+the same schema compare EQUAL."
+  (sort (loop for transient-name being each hash-key
+                of registry
+                using (hash-value options)
+              for pname = (persistent-class-name transient-name options)
+              for class = (find-class pname nil)
+              when class
+                collect (persistent-class-schema class))
+        #'string<
+        :key (lambda (schema) (symbol-name (first schema)))))
+
+(defun classes-changed-since-p (schemas &optional (registry *persistent-class-registry*))
+  "True if the persistent class schemas in REGISTRY (default
+*PERSISTENT-CLASS-REGISTRY*) differ from SCHEMAS.  SAFE-UPDATE uses this
+to decide whether a reload changed the datastore schema and a second
+snapshot is needed."
+  (not (equal schemas (persistent-class-schemas registry))))
+
 (defun safe-update ()
-  "Pulls latest code changes, snapshots BKNR before loading"
+  "Pull latest code changes into the running image safely.
+
+Snapshots the datastore first as a safety baseline, so a broken reload
+can be rolled back.  Then RELOAD-APEIRON reloads the changed APEIRON
+systems, which re-runs DEFINE-PERSISTENT-CLASSES and redefines the
+persistent classes from *PERSISTENT-CLASS-REGISTRY* whenever that file
+changed.
+
+A second snapshot is taken only when the persistent class schemas
+actually changed — the situation BKNR warns about ('class ~A has been
+changed ... please snapshot your datastore') — so the new schema is
+persisted.  When no class changed, the first snapshot is still current
+and the redundant second snapshot is skipped."
   (sync-world)
-  (ql:quickload :apeiron)
-  (sync-world))
+  (let ((before (persistent-class-schemas)))
+    (reload-apeiron)
+    (when (classes-changed-since-p before)
+      (log-message "Persistent class definitions changed — snapshotting datastore for schema evolution.")
+      (sync-world))))
 
 ;; ─── Persistent class mapping ───────────────────────────────────────────────
 
