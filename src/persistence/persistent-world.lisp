@@ -4,47 +4,29 @@
 
 ;; ─── Persistent wrapper classes ──────────────────────────────────────────────
 
-(defwrapping-persistent-class persistent-object (mud-object)
-  ()
-  ;; properties is intentionally NOT transient — objects store meaningful
-  ;; game state via object-set-property that must survive restarts.
-  (:transient-slots))
-
-(defwrapping-persistent-class persistent-room (mud-room persistent-object)
-  ()
-  (:transient-slots contents))
-
-(defwrapping-persistent-class persistent-character (mud-character persistent-object)
-  ()
-  (:transient-slots session))
-
-(defwrapping-persistent-class persistent-head (head)
-  ()
-  (:transient-slots))
-
-(defwrapping-persistent-class persistent-hand (hand)
-  ()
-  (:transient-slots))
-
-(defwrapping-persistent-class persistent-guestbook (mud-guestbook persistent-object)
-  ()
-  (:transient-slots entries))
-
-(defwrapping-persistent-class persistent-npc (mud-npc persistent-object)
-  ())
-
-(defwrapping-persistent-class persistent-wordle (mud-wordle-puzzle persistent-object)
-  ()
-  (:transient-slots character-guesses))
-
-(defwrapping-persistent-class persistent-connection (mud-connection persistent-object)
-  ())
-
-(defwrapping-persistent-class persistent-area (mud-area persistent-object)
-  ()
-  ;; the cl-graph index is derived from rooms/connections and rebuilt on
-  ;; restore (see INITIALIZE-TRANSIENT-INSTANCE below).
-  (:transient-slots graph))
+;; Declarative registration: a serapeum dict maps each transient game class
+;; to options for its wrapping persistent class.  DEFINE-PERSISTENT-CLASSES
+;; defines the PERSISTENT-* classes (MUD-ROOM → PERSISTENT-ROOM, and every
+;; MUD-OBJECT subtype also inherits PERSISTENT-OBJECT) and installs
+;; *PERSISTENT-CLASS-REGISTRY* for TRANSIENT->PERSISTENT-CLASS.
+(define-persistent-classes
+  (dict
+   'mud-object        (dict)
+   ;; properties is intentionally NOT transient — objects store meaningful
+   ;; game state via object-set-property that must survive restarts.
+   'mud-room          (dict :transient-slots (contents))
+   'mud-character     (dict :transient-slots (session))
+   'head              (dict)
+   'hand              (dict)
+   'mud-guestbook     (dict :transient-slots (entries))
+   'mud-npc           (dict)
+   'mud-wordle-puzzle (dict :transient-slots (character-guesses)
+                            :persistent-name persistent-wordle)
+   'mud-connection    (dict)
+   'mud-area          (dict :transient-slots (graph))
+   ;; the cl-graph index is derived from rooms/connections and rebuilt on
+   ;; restore (see INITIALIZE-TRANSIENT-INSTANCE below).
+   'mud-world         (dict :transient-slots (characters objects rooms areas))))
 
 (defmethod bknr.datastore:initialize-transient-instance ((gb persistent-guestbook))
   "Re-read guestbook entries from the CSV file after restore."
@@ -94,10 +76,6 @@ Usage from the MUD: eval (refresh-guestbooks)"
               (guestbook-load-from-csv (pathname fp))))
       (log-message "Refreshed guestbook ~A from ~A" (object-name gb) fp)))
   (values))
-
-(defwrapping-persistent-class persistent-world (mud-world)
-  ()
-  (:transient-slots characters objects rooms areas))
 
 (defmethod object-set-property ((obj persistent-object) property-name value)
   "Set a property on a persistent object, ensuring BKNR tracks the change.
@@ -246,30 +224,18 @@ close/reopen cycles that trigger BKNR transaction log replay warnings."
 
 ;; ─── Persistent class mapping ───────────────────────────────────────────────
 
-(defvar *transient->persistent-class-map*
-  (make-hash-table :test #'eq)
-  "Maps a transient game-object class to its wrapping persistent class.")
-
-(defun build-persistent-class-map ()
-  "Auto-discover the transient→persistent class mapping.
-
-Walks all direct subclasses of STORE-OBJECT.  For each with
-WRAPPING-PERSISTENT-CLASS as metaclass, finds the non-store-object
-parent (the transient game class) and records the mapping."
-  (clrhash *transient->persistent-class-map*)
-  (dolist (subclass (sb-mop:class-direct-subclasses
-                     (find-class 'bknr.datastore:store-object)))
-    (when (typep subclass 'wrapping-persistent-class)
-      (dolist (super (sb-mop:class-direct-superclasses subclass))
-        (when (and (typep super 'sb-mop:standard-class)
-                   (not (subtypep super 'bknr.datastore:store-object)))
-          (setf (gethash super *transient->persistent-class-map*) subclass))))))
-
 (defun transient->persistent-class (transient-class)
-  "Return the persistent class that wraps TRANSIENT-CLASS."
-  (or (gethash transient-class *transient->persistent-class-map*)
-      (error "No persistent class found for ~A -- did you forget a DEFWRAPPING-PERSISTENT-CLASS?"
-             transient-class)))
+  "Return the persistent class that wraps TRANSIENT-CLASS.
+
+The mapping comes from *PERSISTENT-CLASS-REGISTRY*, installed
+declaratively by DEFINE-PERSISTENT-CLASSES — no class-hierarchy
+walking needed."
+  (let* ((entry (gethash (class-name transient-class)
+                         *persistent-class-registry*))
+         (pname (and entry (gethash :persistent-class entry))))
+    (or (and pname (find-class pname))
+        (error "No persistent class registered for ~A -- add it to *PERSISTENT-CLASS-REGISTRY*."
+               transient-class))))
 
 ;; ─── World materialization ──────────────────────────────────────────────────
 
@@ -383,9 +349,6 @@ When FORCE-NEW is true any existing store data is wiped first."
                                 :if-does-not-exist :ignore)
     (makunbound 'bknr.datastore:*store*))
   (open-mud-store)
-  ;; Build the class map for both fresh and restored worlds — new
-  ;; connections need it to materialize guest characters.
-  (build-persistent-class-map)
   (let ((world (get-persistent-world)))
     (if world
         (progn

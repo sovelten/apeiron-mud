@@ -10,10 +10,16 @@
   (:use #:cl
         #:apeiron.core
         #:apeiron.core.utils)
+  (:import-from #:serapeum #:dict)
   (:export
    ;; Metaclass
    #:wrapping-persistent-class
    #:defwrapping-persistent-class
+
+   ;; Declarative persistent class registry
+   #:define-persistent-classes
+   #:*persistent-class-registry*
+   #:transient->persistent-class
 
    ;; Persistent classes
    #:persistent-object

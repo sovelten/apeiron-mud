@@ -8,6 +8,53 @@
     (is (not (null (apeiron.core:get-config-key world :starting-room-id))))
     (is (> (apeiron.core:world-total-rooms world) 0))))
 
+(test persistent-class-registry
+  "The declarative *PERSISTENT-CLASS-REGISTRY* defines a wrapping
+persistent class for every registered transient class, and
+TRANSIENT->PERSISTENT-CLASS resolves them without class-hierarchy
+walking."
+  (let ((expected
+          '((mud-object . persistent-object)
+            (mud-room . persistent-room)
+            (mud-character . persistent-character)
+            (head . apeiron.persistence::persistent-head)
+            (hand . apeiron.persistence::persistent-hand)
+            (mud-guestbook . persistent-guestbook)
+            (mud-npc . apeiron.persistence::persistent-npc)
+            (mud-wordle-puzzle . persistent-wordle)
+            (mud-connection . persistent-connection)
+            (mud-area . persistent-area)
+            (mud-world . persistent-world))))
+    (is (= (length expected) (hash-table-count *persistent-class-registry*))
+        "Registry should have one entry per persistent class")
+    (dolist (pair expected)
+      (let* ((entry (gethash (car pair) *persistent-class-registry*)))
+        (is-true entry "~A should be registered" (car pair))
+        (is (eq (cdr pair) (gethash :persistent-class entry))
+            "~A should map to ~A" (car pair) (cdr pair))
+        (is (eq (cdr pair)
+                (class-name (transient->persistent-class (find-class (car pair)))))
+            "TRANSIENT->PERSISTENT-CLASS should resolve ~A" (car pair)))))
+  ;; The wrapping superclass structure is derived from the registry.
+  (let ((room-supers (mapcar #'class-name (sb-mop:class-direct-superclasses
+                                           (find-class 'persistent-room))))
+        (head-supers (mapcar #'class-name (sb-mop:class-direct-superclasses
+                                           (find-class 'apeiron.persistence::persistent-head)))))
+    (is (member 'mud-room room-supers))
+    (is (member 'persistent-object room-supers)
+        "MUD-OBJECT subtypes wrap PERSISTENT-OBJECT")
+    (is (member 'head head-supers))
+    (is (not (member 'persistent-object head-supers))
+        "HEAD is not a MUD-OBJECT subtype, so its wrapper does not inherit PERSISTENT-OBJECT"))
+  ;; Transient-slot metadata is recorded per class (slots are matched by
+  ;; symbol name, so compare by name here too).
+  (is (equal '("CONTENTS")
+             (mapcar #'symbol-name
+                     (gethash :transient-slots (gethash 'mud-room *persistent-class-registry*)))))
+  (is (equal '("CHARACTERS" "OBJECTS" "ROOMS" "AREAS")
+             (mapcar #'symbol-name
+                     (gethash :transient-slots (gethash 'mud-world *persistent-class-registry*))))))
+
 (test bknr-id-conflict-on-restart
   "Test that world-level IDs do NOT conflict after store close/reopen."
   (unwind-protect
