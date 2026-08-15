@@ -4,13 +4,12 @@
 
 (defun default-character-limbs ()
   "Return the standard set of limbs for a humanoid character: a head,
-left and right hands, and left and right feet.  Hand limbs carry the
-\"hand\" keyword so HAND-LIMB-P can distinguish holding from wearing."
+left and right hands, and feet.  Hand limbs carry the \"hand\" keyword
+so HAND-LIMB-P can distinguish holding from wearing."
   (list (make-limb :name "head" :keywords '("hat" "helmet" "cap" "crown" "hood"))
         (make-limb :name "left hand" :keywords '("hand" "weapon"))
         (make-limb :name "right hand" :keywords '("hand" "weapon"))
-        (make-limb :name "left foot" :keywords '("shoe" "boot" "sandal" "slipper"))
-        (make-limb :name "right foot" :keywords '("shoe" "boot" "sandal" "slipper"))))
+        (make-limb :name "feet" :keywords '("shoe" "boot" "sandal" "slipper"))))
 
 (defclass mud-character (mud-object container-mixin)
   ((session :initarg :session

@@ -1,7 +1,7 @@
 ;;;; tests/core/test-equipment.lisp — Tests for wearing/holding items
 ;;;;
 ;;;; Covers the WEAR / UNEQUIP API on characters (head, left/right hands,
-;;;; left/right feet), keyword matching rules, describing worn items, the
+;;;; feet), keyword matching rules, describing worn items, the
 ;;;; wear/remove/get/drop commands, and persistence of worn items across
 ;;;; a store restart.
 
@@ -76,22 +76,21 @@
   (let ((char (make-test-character))
         (boots (make-shoe)))
     (give char boots)
-    ;; Auto-fit wears on the left foot first
+    ;; Auto-fit wears on the feet
     (multiple-value-bind (limb reason) (apeiron.core:wear char boots)
       (is (eq reason :ok))
       (is (typep limb 'apeiron.core:limb))
-      (is (string= "left foot" (apeiron.core:object-name limb)))
+      (is (string= "feet" (apeiron.core:object-name limb)))
       (is (eq boots (apeiron.core:limb-item limb))))
-    ;; An explicit 'wear on right foot' works too
+    ;; A second pair cannot be worn while the feet are taken
     (let ((sandal (apeiron.core:new-object :name "a sandal"
                                            :keywords '("sandal"))))
       (give char sandal)
-      (multiple-value-bind (limb reason) (apeiron.core:wear char sandal "right foot")
-        (is (eq reason :ok))
-        (is (string= "right foot" (apeiron.core:object-name limb)))
-        (is (eq sandal (apeiron.core:limb-item limb)))))
-    ;; A head item still doesn't fit a foot
-    (multiple-value-bind (limb reason) (apeiron.core:wear char (make-hat) "left foot")
+      (multiple-value-bind (limb reason) (apeiron.core:wear char sandal "feet")
+        (is (eq reason :occupied))
+        (is (eq boots (apeiron.core:limb-item limb)))))
+    ;; A head item still doesn't fit the feet
+    (multiple-value-bind (limb reason) (apeiron.core:wear char (make-hat) "feet")
       (is (typep limb 'apeiron.core:limb))
       (is (eq reason :keywords-dont-match)))))
 

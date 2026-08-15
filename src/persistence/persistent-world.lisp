@@ -239,6 +239,11 @@ systems, which re-runs DEFINE-PERSISTENT-CLASSES and redefines the
 persistent classes from *PERSISTENT-CLASS-REGISTRY* whenever that file
 changed.
 
+After the reload, datastore migrations run for schema changes that a
+plain class redefinition cannot express — e.g. the limb refactor, where
+the old HEAD/HAND limbs are rebuilt as LIMBs by MIGRATE-CHARACTER-LIMBS!
+(preserving worn/held items).
+
 A second snapshot is taken only when the persistent class schemas
 actually changed — the situation BKNR warns about ('class ~A has been
 changed ... please snapshot your datastore') — so the new schema is
@@ -247,6 +252,10 @@ and the redundant second snapshot is skipped."
   (sync-world)
   (let ((before (persistent-class-schemas)))
     (reload-apeiron)
+    ;; Migrate the datastore for schema changes that cannot be handled by
+    ;; a plain class redefinition (e.g. the limb refactor: head/hand →
+    ;; limb).  Idempotent; a no-op when there is nothing to migrate.
+    (migrate-character-limbs!)
     (when (classes-changed-since-p before)
       (log-message "Persistent class definitions changed — snapshotting datastore for schema evolution.")
       (sync-world))))
@@ -309,6 +318,73 @@ encoded lets BKNR track what the character wears."
     (unless (typep limb 'bknr.datastore:store-object)
       (materialize-object limb)))
   (call-next-method))
+
+(defun legacy-limb-slot (limb slot-name)
+  "Return the value of legacy slot SLOT-NAME (a string) on LIMB, or NIL
+when the slot is not present.
+
+Reads the old ITEM-SLOT-MIXIN slots (NAME, KEYWORDS, ITEM) by symbol
+name rather than by accessor: after a reload the old accessor functions
+are gone, but the slot name symbols remain interned in APEIRON.CORE and
+the legacy classes (head/hand) still carry the slots until their
+instances are deleted."
+  (let ((slot (find-symbol slot-name :apeiron.core)))
+    (when (and slot (slot-exists-p limb slot))
+      (slot-value limb slot))))
+
+(defun make-migrated-limb (legacy-limb)
+  "Build a new LIMB from a legacy head/hand limb, preserving its name,
+allowed keywords, and worn/held item (if any).
+
+The item is moved from the legacy ITEM slot into the new limb's
+CONTAINER-CONTENTS.  Pure conversion: performs no store writes, so it
+can be tested without a live datastore."
+  (let* ((new (make-instance 'limb
+                             :name (legacy-limb-slot legacy-limb "NAME")
+                             :keywords (legacy-limb-slot legacy-limb "KEYWORDS")))
+         (item (legacy-limb-slot legacy-limb "ITEM")))
+    (when item
+      (setf (container-contents new) (list item)))
+    new))
+
+(defun migrate-character-limbs! ()
+  "Migrate every persisted character's legacy head/hand limbs to the new
+single LIMB class.
+
+For each PERSISTENT-CHARACTER whose limbs are not yet LIMBs, each legacy
+limb is converted with MAKE-MIGRATED-LIMB (preserving worn/held items),
+materialized as a PERSISTENT-LIMB store-object, the legacy limb
+store-objects are deleted, and the character's LIMBS slot is updated.
+Idempotent: characters whose limbs are already LIMBs are left untouched.
+Hooked into SAFE-UPDATE so hot updates migrate the running datastore.
+Returns the number of characters migrated."
+  (when (and (boundp 'bknr.datastore:*store*)
+             bknr.datastore:*store*)
+    (let ((migrated 0))
+      (bknr.datastore:with-transaction ("migrate-character-limbs")
+        (dolist (char (bknr.datastore:store-objects-with-class
+                       'persistent-character))
+          (let ((old-limbs (character-limbs char)))
+            (when (some (lambda (limb) (not (typep limb 'limb))) old-limbs)
+              (let ((new-limbs (mapcar #'make-migrated-limb old-limbs)))
+                (dolist (new new-limbs)
+                  (materialize-object new))
+                (dolist (old old-limbs)
+                  (when (typep old 'bknr.datastore:store-object)
+                    (bknr.datastore:delete-object old)))
+                (setf (character-limbs char) new-limbs)
+                (incf migrated)))))
+        ;; Best-effort cleanup of legacy head/hand store-objects that are
+        ;; no longer referenced by any character.
+        (dolist (legacy-name '("PERSISTENT-HEAD" "PERSISTENT-HAND"))
+          (let* ((class-sym (find-symbol legacy-name :apeiron.persistence))
+                 (class (and class-sym (find-class class-sym nil))))
+            (when class
+              (dolist (obj (bknr.datastore:store-objects-with-class class))
+                (unless (bknr.indices:object-destroyed-p obj)
+                  (bknr.datastore:delete-object obj)))))))
+      (log-message "Migrated limbs for ~D character~:P" migrated)
+      migrated)))
 
 (defun materialize-world (transient-world)
   "Convert TRANSIENT-WORLD into a persistent world in-place.

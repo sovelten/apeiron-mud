@@ -48,5 +48,8 @@
    #:get-persistent-world
    #:materialize-object
 
+   ;; Schema migrations
+   #:migrate-character-limbs!
+
    ;; Utilities
    #:refresh-guestbooks))

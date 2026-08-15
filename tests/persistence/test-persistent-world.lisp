@@ -132,6 +132,85 @@ survives a restart."
          (ignore-errors (bknr.datastore:close-store))
          (makunbound 'bknr.datastore:*store*))))))
 
+(test migrate-character-limbs-preserves-worn-items
+  "Migrating a character with legacy head/hand limbs preserves worn/held
+items and replaces the old limb store-objects with LIMBs."
+  (let* ((legacy-name (intern "LEGACY-HEAD-FOR-MIGRATION" :apeiron-test))
+         (pname (intern "PERSISTENT-LEGACY-HEAD-FOR-MIGRATION" :apeiron.persistence))
+         (old-pclass (find-class pname nil)))
+    (unwind-protect
+         (progn
+           ;; Define a legacy head class with the old ITEM-SLOT-MIXIN slots
+           ;; (named in APEIRON.CORE so the migration can read them), and
+           ;; wrap it as a persistent store-object via a throwaway registry.
+           (eval `(defclass ,legacy-name ()
+                    ((apeiron.core::name :initarg :name :initform "head")
+                     (apeiron.core::keywords :initarg :keywords :initform nil)
+                     (apeiron.core::item :initarg :item :initform nil))))
+           (define-persistent-classes
+             (serapeum:dict legacy-name (serapeum:dict)))
+           (setf old-pclass (find-class pname))
+           (let* ((world (apeiron.persistence:world-restore-or-initialize
+                          :force-new t))
+                  (hat (apeiron.core:create-object!
+                        world (apeiron.core:new-object
+                               :name "a wizard hat" :keywords '("hat"))))
+                  (char (apeiron.core:new-character
+                         "Migratee"
+                         (make-instance 'apeiron.core:stream-session
+                                        :stream (make-string-output-stream)
+                                        :use-colors nil)
+                         :owner "migratee-owner")))
+             ;; Attach a legacy limb store-object holding the hat BEFORE the
+             ;; character is materialized, so no default limbs are created.
+             (bknr.datastore:with-transaction ("set-legacy-limbs")
+               (setf (apeiron.core:character-limbs char)
+                     (list (make-instance old-pclass
+                                          :name "head"
+                                          :keywords '("hat" "helmet")
+                                          :item hat))))
+             (apeiron.core:create-object! world char)
+             ;; Simulate the old wear behavior: the worn item's location is
+             ;; the character.
+             (bknr.datastore:with-transaction ("set-worn-location")
+               (setf (apeiron.core:object-location hat) char))
+             ;; Sanity: the legacy limb is a store-object in the datastore.
+             (is (= 1 (length (bknr.datastore:store-objects-with-class
+                               pname))))
+             ;; Migrate.
+             (is (= 1 (apeiron.persistence:migrate-character-limbs!)))
+             (let ((limbs (apeiron.core:character-limbs char)))
+               (is (= 1 (length limbs)))
+               (let ((limb (first limbs)))
+                 (is (typep limb 'apeiron.core:limb))
+                 (is (typep limb 'bknr.datastore:store-object))
+                 (is (string= "head" (apeiron.core:object-name limb)))
+                 (is (equal '("hat" "helmet")
+                            (apeiron.core:container-keywords limb)))
+                 (is (eq hat (apeiron.core:limb-item limb)))
+                 (is (eq char (apeiron.core:object-location hat)))))
+             ;; Legacy store-objects are gone; the migration is idempotent.
+             (is (null (bknr.datastore:store-objects-with-class pname)))
+             (is (zerop (apeiron.persistence:migrate-character-limbs!)))
+             ;; The migrated state survives a restart.
+             (apeiron.persistence:sync-world)
+             (bknr.datastore:close-store)
+             (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
+                    (restored (apeiron.core:find-character-by-owner
+                               new-world "migratee-owner")))
+               (is (not (null restored)))
+               (let ((limb (first (apeiron.core:character-limbs restored))))
+                 (is (typep limb 'apeiron.core:limb))
+                 (is (string= "head" (apeiron.core:object-name limb)))
+                 (is (= (apeiron.core:object-id hat)
+                        (apeiron.core:object-id (apeiron.core:limb-item limb))))
+                 (is (= 1 (length (apeiron.core:character-worn-items restored))))))))
+      ;; Cleanup: close any open store.
+      (ignore-errors
+       (when (and (boundp 'bknr.datastore:*store*) bknr.datastore:*store*)
+         (ignore-errors (bknr.datastore:close-store))
+         (makunbound 'bknr.datastore:*store*))))))
+
 (test bknr-id-conflict-on-restart
   "Test that world-level IDs do NOT conflict after store close/reopen."
   (unwind-protect
