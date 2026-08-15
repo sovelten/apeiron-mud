@@ -3,48 +3,11 @@
 (in-package :apeiron.persistence)
 
 ;; ─── Persistent wrapper classes ──────────────────────────────────────────────
-
-(defwrapping-persistent-class persistent-object (mud-object)
-  ()
-  ;; properties is intentionally NOT transient — objects store meaningful
-  ;; game state via object-set-property that must survive restarts.
-  (:transient-slots))
-
-(defwrapping-persistent-class persistent-room (mud-room persistent-object)
-  ()
-  (:transient-slots contents))
-
-(defwrapping-persistent-class persistent-character (mud-character persistent-object)
-  ()
-  (:transient-slots session))
-
-(defwrapping-persistent-class persistent-head (head)
-  ()
-  (:transient-slots))
-
-(defwrapping-persistent-class persistent-hand (hand)
-  ()
-  (:transient-slots))
-
-(defwrapping-persistent-class persistent-guestbook (mud-guestbook persistent-object)
-  ()
-  (:transient-slots entries))
-
-(defwrapping-persistent-class persistent-npc (mud-npc persistent-object)
-  ())
-
-(defwrapping-persistent-class persistent-wordle (mud-wordle-puzzle persistent-object)
-  ()
-  (:transient-slots character-guesses))
-
-(defwrapping-persistent-class persistent-connection (mud-connection persistent-object)
-  ())
-
-(defwrapping-persistent-class persistent-area (mud-area persistent-object)
-  ()
-  ;; the cl-graph index is derived from rooms/connections and rebuilt on
-  ;; restore (see INITIALIZE-TRANSIENT-INSTANCE below).
-  (:transient-slots graph))
+;;
+;; The PERSISTENT-* classes are declared as data in registry.lisp via
+;; *PERSISTENT-CLASS-REGISTRY*.  That file is loaded before this one, so the
+;; classes already exist when the DEFMETHODs below are compiled; they only
+;; specialize on them.
 
 (defmethod bknr.datastore:initialize-transient-instance ((gb persistent-guestbook))
   "Re-read guestbook entries from the CSV file after restore."
@@ -94,10 +57,6 @@ Usage from the MUD: eval (refresh-guestbooks)"
               (guestbook-load-from-csv (pathname fp))))
       (log-message "Refreshed guestbook ~A from ~A" (object-name gb) fp)))
   (values))
-
-(defwrapping-persistent-class persistent-world (mud-world)
-  ()
-  (:transient-slots characters objects rooms areas))
 
 (defmethod object-set-property ((obj persistent-object) property-name value)
   "Set a property on a persistent object, ensuring BKNR tracks the change.
@@ -238,38 +197,73 @@ close/reopen cycles that trigger BKNR transaction log replay warnings."
   (bknr.datastore:snapshot)
   t)
 
+(defun persistent-class-schema (class)
+  "Return a canonical fingerprint of CLASS's persistent schema: its
+name, the name and transient flag of every effective slot, and its
+direct superclasses.  Used by SAFE-UPDATE to detect whether a reload
+changed the datastore schema."
+  (list (class-name class)
+        (mapcar (lambda (slotd)
+                  (list (sb-mop:slot-definition-name slotd)
+                        (bknr.datastore::transient-slot-p slotd)))
+                (sb-mop:class-slots class))
+        (mapcar #'class-name (sb-mop:class-direct-superclasses class))))
+
+(defun persistent-class-schemas (&optional (registry *persistent-class-registry*))
+  "Fingerprints of every persistent class declared in REGISTRY (default
+*PERSISTENT-CLASS-REGISTRY*), sorted by class name so two snapshots of
+the same schema compare EQUAL."
+  (sort (loop for transient-name being each hash-key
+                of registry
+                using (hash-value options)
+              for pname = (persistent-class-name transient-name options)
+              for class = (find-class pname nil)
+              when class
+                collect (persistent-class-schema class))
+        #'string<
+        :key (lambda (schema) (symbol-name (first schema)))))
+
+(defun classes-changed-since-p (schemas &optional (registry *persistent-class-registry*))
+  "True if the persistent class schemas in REGISTRY (default
+*PERSISTENT-CLASS-REGISTRY*) differ from SCHEMAS.  SAFE-UPDATE uses this
+to decide whether a reload changed the datastore schema and a second
+snapshot is needed."
+  (not (equal schemas (persistent-class-schemas registry))))
+
 (defun safe-update ()
-  "Pulls latest code changes, snapshots BKNR before loading"
+  "Pull latest code changes into the running image safely.
+
+Snapshots the datastore first as a safety baseline, so a broken reload
+can be rolled back.  Then RELOAD-APEIRON reloads the changed APEIRON
+systems, which re-runs DEFINE-PERSISTENT-CLASSES and redefines the
+persistent classes from *PERSISTENT-CLASS-REGISTRY* whenever that file
+changed.
+
+A second snapshot is taken only when the persistent class schemas
+actually changed — the situation BKNR warns about ('class ~A has been
+changed ... please snapshot your datastore') — so the new schema is
+persisted.  When no class changed, the first snapshot is still current
+and the redundant second snapshot is skipped."
   (sync-world)
-  (ql:quickload :apeiron)
-  (sync-world))
+  (let ((before (persistent-class-schemas)))
+    (reload-apeiron)
+    (when (classes-changed-since-p before)
+      (log-message "Persistent class definitions changed — snapshotting datastore for schema evolution.")
+      (sync-world))))
 
 ;; ─── Persistent class mapping ───────────────────────────────────────────────
 
-(defvar *transient->persistent-class-map*
-  (make-hash-table :test #'eq)
-  "Maps a transient game-object class to its wrapping persistent class.")
-
-(defun build-persistent-class-map ()
-  "Auto-discover the transient→persistent class mapping.
-
-Walks all direct subclasses of STORE-OBJECT.  For each with
-WRAPPING-PERSISTENT-CLASS as metaclass, finds the non-store-object
-parent (the transient game class) and records the mapping."
-  (clrhash *transient->persistent-class-map*)
-  (dolist (subclass (sb-mop:class-direct-subclasses
-                     (find-class 'bknr.datastore:store-object)))
-    (when (typep subclass 'wrapping-persistent-class)
-      (dolist (super (sb-mop:class-direct-superclasses subclass))
-        (when (and (typep super 'sb-mop:standard-class)
-                   (not (subtypep super 'bknr.datastore:store-object)))
-          (setf (gethash super *transient->persistent-class-map*) subclass))))))
-
 (defun transient->persistent-class (transient-class)
-  "Return the persistent class that wraps TRANSIENT-CLASS."
-  (or (gethash transient-class *transient->persistent-class-map*)
-      (error "No persistent class found for ~A -- did you forget a DEFWRAPPING-PERSISTENT-CLASS?"
-             transient-class)))
+  "Return the persistent class that wraps TRANSIENT-CLASS.
+
+The persistent class name is derived from TRANSIENT-CLASS's entry in
+*PERSISTENT-CLASS-REGISTRY* (the declarative data in registry.lisp) —
+no class-hierarchy walking needed."
+  (let* ((transient-name (class-name transient-class))
+         (entry (gethash transient-name *persistent-class-registry*)))
+    (or (and entry (find-class (persistent-class-name transient-name entry)))
+        (error "No persistent class registered for ~A -- add it to *PERSISTENT-CLASS-REGISTRY*."
+               transient-class))))
 
 ;; ─── World materialization ──────────────────────────────────────────────────
 
@@ -383,9 +377,6 @@ When FORCE-NEW is true any existing store data is wiped first."
                                 :if-does-not-exist :ignore)
     (makunbound 'bknr.datastore:*store*))
   (open-mud-store)
-  ;; Build the class map for both fresh and restored worlds — new
-  ;; connections need it to materialize guest characters.
-  (build-persistent-class-map)
   (let ((world (get-persistent-world)))
     (if world
         (progn

@@ -79,12 +79,14 @@
   :depends-on ("apeiron/core"
                "bknr.datastore"
                "bknr.indices"
-               "bknr.utils")
+               "bknr.utils"
+               "serapeum")
   :components ((:module "src/persistence"
                 :components
                 ((:file "package")
                  (:file "store")
-                 (:file "persistent-world" :depends-on ("store"))))))
+                 (:file "registry" :depends-on ("store"))
+                 (:file "persistent-world" :depends-on ("registry"))))))
 
 (defsystem "apeiron/worlds"
   :version "0.0.1"

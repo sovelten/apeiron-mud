@@ -8,6 +8,131 @@
     (is (not (null (apeiron.core:get-config-key world :starting-room-id))))
     (is (> (apeiron.core:world-total-rooms world) 0))))
 
+(test persistent-class-registry
+  "The declarative *PERSISTENT-CLASS-REGISTRY* defines a wrapping
+persistent class for every registered transient class, and
+TRANSIENT->PERSISTENT-CLASS resolves them without class-hierarchy
+walking."
+  (let ((expected
+          '((mud-object . persistent-object)
+            (mud-room . persistent-room)
+            (mud-character . persistent-character)
+            (head . apeiron.persistence::persistent-head)
+            (hand . apeiron.persistence::persistent-hand)
+            (mud-guestbook . persistent-guestbook)
+            (mud-npc . apeiron.persistence::persistent-npc)
+            (mud-wordle-puzzle . persistent-wordle)
+            (mud-connection . persistent-connection)
+            (mud-area . persistent-area)
+            (mud-world . persistent-world))))
+    (is (= (length expected) (hash-table-count *persistent-class-registry*))
+        "Registry should have one entry per persistent class")
+    (dolist (pair expected)
+      (let* ((entry (gethash (car pair) *persistent-class-registry*)))
+        (is-true entry "~A should be registered" (car pair))
+        (is (eq (cdr pair)
+                (class-name (transient->persistent-class (find-class (car pair)))))
+            "TRANSIENT->PERSISTENT-CLASS should resolve ~A" (car pair)))))
+  ;; The wrapping superclass structure is derived from the registry.
+  (let ((room-supers (mapcar #'class-name (sb-mop:class-direct-superclasses
+                                           (find-class 'persistent-room))))
+        (head-supers (mapcar #'class-name (sb-mop:class-direct-superclasses
+                                           (find-class 'apeiron.persistence::persistent-head)))))
+    (is (member 'mud-room room-supers))
+    (is (member 'persistent-object room-supers)
+        "MUD-OBJECT subtypes wrap PERSISTENT-OBJECT")
+    (is (member 'head head-supers))
+    (is (not (member 'persistent-object head-supers))
+        "HEAD is not a MUD-OBJECT subtype, so its wrapper does not inherit PERSISTENT-OBJECT"))
+  ;; Transient-slot metadata is recorded per class (slots are matched by
+  ;; symbol name, so compare by name here too).
+  (is (equal '("CONTENTS")
+             (mapcar #'symbol-name
+                     (gethash :transient-slots (gethash 'mud-room *persistent-class-registry*)))))
+  (is (equal '("CHARACTERS" "OBJECTS" "ROOMS" "AREAS")
+             (mapcar #'symbol-name
+                     (gethash :transient-slots (gethash 'mud-world *persistent-class-registry*))))))
+
+(test persistent-class-schemas-stable
+  "Persistent class schema fingerprints are deterministic and stay
+unchanged when the classes are redefined from the same registry — the
+signal SAFE-UPDATE uses to decide whether a second snapshot is needed
+after a reload."
+  (let ((schemas (apeiron.persistence::persistent-class-schemas)))
+    (is (= 11 (length schemas))
+        "One schema fingerprint per registered class")
+    (is (equal schemas (apeiron.persistence::persistent-class-schemas))
+        "Fingerprints must be deterministic")
+    ;; Redefining every class from the same registry must not change them.
+    (define-persistent-classes *persistent-class-registry*)
+    (is (equal schemas (apeiron.persistence::persistent-class-schemas))
+        "Same registry data → same schema, so no extra snapshot needed")))
+
+(test persistent-class-schema-change-detection
+  "SAFE-UPDATE's 'snapshot again' decision (CLASSES-CHANGED-SINCE-P)
+triggers on real schema changes and not on identical redefinitions."
+  (let* ((transient-name (intern "MUD-SCHEMA-TEST-THING" :apeiron-test))
+         (registry (serapeum:dict transient-name (serapeum:dict))))
+    (eval `(defclass ,transient-name () ((data :initform nil))))
+    (define-persistent-classes registry)
+    (let ((before (apeiron.persistence::persistent-class-schemas registry)))
+      ;; Identical redefinition must not change the schema.
+      (define-persistent-classes registry)
+      (is (not (apeiron.persistence::classes-changed-since-p before registry))
+          "Identical redefinition → same schema → no snapshot")
+      ;; Marking DATA transient is a real schema change.
+      (setf (gethash :transient-slots (gethash transient-name registry)) '(data))
+      (define-persistent-classes registry)
+      (is (apeiron.persistence::classes-changed-since-p before registry)
+          "Adding a transient slot changes the schema → snapshot"))))
+
+(test class-change-snapshot-and-restore
+  "The class-change scenario SAFE-UPDATE is designed for: when persistent
+class schemas change, the second snapshot persists the new schema so it
+survives a restart."
+  (let* ((transient-name (intern "MUD-SCHEMA-EVOLVE-THING" :apeiron-test))
+         (pname (intern "PERSISTENT-SCHEMA-EVOLVE-THING" :apeiron.persistence))
+         (registry (serapeum:dict transient-name (serapeum:dict))))
+    (unwind-protect
+         (progn
+           ;; Throwaway transient class with one slot.
+           (eval `(defclass ,transient-name ()
+                    ((data :initform "v1"))))
+           (define-persistent-classes registry)
+           ;; Live store with one instance of the wrapper class.
+           (world-restore-or-initialize :force-new t)
+           (let* ((obj (bknr.datastore:with-transaction ("schema-evolve-create")
+                         (make-instance pname)))
+                  (before (apeiron.persistence::persistent-class-schemas registry)))
+             (is (equal "v1" (slot-value obj 'data)))
+             (sync-world)              ; first snapshot (baseline)
+             ;; Code changes: the transient class gains a slot and the
+             ;; wrapper is redefined — exactly what a registry edit plus a
+             ;; reload does.
+             (eval `(defclass ,transient-name ()
+                      ((data :initform "v1")
+                       (extra :initform "v2"))))
+             (define-persistent-classes registry)
+             ;; SAFE-UPDATE's decision: classes changed → snapshot again.
+             (is (apeiron.persistence::classes-changed-since-p before registry)
+                 "Class change must trigger the second snapshot")
+             ;; BKNR updated the live instance in place.
+             (is (equal "v2" (slot-value obj 'extra)))
+             (sync-world)              ; second snapshot with the new schema
+             ;; Restart: the new schema must survive.
+             (bknr.datastore:close-store)
+             (world-restore-or-initialize)
+             (let ((restored (first (bknr.datastore:store-objects-with-class pname))))
+               (is-true restored "Restored instance of the changed class")
+               (is (equal "v1" (slot-value restored 'data)))
+               (is (equal "v2" (slot-value restored 'extra))
+                   "Slot added by the class change survives the restore"))))
+      ;; Cleanup.
+      (ignore-errors
+       (when (and (boundp 'bknr.datastore:*store*) bknr.datastore:*store*)
+         (ignore-errors (bknr.datastore:close-store))
+         (makunbound 'bknr.datastore:*store*))))))
+
 (test bknr-id-conflict-on-restart
   "Test that world-level IDs do NOT conflict after store close/reopen."
   (unwind-protect

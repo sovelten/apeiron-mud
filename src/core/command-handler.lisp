@@ -172,13 +172,19 @@ CHARACTER is the character, ARGS is a raw string that the handler can parse as n
 Call this from the MUD via 'eval (reload-apeiron)' after modifying
 source files to pick up changes without restarting the server.
 
-After reloading, re-establishes the :use of APEIRON.CORE in the
-APEIRON.EVAL package in case quickload recreated the package."
-  (ql:quickload :apeiron :force t)
-  ;; Re-establish :use of apeiron.core in the eval context package,
-  ;; in case quickload recreated apeiron.core (new package object).
-  ;; Unintern any symbols that shadow newly-exported symbols so
-  ;; the use-package succeeds even when new exports were added.
+ASDF recompiles the files that changed (and everything that depends
+on them), so a plain QUICKLOAD is enough for normal git-based
+workflows; no forced recompile is needed.
+
+After reloading, re-syncs APEIRON.EVAL with APEIRON.CORE.  If CORE
+exported a symbol that a previous /eval form interned in the eval
+context (a defvar or defun, say), that local symbol would shadow the
+new export.  Uninterning the shadows and re-establishing the :use
+makes fresh exports visible without manual intervention."
+  (ql:quickload :apeiron)
+  ;; Re-sync the eval context package with apeiron.core.  Unintern any
+  ;; symbols that shadow newly-exported core symbols (created by earlier
+  ;; /eval forms) so the re-established :use sees the fresh exports.
   (let ((p (find-package '#:apeiron.eval)))
     (when p
       (loop for s being the external-symbols of 'apeiron.core
