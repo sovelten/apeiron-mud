@@ -301,9 +301,9 @@ logging)."
 (defmethod materialize-object ((obj mud-character))
   "Materialize a character's limbs first, then the character itself.
 
-The limbs (head/hand instances) are plain transient objects whose ITEM
-slots must be persisted.  Converting them to PERSISTENT-HEAD /
-PERSISTENT-HAND store-objects before the character's LIMBS slot is
+The limbs (head/hand instances) are plain objects whose
+CONTAINER-CONTENTS must be persisted.  Converting them to
+PERSISTENT-LIMB store-objects before the character's LIMBS slot is
 encoded lets BKNR track what the character wears."
   (dolist (limb (character-limbs obj))
     (unless (typep limb 'bknr.datastore:store-object)

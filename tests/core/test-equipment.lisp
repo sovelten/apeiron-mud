@@ -44,9 +44,9 @@
     (give char hat)
     (multiple-value-bind (limb reason) (apeiron.core:wear char hat)
       (is (eq reason :ok))
-      (is (typep limb 'apeiron.core:head))
-      (is (string= "head" (apeiron.core:item-slot-name limb)))
-      (is (eq hat (apeiron.core:item-slot limb)))
+      (is (typep limb 'apeiron.core:limb))
+      (is (string= "head" (apeiron.core:object-name limb)))
+      (is (eq hat (apeiron.core:limb-item limb)))
       ;; Worn items leave the inventory
       (is (null (find hat (apeiron.core:container-all-objects char))))
       ;; ...but keep the character as their location
@@ -59,9 +59,9 @@
     (give char sword)
     (multiple-value-bind (limb reason) (apeiron.core:wear char sword)
       (is (eq reason :ok))
-      (is (typep limb 'apeiron.core:hand))
-      (is (string= "left hand" (apeiron.core:item-slot-name limb)))
-      (is (eq sword (apeiron.core:item-slot limb))))))
+      (is (typep limb 'apeiron.core:limb))
+      (is (string= "left hand" (apeiron.core:object-name limb)))
+      (is (eq sword (apeiron.core:limb-item limb))))))
 
 (test wear-explicit-limb
   "Wearing on an explicit limb name works ('wear sword on right hand')."
@@ -70,9 +70,9 @@
     (give char sword)
     (multiple-value-bind (limb reason) (apeiron.core:wear char sword "right hand")
       (is (eq reason :ok))
-      (is (string= "right hand" (apeiron.core:item-slot-name limb)))
-      (is (eq sword (apeiron.core:item-slot limb)))
-      (is (null (apeiron.core:item-slot
+      (is (string= "right hand" (apeiron.core:object-name limb)))
+      (is (eq sword (apeiron.core:limb-item limb)))
+      (is (null (apeiron.core:limb-item
                  (apeiron.core:find-limb-by-name char "left hand")))))))
 
 (test wear-keyword-mismatch-rejected
@@ -87,7 +87,7 @@
       (is (eq reason :no-fitting-limb)))
     ;; Explicit limb also refuses the mismatched item, reporting the limb
     (multiple-value-bind (limb reason) (apeiron.core:wear char apple "head")
-      (is (typep limb 'apeiron.core:head))
+      (is (typep limb 'apeiron.core:limb))
       (is (eq reason :keywords-dont-match)))
     ;; The apple is still in the inventory
     (is (find apple (apeiron.core:container-all-objects char)))))
@@ -111,9 +111,9 @@ limb is reported."
     (give char other-hat)
     (apeiron.core:wear char hat)
     (multiple-value-bind (limb reason) (apeiron.core:wear char other-hat)
-      (is (typep limb 'apeiron.core:head))
+      (is (typep limb 'apeiron.core:limb))
       (is (eq reason :occupied))
-      (is (eq hat (apeiron.core:item-slot limb))))))
+      (is (eq hat (apeiron.core:limb-item limb))))))
 
 (test wear-not-in-inventory
   "Wearing an item you don't carry fails with :not-in-inventory."
@@ -140,8 +140,8 @@ limb is reported."
     (apeiron.core:wear char hat)
     (multiple-value-bind (item limb) (apeiron.core:unequip char hat)
       (is (eq item hat))
-      (is (typep limb 'apeiron.core:head))
-      (is (null (apeiron.core:item-slot limb)))
+      (is (typep limb 'apeiron.core:limb))
+      (is (null (apeiron.core:limb-item limb)))
       (is (find hat (apeiron.core:container-all-objects char)))
       (is (eq char (apeiron.core:object-location hat))))))
 
@@ -167,9 +167,9 @@ limb is reported."
       (is (= 2 (length worn)))
       (is (find hat worn :key #'cdr))
       (is (find sword worn :key #'cdr))
-      (is (string= "head" (apeiron.core:item-slot-name
+      (is (string= "head" (apeiron.core:object-name
                            (car (find hat worn :key #'cdr)))))
-      (is (string= "left hand" (apeiron.core:item-slot-name
+      (is (string= "left hand" (apeiron.core:object-name
                                 (car (find sword worn :key #'cdr))))))))
 
 (test describe-shows-worn-items
@@ -222,20 +222,20 @@ limb is reported."
         (apeiron.core:process-command world character "wear hat")
         (let ((out (get-output-stream-string (apeiron.core:session-stream session))))
           (is (search "You wear a wizard hat on your head" out)))
-        (is (not (null (apeiron.core:item-slot
+        (is (not (null (apeiron.core:limb-item
                         (apeiron.core:find-limb-by-name character "head")))))
         ;; get the sword and hold it in a hand
         (apeiron.core:process-command world character "get sword")
         (apeiron.core:process-command world character "wear sword")
         (let ((out (get-output-stream-string (apeiron.core:session-stream session))))
           (is (search "hold a rusty sword in your left hand" out)))
-        (is (not (null (apeiron.core:item-slot
+        (is (not (null (apeiron.core:limb-item
                         (apeiron.core:find-limb-by-name character "left hand")))))
         ;; removing the hat returns it to the inventory
         (apeiron.core:process-command world character "remove hat")
         (let ((out (get-output-stream-string (apeiron.core:session-stream session))))
           (is (search "You remove a wizard hat from your head" out)))
-        (is (null (apeiron.core:item-slot
+        (is (null (apeiron.core:limb-item
                    (apeiron.core:find-limb-by-name character "head"))))
         (is (= 1 (length (apeiron.core:container-all-objects character))))
         ;; drop the hat (now in inventory) back into the room
@@ -247,7 +247,7 @@ limb is reported."
         (apeiron.core:process-command world character "remove sword")
         (let ((out (get-output-stream-string (apeiron.core:session-stream session))))
           (is (search "You remove a rusty sword from your left hand" out)))
-        (is (null (apeiron.core:item-slot
+        (is (null (apeiron.core:limb-item
                    (apeiron.core:find-limb-by-name character "left hand"))))
         ;; the room now holds exactly the hat (the sword is in inventory)
         (let ((room-objs (remove-if (lambda (o)
@@ -307,7 +307,7 @@ limb is reported."
     (apeiron.core:container-add-object character hat)
     (multiple-value-bind (limb reason) (apeiron.core:wear character hat)
       (is (eq reason :ok))
-      (is (string= "head" (apeiron.core:item-slot-name limb))))
+      (is (string= "head" (apeiron.core:object-name limb))))
     (apeiron.persistence:sync-world)
     (bknr.datastore:close-store)
     ;; Restart
@@ -318,7 +318,7 @@ limb is reported."
           "Owned character should survive the restart")
       (let ((worn (apeiron.core:character-worn-items restored)))
         (is (= 1 (length worn)))
-        (is (string= "head" (apeiron.core:item-slot-name (caar worn))))
+        (is (string= "head" (apeiron.core:object-name (caar worn))))
         (is (search "wizard hat"
                     (string-downcase (apeiron.core:object-name (cdar worn)))))))))
 
@@ -343,7 +343,7 @@ and deletes the character's persistent limbs (no leaked store-objects)."
     (apeiron.core:wear guest hat)
     ;; Guest limbs are persistent store-objects
     (is (typep (first (apeiron.core:character-limbs guest))
-               (find-class (find-symbol "PERSISTENT-HEAD" :apeiron.persistence))))
+               (find-class (find-symbol "PERSISTENT-LIMB" :apeiron.persistence))))
     ;; Remove the guest: drop items, delete character and limbs
     (apeiron.core:world-remove-character! world guest)
     ;; Character is gone from the room
@@ -353,9 +353,7 @@ and deletes the character's persistent limbs (no leaked store-objects)."
     (is (find apple (apeiron.core:container-all-objects room)))
     ;; No persistent limb store-objects leaked
     (is (null (bknr.datastore:store-objects-with-class
-               (find-symbol "PERSISTENT-HEAD" :apeiron.persistence))))
-    (is (null (bknr.datastore:store-objects-with-class
-               (find-symbol "PERSISTENT-HAND" :apeiron.persistence))))))
+               (find-symbol "PERSISTENT-LIMB" :apeiron.persistence))))))
 
 (test default-world-has-starter-equipment
   "The default transient world starts with a wearable hat and a weapon."

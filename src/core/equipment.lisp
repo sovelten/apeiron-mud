@@ -1,84 +1,49 @@
-;;;; src/core/human.lisp — Body slots (limbs) for characters
+;;;; src/core/equipment.lisp — Body slots (limbs) for characters
 ;;;;
-;;;; A character has a set of limbs (head, hands, ...).  Each limb is an
-;;;; ITEM-SLOT-MIXIN: it holds at most one item, and only items whose
-;;;; KEYWORDS overlap the limb's allowed keywords may be worn/held there
-;;;; (e.g. a head accepts "hat", a hand accepts "weapon").
+;;;; A character has a set of limbs (head, hands, ...).  Each limb is a
+;;;; MUD-OBJECT and CONTAINER-MIXIN with a MAX-CAPACITY of one: its
+;;;; CONTAINER-CONTENTS holds the single item worn/held there, and only
+;;;; items whose KEYWORDS overlap the limb's allowed keywords
+;;;; (CONTAINER-KEYWORDS) may be worn/held (e.g. a head accepts "hat",
+;;;; a hand accepts "weapon").
 
 (in-package #:apeiron.core)
 
-(defclass item-slot-mixin ()
-  ((name :initarg :name
-         :accessor item-slot-name
-         :initform "a body slot"
-         :documentation "Human-readable name of this slot (e.g. \"head\",
-\"left hand\")")
-   (keywords :initarg :keywords
-             :accessor item-slot-keywords
-             :initform nil
-             :documentation "List of item keywords that are allowed in this
-slot (e.g. \"hat\" for a head, \"weapon\" for a hand)")
-   (item :initarg :item
-         :accessor item-slot
-         :initform nil
-         :documentation "The single item currently held/worn in this slot,
-or NIL when the slot is empty"))
-  (:documentation "A body slot that can hold a single item.  An item may be
-equipped here only if its keywords overlap ITEM-SLOT-KEYWORDS."))
+(defclass limb (mud-object container-mixin)
+  ((max-capacity :initarg :max-capacity
+                 :initform 1
+                 :documentation "A limb holds at most one item."))
+  (:documentation "A body part that can hold or wear a single item.  The
+item is stored in the limb's CONTAINER-CONTENTS; the keywords it accepts
+are CONTAINER-KEYWORDS (e.g. \"hat\" for a head, \"weapon\" for a hand)."))
 
-(defgeneric item-slot-add (slot object)
-  (:documentation "Place OBJECT in SLOT if the slot is empty and OBJECT's
-keywords fit.  Returns OBJECT on success, NIL otherwise."))
+(defun limb-empty-p (limb)
+  "Return non-NIL if LIMB currently holds no item."
+  (null (container-contents limb)))
 
-(defgeneric item-slot-remove (slot object)
-  (:documentation "Remove OBJECT from SLOT if it is the item held there.
-Returns OBJECT on success, NIL otherwise."))
+(defun limb-occupied-p (limb)
+  "Return non-NIL if LIMB currently holds an item."
+  (not (limb-empty-p limb)))
 
-(defmethod item-slot-add ((slot item-slot-mixin) object)
-  "Place OBJECT in SLOT if empty and fitting."
-  (when (and (null (item-slot slot))
-             (item-fits-slot-p object slot))
-    (setf (item-slot slot) object)
-    object))
+(defun item-fits-limb-p (object limb)
+  "Return non-NIL if OBJECT's keywords overlap LIMB's allowed keywords.
 
-(defmethod item-slot-remove ((slot item-slot-mixin) object)
-  "Remove OBJECT from SLOT if it is the item held there."
-  (when (eq (item-slot slot) object)
-    (setf (item-slot slot) nil)
-    object))
-
-(defun item-slot-empty-p (slot)
-  "Return non-NIL if SLOT currently holds no item."
-  (null (item-slot slot)))
-
-(defun item-slot-occupied-p (slot)
-  "Return non-NIL if SLOT currently holds an item."
-  (not (item-slot-empty-p slot)))
-
-(defun item-fits-slot-p (object slot)
-  "Return non-NIL if OBJECT's keywords overlap SLOT's allowed keywords.
-
-An item with no keywords fits no slot: it cannot be worn or held anywhere."
+An item with no keywords fits no limb: it cannot be worn or held anywhere."
   (intersection (object-keywords object)
-                (item-slot-keywords slot)
+                (container-keywords limb)
                 :test #'string-equal))
 
-(defclass head (item-slot-mixin)
-  ()
-  (:documentation "A head: wears hats, helmets, caps, crowns, hoods, etc."))
-
-(defclass hand (item-slot-mixin)
-  ()
-  (:documentation "A hand: holds weapons."))
-
-(defun make-head (&key (name "head"))
-  "Create a head limb.  Accepts hats, helmets, caps, crowns and hoods."
-  (make-instance 'head
+(defun make-limb (&key (name "limb") (keywords nil))
+  "Create a limb.  KEYWORDS are the item keywords allowed in it."
+  (make-instance 'limb
                  :name name
-                 :keywords '("hat" "helmet" "cap" "crown" "hood")))
+                 :keywords keywords))
 
-(defun make-hand (&key (name "hand"))
-  "Create a hand limb.  Holds weapons."
-  (make-instance 'hand
-                 :name name
-                 :keywords '("weapon")))
+(defun limb-item (limb)
+  "Return the single item currently held/worn in LIMB, or NIL."
+  (first (container-contents limb)))
+
+(defun hand-limb-p (limb)
+  "Return non-NIL if LIMB is a hand — i.e. an item is held in it rather
+than worn on it.  Hands are limbs whose name contains \"hand\"."
+  (search "hand" (object-name limb) :test #'string-equal))

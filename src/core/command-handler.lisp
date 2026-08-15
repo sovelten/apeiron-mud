@@ -332,7 +332,6 @@ Only administrators (admin accounts) or characters wearing a wizard hat
                                                (format nil "  - ~A" (object-describe obj)))
                                              inv))))))
 
-
 (defun wear-result-message (item limb reason &optional requested-limb)
   "Build the player-facing message for a WEAR result.
 ITEM is the item attempted, LIMB the limb equipped (or NIL on failure),
@@ -340,23 +339,22 @@ REASON one of the WEAR result keywords, REQUESTED-LIMB the limb name the
 player asked for (for :no-such-limb)."
   (ecase reason
     (:ok
-     (let ((verb (if (typep limb 'hand) "hold" "wear"))
-           (prep (if (typep limb 'hand) "in" "on")))
+     (let ((verb (if (hand-limb-p limb) "hold" "wear"))
+           (prep (if (hand-limb-p limb) "in" "on")))
        (format nil "You ~A ~A ~A your ~A."
-               verb (object-name item) prep (item-slot-name limb))))
+               verb (object-name item) prep (object-name limb))))
     (:no-such-limb
      (format nil "You don't have a ~A to wear that on." requested-limb))
     (:no-fitting-limb
      (format nil "You can't wear ~A — nothing fits it." (object-name item)))
     (:keywords-dont-match
      (format nil "~A doesn't belong on your ~A."
-             (object-name item) (item-slot-name limb)))
+             (object-name item) (object-name limb)))
     (:occupied
      (format nil "Your ~A already holds ~A."
-             (item-slot-name limb) (object-name (item-slot limb))))
+             (object-name limb) (object-name (limb-item limb))))
     (:not-in-inventory
      (format nil "You aren't carrying ~A." (object-name item)))))
-
 
 (define-command "wear" (world character args)
   "Wear or hold an item you are carrying, e.g. 'wear wizard hat', 'wear sword on left hand'."
@@ -380,7 +378,7 @@ player asked for (for :no-such-limb)."
                (wear-result-message item limb reason limb-name))
               (when (eq reason :ok)
                 ;; Give the item a chance to react to being worn/held.
-                (funcall (if (typep limb 'hand) #'handle-hold #'handle-wear)
+                (funcall (if (hand-limb-p limb) #'handle-hold #'handle-wear)
                          item character)))))))
 
 
@@ -401,7 +399,7 @@ player asked for (for :no-such-limb)."
                character
                (format nil "You remove ~A from your ~A."
                        (object-name (cdr pair))
-                       (item-slot-name (car pair)))))))))
+                       (object-name (car pair)))))))))
 
 
 (define-command "get" (world character args)

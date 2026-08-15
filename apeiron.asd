@@ -41,7 +41,7 @@
                  (:file "colors" :depends-on ("package"))
                  (:file "object" :depends-on ("utils"))
                  (:file "container" :depends-on ("object"))
-                 (:file "equipment" :depends-on ("object"))
+                 (:file "equipment" :depends-on ("object" "container"))
                  (:file "connection" :depends-on ("object"))
                  (:file "room" :depends-on ("object" "container" "connection"))
                  (:file "guestbook" :depends-on ("object" "character"))

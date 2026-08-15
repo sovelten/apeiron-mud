@@ -17,8 +17,7 @@ walking."
           '((mud-object . persistent-object)
             (mud-room . persistent-room)
             (mud-character . persistent-character)
-            (head . apeiron.persistence::persistent-head)
-            (hand . apeiron.persistence::persistent-hand)
+            (limb . apeiron.persistence::persistent-limb)
             (mud-guestbook . persistent-guestbook)
             (mud-npc . apeiron.persistence::persistent-npc)
             (mud-wordle-puzzle . persistent-wordle)
@@ -36,14 +35,14 @@ walking."
   ;; The wrapping superclass structure is derived from the registry.
   (let ((room-supers (mapcar #'class-name (sb-mop:class-direct-superclasses
                                            (find-class 'persistent-room))))
-        (head-supers (mapcar #'class-name (sb-mop:class-direct-superclasses
-                                           (find-class 'apeiron.persistence::persistent-head)))))
+        (limb-supers (mapcar #'class-name (sb-mop:class-direct-superclasses
+                                           (find-class 'apeiron.persistence::persistent-limb)))))
     (is (member 'mud-room room-supers))
     (is (member 'persistent-object room-supers)
         "MUD-OBJECT subtypes wrap PERSISTENT-OBJECT")
-    (is (member 'head head-supers))
-    (is (not (member 'persistent-object head-supers))
-        "HEAD is not a MUD-OBJECT subtype, so its wrapper does not inherit PERSISTENT-OBJECT"))
+    (is (member 'limb limb-supers))
+    (is (member 'persistent-object limb-supers)
+        "LIMB is a MUD-OBJECT subtype, so its wrapper inherits PERSISTENT-OBJECT"))
   ;; Transient-slot metadata is recorded per class (slots are matched by
   ;; symbol name, so compare by name here too).
   (is (equal '("CONTENTS")
@@ -59,7 +58,7 @@ unchanged when the classes are redefined from the same registry — the
 signal SAFE-UPDATE uses to decide whether a second snapshot is needed
 after a reload."
   (let ((schemas (apeiron.persistence::persistent-class-schemas)))
-    (is (= 11 (length schemas))
+    (is (= 10 (length schemas))
         "One schema fingerprint per registered class")
     (is (equal schemas (apeiron.persistence::persistent-class-schemas))
         "Fingerprints must be deterministic")

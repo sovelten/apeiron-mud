@@ -7,7 +7,19 @@
              :documentation "Container contents: a list of the contained
 objects.  A list (rather than a hash keyed by OBJECT-ID) so that objects
 which have not yet been registered with a world — and therefore share
-the unset OBJECT-ID -1 — can still coexist in one container."))
+the unset OBJECT-ID -1 — can still coexist in one container.")
+   (max-capacity :initarg :max-capacity
+                 :accessor container-max-capacity
+                 :initform nil
+                 :documentation "Maximum number of objects this container
+may hold, or NIL for no limit.  Limbs use a capacity of 1.")
+   (keywords :initarg :keywords
+             :accessor container-keywords
+             :initform nil
+             :documentation "List of item keywords that are allowed in this
+container (e.g. \"hat\" for a head limb, \"weapon\" for a hand limb).
+Only meaningful for containers that restrict what may be stored; rooms
+and inventories leave it NIL."))
   (:documentation "Objects that contain things inside it (character inventory, rooms)
    should use this mix-in"))
 
@@ -25,11 +37,17 @@ persistent object's LOCATION slot.
 
 The contents list is keyed by object identity, so adding the same object
 twice is idempotent and objects that share an unset OBJECT-ID (-1) do
-not clobber one another."
-  (let ((contents (container-contents container)))
-    (pushnew object contents :test #'eq)
-    (setf (container-contents container) contents))
-  (setf (object-location object) container))
+not clobber one another.
+
+Returns T on success, or NIL if CONTAINER is already at MAX-CAPACITY."
+  (let ((capacity (container-max-capacity container)))
+    (when (or (null capacity)
+              (< (length (container-contents container)) capacity))
+      (let ((contents (container-contents container)))
+        (pushnew object contents :test #'eq)
+        (setf (container-contents container) contents))
+      (setf (object-location object) container)
+      t)))
 
 (defmethod container-remove-object ((container container-mixin) object)
   "Remove OBJECT from CONTAINER's contents and clear its location."
