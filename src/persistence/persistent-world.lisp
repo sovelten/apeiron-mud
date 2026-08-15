@@ -3,30 +3,11 @@
 (in-package :apeiron.persistence)
 
 ;; ─── Persistent wrapper classes ──────────────────────────────────────────────
-
-;; Declarative registration: a serapeum dict maps each transient game class
-;; to options for its wrapping persistent class.  DEFINE-PERSISTENT-CLASSES
-;; defines the PERSISTENT-* classes (MUD-ROOM → PERSISTENT-ROOM, and every
-;; MUD-OBJECT subtype also inherits PERSISTENT-OBJECT) and installs
-;; *PERSISTENT-CLASS-REGISTRY* for TRANSIENT->PERSISTENT-CLASS.
-(define-persistent-classes
-  (dict
-   'mud-object        (dict)
-   ;; properties is intentionally NOT transient — objects store meaningful
-   ;; game state via object-set-property that must survive restarts.
-   'mud-room          (dict :transient-slots (contents))
-   'mud-character     (dict :transient-slots (session))
-   'head              (dict)
-   'hand              (dict)
-   'mud-guestbook     (dict :transient-slots (entries))
-   'mud-npc           (dict)
-   'mud-wordle-puzzle (dict :transient-slots (character-guesses)
-                            :persistent-name persistent-wordle)
-   'mud-connection    (dict)
-   'mud-area          (dict :transient-slots (graph))
-   ;; the cl-graph index is derived from rooms/connections and rebuilt on
-   ;; restore (see INITIALIZE-TRANSIENT-INSTANCE below).
-   'mud-world         (dict :transient-slots (characters objects rooms areas))))
+;;
+;; The PERSISTENT-* classes are declared as data in registry.lisp via
+;; *PERSISTENT-CLASS-REGISTRY*.  That file is loaded before this one, so the
+;; classes already exist when the DEFMETHODs below are compiled; they only
+;; specialize on them.
 
 (defmethod bknr.datastore:initialize-transient-instance ((gb persistent-guestbook))
   "Re-read guestbook entries from the CSV file after restore."
@@ -227,13 +208,12 @@ close/reopen cycles that trigger BKNR transaction log replay warnings."
 (defun transient->persistent-class (transient-class)
   "Return the persistent class that wraps TRANSIENT-CLASS.
 
-The mapping comes from *PERSISTENT-CLASS-REGISTRY*, installed
-declaratively by DEFINE-PERSISTENT-CLASSES — no class-hierarchy
-walking needed."
-  (let* ((entry (gethash (class-name transient-class)
-                         *persistent-class-registry*))
-         (pname (and entry (gethash :persistent-class entry))))
-    (or (and pname (find-class pname))
+The persistent class name is derived from TRANSIENT-CLASS's entry in
+*PERSISTENT-CLASS-REGISTRY* (the declarative data in registry.lisp) —
+no class-hierarchy walking needed."
+  (let* ((transient-name (class-name transient-class))
+         (entry (gethash transient-name *persistent-class-registry*)))
+    (or (and entry (find-class (persistent-class-name transient-name entry)))
         (error "No persistent class registered for ~A -- add it to *PERSISTENT-CLASS-REGISTRY*."
                transient-class))))
 

@@ -30,8 +30,6 @@ walking."
     (dolist (pair expected)
       (let* ((entry (gethash (car pair) *persistent-class-registry*)))
         (is-true entry "~A should be registered" (car pair))
-        (is (eq (cdr pair) (gethash :persistent-class entry))
-            "~A should map to ~A" (car pair) (cdr pair))
         (is (eq (cdr pair)
                 (class-name (transient->persistent-class (find-class (car pair)))))
             "TRANSIENT->PERSISTENT-CLASS should resolve ~A" (car pair)))))
