@@ -115,6 +115,7 @@
   - **Multi-player networking** — multiple players connect via telnet simultaneously
   - **Object-oriented world** — everything is an object with unique IDs and extensible properties
   - **Persistence** — objects are persisted through the BKNR datastore; journaling enables recovery in case the server needs to be shut down
+  - **Hot reloading** — reload changed code into a running server without restarting (`reload-apeiron`, `safe-update`)
   - **Room system** — navigable rooms with directional exits (north, south, east, west)
   - **Player chat** — `say` command for in-room communication
   - **Inventory system** — foundation for item management
@@ -122,7 +123,6 @@
 
   ### Planned
 
-  - Hot code reloading — update the system without restarting
   - Full item system — items with properties (take, drop, examine)
   - NPC support — non-player characters with behaviors
   - LLM NPCs — NPCs backed by LLMs, armed with MCP servers""")
@@ -272,6 +272,60 @@
   (wordle (include #.(asdf:system-relative-pathname
                        :apeiron-docs "docs/tutorial-wordle.md"))))
 
+(defsection @persistence (:title "Persistence")
+  """The game world and every object in it live in a BKNR datastore.
+  Transient game objects are converted to *persistent* counterparts
+  (BKNR store-objects) whose changes are journaled, so everything
+  survives restarts and crashes.
+
+  ### Declarative persistent classes
+
+  Persistent classes are declared as *data* in
+  `src/persistence/registry.lisp`: a serapeum dict,
+  `*PERSISTENT-CLASS-REGISTRY*`, maps each transient game class to an
+  options dict.
+
+  ```lisp
+  (defparameter *persistent-class-registry*
+    (dict
+     'mud-object        (dict)
+     'mud-room          (dict :transient-slots '(contents))
+     'mud-character     (dict :transient-slots '(session))
+     'mud-guestbook     (dict :transient-slots '(entries))
+     'mud-world         (dict :transient-slots '(characters objects rooms areas))))
+  ```
+
+  `DEFINE-PERSISTENT-CLASSES` reads the registry and defines the
+  wrapping `PERSISTENT-*` classes:
+  - **name** — `PERSISTENT-<name>` by default (`MUD-ROOM` →
+    `PERSISTENT-ROOM`), overridable with `:persistent-name`;
+  - **superclasses** — the transient class plus `PERSISTENT-OBJECT`
+    when it is a `MUD-OBJECT` subtype, so every game object shares the
+    same persistence behavior; overridable with `:superclasses`;
+  - **transient slots** — `:transient-slots` lists the slots inherited
+    from the transient class that must NOT be stored, for example a
+    character's live `session` or a world's in-memory indices.
+
+  Adding a new persistent class is a one-line registry entry — no
+  class definitions to hand-write.
+
+  ### Materialization and restore
+
+  `MATERIALIZE-OBJECT` converts a transient object into its persistent
+  counterpart in place (preserving identity and cross-references).
+  `WORLD-RESTORE-OR-INITIALIZE` restores the stored world on startup —
+  or materializes a fresh one when no store exists yet.
+
+  ### Updating a running server
+
+  `SAFE-UPDATE` reloads changed code into a live image without a
+  restart.  It snapshots the datastore first (a rollback baseline),
+  reloads the changed systems via `RELOAD-APEIRON`, and takes a second
+  snapshot only when the persistent class schemas actually changed —
+  the situation BKNR warns about, where the new schema must be
+  persisted.  If no class changed, the redundant second snapshot is
+  skipped.  See @DEPLOYMENT.""")
+
 (defsection @deployment (:title "Deployment")
   """### Configuration
 
@@ -294,6 +348,28 @@
 
   ;; Get all rooms
   (apeiron.core:world-all-rooms (apeiron.persistence:get-persistent-world))
+  ```
+
+  ### Updating a Running Server
+
+  Pull the latest code and reload it into the running image without a
+  restart:
+
+  ```lisp
+  (apeiron.persistence:safe-update)
+  ```
+
+  `SAFE-UPDATE` snapshots the datastore first (a rollback baseline),
+  reloads the changed APEIRON systems via `reload-apeiron`, then takes a
+  second snapshot only when persistent class definitions changed — so a
+  new class schema is persisted.  If nothing changed, the second snapshot
+  is skipped.
+
+  For quick development reloads from inside the game, use the eval
+  command:
+
+  ```
+  eval (reload-apeiron)
   ```
 
   ### Stopping the Server
@@ -347,6 +423,7 @@
   - **cl-graph** — area graph algorithms
   - **deeds** — event system
   - **bknr.datastore** — persistence
+  - **serapeum** — utility hash tables (the declarative persistent class registry)
   - **fiveam** — testing (optional)
 
   All installed via Quicklisp automatically.""")

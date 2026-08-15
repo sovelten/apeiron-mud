@@ -65,11 +65,13 @@
 ;;; Automatically generated API reference. Every exported symbol of the
 ;;; listed packages is classified and documented; nothing to maintain
 ;;; by hand — adding an export is enough to get it documented.
-(defautodoc-packages @api (:packages (:apeiron.core :apeiron.core.utils)
+(defautodoc-packages @api (:packages (:apeiron.core
+                                      :apeiron.core.utils
+                                      :apeiron.persistence)
                           :title "API Reference")
   "Automatically generated from the exported symbols of the
   `apeiron.core` package (and its small `apeiron.core.utils` helper
-  package).")
+  package, plus the `apeiron.persistence` persistence layer).")
 
 ;;; The landing README.md. All substantive content is REFERENCED from
 ;;; the shared sections in docs/apeiron-manual.lisp (single source of
@@ -112,6 +114,7 @@
   (apeiron.core::@commands section)
   (@tutorial-secret-room section)
   (@tutorial-wordle section)
+  (@persistence section)
   (@deployment section)
   (@troubleshooting section)
   (@dependencies section)
