@@ -310,15 +310,15 @@
    #:container-objects-matching
    #:container-max-capacity
    #:container-keywords
+   #:container-empty-p
+   #:container-full-p
+   #:item-fits-container-p
    #:character-send-message
 
    ;; Equipment / body slots
    #:limb
    #:make-limb
    #:limb-item
-   #:limb-empty-p
-   #:limb-occupied-p
-   #:item-fits-limb-p
    #:hand-limb-p
 
    ;; World

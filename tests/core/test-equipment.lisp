@@ -1,7 +1,7 @@
 ;;;; tests/core/test-equipment.lisp — Tests for wearing/holding items
 ;;;;
-;;;; Covers the WEAR / UNEQUIP API on characters (head, left hand, right
-;;;; hand), keyword matching rules, describing worn items, the
+;;;; Covers the WEAR / UNEQUIP API on characters (head, left/right hands,
+;;;; left/right feet), keyword matching rules, describing worn items, the
 ;;;; wear/remove/get/drop commands, and persistence of worn items across
 ;;;; a store restart.
 
@@ -33,6 +33,14 @@
    :keywords '("weapon" "sword")
    :aliases '("sword")))
 
+(defun make-shoe (&key (name "a pair of boots"))
+  "A foot-wearable item."
+  (apeiron.core:new-object
+   :name name
+   :description "Sturdy leather boots."
+   :keywords '("boot" "shoe")
+   :aliases '("boots" "shoes")))
+
 (defun give (character object)
   "Put OBJECT into CHARACTER's inventory."
   (apeiron.core:container-add-object character object))
@@ -62,6 +70,30 @@
       (is (typep limb 'apeiron.core:limb))
       (is (string= "left hand" (apeiron.core:object-name limb)))
       (is (eq sword (apeiron.core:limb-item limb))))))
+
+(test wear-shoes-on-feet
+  "A shoe (keyword boot/shoe) is worn on the feet."
+  (let ((char (make-test-character))
+        (boots (make-shoe)))
+    (give char boots)
+    ;; Auto-fit wears on the left foot first
+    (multiple-value-bind (limb reason) (apeiron.core:wear char boots)
+      (is (eq reason :ok))
+      (is (typep limb 'apeiron.core:limb))
+      (is (string= "left foot" (apeiron.core:object-name limb)))
+      (is (eq boots (apeiron.core:limb-item limb))))
+    ;; An explicit 'wear on right foot' works too
+    (let ((sandal (apeiron.core:new-object :name "a sandal"
+                                           :keywords '("sandal"))))
+      (give char sandal)
+      (multiple-value-bind (limb reason) (apeiron.core:wear char sandal "right foot")
+        (is (eq reason :ok))
+        (is (string= "right foot" (apeiron.core:object-name limb)))
+        (is (eq sandal (apeiron.core:limb-item limb)))))
+    ;; A head item still doesn't fit a foot
+    (multiple-value-bind (limb reason) (apeiron.core:wear char (make-hat) "left foot")
+      (is (typep limb 'apeiron.core:limb))
+      (is (eq reason :keywords-dont-match)))))
 
 (test wear-explicit-limb
   "Wearing on an explicit limb name works ('wear sword on right hand')."

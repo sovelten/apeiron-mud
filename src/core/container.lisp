@@ -40,20 +40,40 @@ twice is idempotent and objects that share an unset OBJECT-ID (-1) do
 not clobber one another.
 
 Returns T on success, or NIL if CONTAINER is already at MAX-CAPACITY."
-  (let ((capacity (container-max-capacity container)))
-    (when (or (null capacity)
-              (< (length (container-contents container)) capacity))
-      (let ((contents (container-contents container)))
-        (pushnew object contents :test #'eq)
-        (setf (container-contents container) contents))
-      (setf (object-location object) container)
-      t)))
+  (unless (container-full-p container)
+    (let ((contents (container-contents container)))
+      (pushnew object contents :test #'eq)
+      (setf (container-contents container) contents))
+    (setf (object-location object) container)
+    t))
 
 (defmethod container-remove-object ((container container-mixin) object)
   "Remove OBJECT from CONTAINER's contents and clear its location."
   (setf (container-contents container)
         (remove object (container-contents container) :test #'eq))
   (setf (object-location object) nil))
+
+(defun container-empty-p (container)
+  "Return non-NIL if CONTAINER currently holds no objects."
+  (null (container-contents container)))
+
+(defun container-full-p (container)
+  "Return non-NIL if CONTAINER is at its MAX-CAPACITY.  A container with
+NIL capacity is never full."
+  (let ((capacity (container-max-capacity container)))
+    (and capacity
+         (>= (length (container-contents container)) capacity))))
+
+(defun item-fits-container-p (object container)
+  "Return non-NIL if OBJECT may be stored in CONTAINER.
+
+A container with no keyword restrictions accepts anything; otherwise
+OBJECT's keywords must overlap CONTAINER's allowed keywords."
+  (let ((allowed (container-keywords container)))
+    (or (null allowed)
+        (intersection (object-keywords object)
+                      allowed
+                      :test #'string-equal))))
 
 (defmethod container-object-by-id ((container container-mixin) id)
   "Return the object in CONTAINER with the given world-level ID, or NIL.
