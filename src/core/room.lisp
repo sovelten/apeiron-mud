@@ -59,6 +59,16 @@ incident to it and its own CONNECTIONS list (see ROOM-EXIT-CONNECTIONS)."))
                  
                  :location nil))
 
+(defun characters-in-room (room)
+  "Return the list of MUD-CHARACTER objects currently in ROOM.
+
+MUD-CHARACTER is defined in character.lisp, which loads after this file,
+so the class is looked up at runtime via FIND-CLASS."
+  (let ((character-class (find-class 'mud-character nil)))
+    (when character-class
+      (remove-if-not (lambda (obj) (typep obj character-class))
+                     (container-all-objects room)))))
+
 (defun room-exit-target (room direction)
   "Get the target room when moving in DIRECTION from ROOM.
 

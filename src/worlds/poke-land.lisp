@@ -181,9 +181,16 @@ main concourse.  Returns the area."
           (fashion (new-room
                     :name "Fashion Wing"
                     :description
-                    "Mannequins display the latest trainer gear: cargo shorts, fingerless gloves, and hats that somehow never fall off during battle. A sale banner screams '50% OFF REPEL!'.")))
+                    "Mannequins display the latest trainer gear: cargo shorts, fingerless gloves, and hats that somehow never fall off during battle. A sale banner screams '50% OFF REPEL!'."))
+          (black-heels (new-object
+                        :name "black heels"
+                        :description "A pair of sleek black high heels, polished to a mirror shine. They look like they'd announce your arrival with a satisfying click-clack on any hard floor."
+                        :keywords '("heels" "black" "shoe")
+                        :aliases '("heels" "black heels"))))
       (area-connect-north-south! area mall food-court)
       (area-connect-west-east! area mall arcade)
       (area-connect-west-east! area fashion mall)
+      ;; Display the black heels on a mannequin in the Fashion Wing
+      (container-add-object fashion black-heels)
       (area-set-entrance! area mall)
       area)))
