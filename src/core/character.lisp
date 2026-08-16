@@ -75,11 +75,6 @@ If the character has no session (e.g. disconnected), the message is silently dro
                   (string-equal (object-name obj) character-name))
         return obj))
 
-(defun characters-in-room (room)
-  "Return the list of MUD-CHARACTER objects currently in ROOM."
-  (remove-if-not (lambda (obj) (typep obj 'mud-character))
-                 (container-all-objects room)))
-
 (defun find-limb-by-name (character name)
   "Return the limb of CHARACTER whose name matches NAME (case-insensitive),
 or NIL."
