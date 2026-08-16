@@ -51,8 +51,9 @@ characters already in TO-ROOM are told \"<name> arrives from <direction>\"
 If CHARACTER is wearing black heels, the announcements are prefixed with
 the sound of heels on the ground: \"You hear a click-clack sound as ...\".
 
-Returns the canonical direction name (as seen from FROM-ROOM), which is
-useful for the mover's own message."
+Returns (values WENT-DIRECTION HEELS-P): the canonical direction name
+(as seen from FROM-ROOM, useful for the mover's own message) and whether
+CHARACTER is wearing black heels (so the mover can hear the heels too)."
   (let* ((conn (connection-find from-room direction))
          (went-direction (if conn
                              (connection-direction-to conn from-room)
@@ -61,7 +62,8 @@ useful for the mover's own message."
                                (connection-direction-to conn to-room)
                                direction))
          (name (bright-green (object-name character)))
-         (prefix (if (character-wearing-keywords-p character '("black" "heels"))
+         (heels-p (character-wearing-keywords-p character '("black" "heels")))
+         (prefix (if heels-p
                      "You hear a click-clack sound as "
                      "")))
     ;; Announce departure to the room being left
@@ -76,7 +78,7 @@ useful for the mover's own message."
         (character-send-message
          other
          (format nil "~A~A arrives from ~A" prefix name (yellow arrive-direction)))))
-    went-direction))
+    (values went-direction heels-p)))
 
 (define-command "go" (world character args)
   "Move in a direction, e.g. 'go north', 'go east', 'go south', 'go west'."
@@ -91,9 +93,16 @@ useful for the mover's own message."
               (let ((target-room (room-exit-target room direction)))
                 (if target-room
                     (progn
-                      (let ((went-direction (announce-movement character direction room target-room)))
+                      (multiple-value-bind (went-direction heels-p)
+                          (announce-movement character direction room target-room)
                         (object-move character target-room)
-                        (character-send-message character (format nil "~A ~A~%" (bright-cyan "You went") (yellow went-direction)))
+                        (character-send-message
+                         character
+                         (format nil "~A ~A~%"
+                                 (if heels-p
+                                     (bright-cyan "You hear a click-clack sound as you went")
+                                     (bright-cyan "You went"))
+                                 (yellow went-direction)))
                         (character-send-message character (object-describe target-room))))
                     (character-send-message character "You can't go that way."))))))))
 

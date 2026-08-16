@@ -878,6 +878,7 @@ characters hear the click-clack of the heels on the ground."
     (let ((alice (make-movement-test-character world "Alice"))
           (bob (make-movement-test-character world "Bob"))
           (carol (make-movement-test-character world "Carol"))
+          (msgs-alice '())
           (msgs-bob '())
           (msgs-carol '()))
       ;; Carol waits in the south room
@@ -899,10 +900,15 @@ characters hear the click-clack of the heels on the ground."
                      (lambda (p msg &key newline)
                        (declare (ignore newline))
                        (cond
+                         ((eq p alice) (push msg msgs-alice))
                          ((eq p bob) (push msg msgs-bob))
                          ((eq p carol) (push msg msgs-carol)))))
-               (setf msgs-bob '() msgs-carol '())
+               (setf msgs-alice '() msgs-bob '() msgs-carol '())
                (apeiron.core:process-command world alice "go south")
+               ;; Alice, the mover, hears her own heels
+               (is (some (lambda (m)
+                           (search "You hear a click-clack sound as you went south" m))
+                         msgs-alice))
                ;; Bob hears the click-clack as Alice leaves
                (is (some (lambda (m)
                            (search "You hear a click-clack sound as Alice went south" m))
