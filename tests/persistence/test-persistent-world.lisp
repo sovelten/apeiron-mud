@@ -132,6 +132,11 @@ survives a restart."
          (ignore-errors (bknr.datastore:close-store))
          (makunbound 'bknr.datastore:*store*))))))
 
+<<<<<<< Updated upstream
+=======
+<<<<<<< Updated upstream
+=======
+>>>>>>> Stashed changes
 (test migrate-character-limbs-preserves-worn-items
   "Migrating a character with legacy head/hand limbs preserves worn/held
 items and replaces the old limb store-objects with LIMBs."
@@ -180,7 +185,17 @@ items and replaces the old limb store-objects with LIMBs."
              ;; Migrate.
              (is (= 1 (apeiron.persistence:migrate-character-limbs!)))
              (let ((limbs (apeiron.core:character-limbs char)))
+<<<<<<< Updated upstream
                (is (= 1 (length limbs)))
+=======
+               ;; The legacy head is converted and the missing default
+               ;; limbs (left/right hand, feet) are added fresh.
+               (is (= 4 (length limbs)))
+               (is (every (lambda (l) (typep l 'bknr.datastore:store-object))
+                          limbs))
+               (is (member "feet" (mapcar #'apeiron.core:object-name limbs)
+                           :test #'string-equal))
+>>>>>>> Stashed changes
                (let ((limb (first limbs)))
                  (is (typep limb 'apeiron.core:limb))
                  (is (typep limb 'bknr.datastore:store-object))
@@ -199,7 +214,15 @@ items and replaces the old limb store-objects with LIMBs."
                     (restored (apeiron.core:find-character-by-owner
                                new-world "migratee-owner")))
                (is (not (null restored)))
+<<<<<<< Updated upstream
                (let ((limb (first (apeiron.core:character-limbs restored))))
+=======
+               (let ((limbs (apeiron.core:character-limbs restored))
+                     (limb (first (apeiron.core:character-limbs restored))))
+                 (is (= 4 (length limbs)))
+                 (is (member "feet" (mapcar #'apeiron.core:object-name limbs)
+                             :test #'string-equal))
+>>>>>>> Stashed changes
                  (is (typep limb 'apeiron.core:limb))
                  (is (string= "head" (apeiron.core:object-name limb)))
                  (is (= (apeiron.core:object-id hat)
@@ -211,6 +234,10 @@ items and replaces the old limb store-objects with LIMBs."
          (ignore-errors (bknr.datastore:close-store))
          (makunbound 'bknr.datastore:*store*))))))
 
+<<<<<<< Updated upstream
+=======
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
 (test bknr-id-conflict-on-restart
   "Test that world-level IDs do NOT conflict after store close/reopen."
   (unwind-protect

@@ -10,6 +10,12 @@
   (:use #:cl
         #:apeiron.core
         #:apeiron.core.utils)
+  ;; LIMB is referenced unqualified by persistent-world.lisp (the limb
+  ;; migration).  Declaring it a shadowing import of APEIRON.CORE:LIMB
+  ;; keeps the package's LIMB symbol identical to the core one even when
+  ;; the packages are in flux during a hot reload, so the newly-exported
+  ;; core symbol can never collide with a stray locally-interned LIMB.
+  (:shadowing-import-from #:apeiron.core #:limb)
   (:import-from #:serapeum #:dict)
   (:export
    ;; Metaclass
