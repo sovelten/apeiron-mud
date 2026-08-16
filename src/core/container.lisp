@@ -7,7 +7,19 @@
              :documentation "Container contents: a list of the contained
 objects.  A list (rather than a hash keyed by OBJECT-ID) so that objects
 which have not yet been registered with a world — and therefore share
-the unset OBJECT-ID -1 — can still coexist in one container."))
+the unset OBJECT-ID -1 — can still coexist in one container.")
+   (max-capacity :initarg :max-capacity
+                 :accessor container-max-capacity
+                 :initform nil
+                 :documentation "Maximum number of objects this container
+may hold, or NIL for no limit.  Limbs use a capacity of 1.")
+   (keywords :initarg :keywords
+             :accessor container-keywords
+             :initform nil
+             :documentation "List of item keywords that are allowed in this
+container (e.g. \"hat\" for a head limb, \"weapon\" for a hand limb).
+Only meaningful for containers that restrict what may be stored; rooms
+and inventories leave it NIL."))
   (:documentation "Objects that contain things inside it (character inventory, rooms)
    should use this mix-in"))
 
@@ -25,17 +37,43 @@ persistent object's LOCATION slot.
 
 The contents list is keyed by object identity, so adding the same object
 twice is idempotent and objects that share an unset OBJECT-ID (-1) do
-not clobber one another."
-  (let ((contents (container-contents container)))
-    (pushnew object contents :test #'eq)
-    (setf (container-contents container) contents))
-  (setf (object-location object) container))
+not clobber one another.
+
+Returns T on success, or NIL if CONTAINER is already at MAX-CAPACITY."
+  (unless (container-full-p container)
+    (let ((contents (container-contents container)))
+      (pushnew object contents :test #'eq)
+      (setf (container-contents container) contents))
+    (setf (object-location object) container)
+    t))
 
 (defmethod container-remove-object ((container container-mixin) object)
   "Remove OBJECT from CONTAINER's contents and clear its location."
   (setf (container-contents container)
         (remove object (container-contents container) :test #'eq))
   (setf (object-location object) nil))
+
+(defun container-empty-p (container)
+  "Return non-NIL if CONTAINER currently holds no objects."
+  (null (container-contents container)))
+
+(defun container-full-p (container)
+  "Return non-NIL if CONTAINER is at its MAX-CAPACITY.  A container with
+NIL capacity is never full."
+  (let ((capacity (container-max-capacity container)))
+    (and capacity
+         (>= (length (container-contents container)) capacity))))
+
+(defun item-fits-container-p (object container)
+  "Return non-NIL if OBJECT may be stored in CONTAINER.
+
+A container with no keyword restrictions accepts anything; otherwise
+OBJECT's keywords must overlap CONTAINER's allowed keywords."
+  (let ((allowed (container-keywords container)))
+    (or (null allowed)
+        (intersection (object-keywords object)
+                      allowed
+                      :test #'string-equal))))
 
 (defmethod container-object-by-id ((container container-mixin) id)
   "Return the object in CONTAINER with the given world-level ID, or NIL.

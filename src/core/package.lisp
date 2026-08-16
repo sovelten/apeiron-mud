@@ -308,22 +308,18 @@
    #:container-all-objects
    #:container-object-by-id
    #:container-objects-matching
+   #:container-max-capacity
+   #:container-keywords
+   #:container-empty-p
+   #:container-full-p
+   #:item-fits-container-p
    #:character-send-message
 
    ;; Equipment / body slots
-   #:item-slot-mixin
-   #:head
-   #:hand
-   #:make-head
-   #:make-hand
-   #:item-slot
-   #:item-slot-name
-   #:item-slot-keywords
-   #:item-slot-add
-   #:item-slot-remove
-   #:item-slot-empty-p
-   #:item-slot-occupied-p
-   #:item-fits-slot-p
+   #:limb
+   #:make-limb
+   #:limb-item
+   #:hand-limb-p
 
    ;; World
    #:mud-world

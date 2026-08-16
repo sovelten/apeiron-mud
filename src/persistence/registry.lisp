@@ -10,7 +10,7 @@
 
 (defun default-persistent-class-name (transient-name)
   "Derive the persistent class name for TRANSIENT-NAME.
-MUD-ROOM → PERSISTENT-ROOM; HEAD → PERSISTENT-HEAD.
+MUD-ROOM → PERSISTENT-ROOM; LIMB → PERSISTENT-LIMB.
 The result is interned in the APEIRON.PERSISTENCE package, where the
 persistent classes live."
   (let* ((name (symbol-name transient-name))
@@ -117,8 +117,7 @@ classes (e.g. on PERSISTENT-OBJECT) are resolved automatically."
    ;; game state via object-set-property that must survive restarts.
    'mud-room          (dict :transient-slots '(contents))
    'mud-character     (dict :transient-slots '(session))
-   'head              (dict)
-   'hand              (dict)
+   'limb              (dict)
    'mud-guestbook     (dict :transient-slots '(entries))
    'mud-npc           (dict)
    'mud-wordle-puzzle (dict :transient-slots '(character-guesses)
