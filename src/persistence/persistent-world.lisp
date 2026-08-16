@@ -319,11 +319,6 @@ encoded lets BKNR track what the character wears."
       (materialize-object limb)))
   (call-next-method))
 
-<<<<<<< Updated upstream
-=======
-<<<<<<< Updated upstream
-=======
->>>>>>> Stashed changes
 (defun legacy-limb-slot (limb slot-name)
   "Return the value of legacy slot SLOT-NAME (a string) on LIMB, or NIL
 when the slot is not present.
@@ -342,29 +337,6 @@ instances are deleted."
 allowed keywords, and worn/held item (if any).
 
 The item is moved from the legacy ITEM slot into the new limb's
-<<<<<<< Updated upstream
-CONTAINER-CONTENTS.  Pure conversion: performs no store writes, so it
-can be tested without a live datastore."
-  (let* ((new (make-instance 'limb
-                             :name (legacy-limb-slot legacy-limb "NAME")
-                             :keywords (legacy-limb-slot legacy-limb "KEYWORDS")))
-         (item (legacy-limb-slot legacy-limb "ITEM")))
-    (when item
-      (setf (container-contents new) (list item)))
-    new))
-
-(defun migrate-character-limbs! ()
-  "Migrate every persisted character's legacy head/hand limbs to the new
-single LIMB class.
-
-For each PERSISTENT-CHARACTER whose limbs are not yet LIMBs, each legacy
-limb is converted with MAKE-MIGRATED-LIMB (preserving worn/held items),
-materialized as a PERSISTENT-LIMB store-object, the legacy limb
-store-objects are deleted, and the character's LIMBS slot is updated.
-Idempotent: characters whose limbs are already LIMBs are left untouched.
-Hooked into SAFE-UPDATE so hot updates migrate the running datastore.
-Returns the number of characters migrated."
-=======
 CONTAINER-CONTENTS.  Limbs that are already in the new format are
 returned unchanged.  Pure conversion: performs no store writes, so it
 can be tested without a live datastore."
@@ -417,25 +389,12 @@ Idempotent: characters whose limbs are already all LIMBs and include the
 full default set are left untouched.  Hooked into SAFE-UPDATE so hot
 updates migrate the running datastore.  Returns the number of characters
 migrated."
->>>>>>> Stashed changes
   (when (and (boundp 'bknr.datastore:*store*)
              bknr.datastore:*store*)
     (let ((migrated 0))
       (bknr.datastore:with-transaction ("migrate-character-limbs")
         (dolist (char (bknr.datastore:store-objects-with-class
                        'persistent-character))
-<<<<<<< Updated upstream
-          (let ((old-limbs (character-limbs char)))
-            (when (some (lambda (limb) (not (typep limb 'limb))) old-limbs)
-              (let ((new-limbs (mapcar #'make-migrated-limb old-limbs)))
-                (dolist (new new-limbs)
-                  (materialize-object new))
-                (dolist (old old-limbs)
-                  (when (typep old 'bknr.datastore:store-object)
-                    (bknr.datastore:delete-object old)))
-                (setf (character-limbs char) new-limbs)
-                (incf migrated)))))
-=======
           (when (character-limbs-need-migration-p char)
             (let* ((old-limbs (character-limbs char))
                    (new-limbs (reconcile-default-limbs
@@ -454,7 +413,6 @@ migrated."
                   (materialize-object new)))
               (setf (character-limbs char) new-limbs)
               (incf migrated))))
->>>>>>> Stashed changes
         ;; Best-effort cleanup of legacy head/hand store-objects that are
         ;; no longer referenced by any character.
         (dolist (legacy-name '("PERSISTENT-HEAD" "PERSISTENT-HAND"))
@@ -467,10 +425,6 @@ migrated."
       (log-message "Migrated limbs for ~D character~:P" migrated)
       migrated)))
 
-<<<<<<< Updated upstream
-=======
->>>>>>> Stashed changes
->>>>>>> Stashed changes
 (defun materialize-world (transient-world)
   "Convert TRANSIENT-WORLD into a persistent world in-place.
 
