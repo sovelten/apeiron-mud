@@ -809,3 +809,106 @@ sessionless characters instead of crashing."
     (let ((text (get-output-stream-string output)))
       (is (search "You say" text))
       (is (search "Hello!" text)))))
+
+(defun make-movement-test-world ()
+  "Build a two-room world (north room as the starting room, connected
+south to a second room) and return (values world north-room south-room)."
+  (let* ((world (apeiron.core:new-world))
+         (north (apeiron.core:new-room :name "North Room"))
+         (south (apeiron.core:new-room :name "South Room")))
+    (apeiron.core:world-add-object! world north)
+    (apeiron.core:world-add-object! world south)
+    (apeiron.core:connect-north-south! world north south)
+    (apeiron.core:world-set-starting-room! world north)
+    (values world north south)))
+
+(defun make-movement-test-character (world name)
+  "Create a character with a capture stream session, register it in WORLD
+and place it in the starting room."
+  (let ((character (apeiron.core:new-character
+                    name
+                    (make-instance 'apeiron.core:stream-session
+                                   :stream (make-string-output-stream)
+                                   :use-colors nil))))
+    (apeiron.core:create-object! world character)
+    (apeiron.core:place-character! world character)
+    character))
+
+(test command-go-announces-movement
+  "When a character goes through an exit, other characters in the old room
+see '<name> went <direction>' and characters in the new room see
+'<name> arrives from <direction>'; the mover sees 'You went <direction>'."
+  (multiple-value-bind (world north south)
+      (make-movement-test-world)
+    (let ((alice (make-movement-test-character world "Alice"))
+          (bob (make-movement-test-character world "Bob"))
+          (carol (make-movement-test-character world "Carol"))
+          (msgs-alice '())
+          (msgs-bob '())
+          (msgs-carol '()))
+      ;; Carol waits in the south room
+      (apeiron.core:object-move carol south)
+      (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
+        (unwind-protect
+             (progn
+               (setf (fdefinition 'apeiron.core:character-send-message)
+                     (lambda (p msg &key newline)
+                       (declare (ignore newline))
+                       (cond
+                         ((eq p alice) (push msg msgs-alice))
+                         ((eq p bob) (push msg msgs-bob))
+                         ((eq p carol) (push msg msgs-carol)))))
+               (setf msgs-alice '() msgs-bob '() msgs-carol '())
+               (apeiron.core:process-command world alice "go south")
+               ;; The mover sees their own message
+               (is (some (lambda (m) (search "You went south" m)) msgs-alice))
+               ;; Bob, left behind in the north room, sees the departure
+               (is (some (lambda (m) (search "Alice went south" m)) msgs-bob))
+               ;; Carol, waiting in the south room, sees the arrival
+               (is (some (lambda (m) (search "Alice arrives from north" m)) msgs-carol))
+               ;; The mover's room description is also sent
+               (is (some (lambda (m) (search "South Room" m)) msgs-alice)))
+          (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))
+
+(test command-go-announces-movement-with-black-heels
+  "When a character wearing black heels goes through an exit, other
+characters hear the click-clack of the heels on the ground."
+  (multiple-value-bind (world north south)
+      (make-movement-test-world)
+    (let ((alice (make-movement-test-character world "Alice"))
+          (bob (make-movement-test-character world "Bob"))
+          (carol (make-movement-test-character world "Carol"))
+          (msgs-bob '())
+          (msgs-carol '()))
+      ;; Carol waits in the south room
+      (apeiron.core:object-move carol south)
+      ;; Give Alice the black heels and have her wear them
+      (let ((heels (apeiron.core:new-object
+                    :name "black heels"
+                    :description "Sleek black heels."
+                    :keywords '("heels" "black" "shoe")
+                    :aliases '("heels" "black heels"))))
+        (apeiron.core:container-add-object alice heels)
+        (multiple-value-bind (limb reason) (apeiron.core:wear alice heels)
+          (declare (ignore limb))
+          (is (eq reason :ok))))
+      (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
+        (unwind-protect
+             (progn
+               (setf (fdefinition 'apeiron.core:character-send-message)
+                     (lambda (p msg &key newline)
+                       (declare (ignore newline))
+                       (cond
+                         ((eq p bob) (push msg msgs-bob))
+                         ((eq p carol) (push msg msgs-carol)))))
+               (setf msgs-bob '() msgs-carol '())
+               (apeiron.core:process-command world alice "go south")
+               ;; Bob hears the click-clack as Alice leaves
+               (is (some (lambda (m)
+                           (search "You hear a click-clack sound as Alice went south" m))
+                         msgs-bob))
+               ;; Carol hears the click-clack as Alice arrives
+               (is (some (lambda (m)
+                           (search "You hear a click-clack sound as Alice arrives from north" m))
+                         msgs-carol)))
+          (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))

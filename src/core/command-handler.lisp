@@ -40,6 +40,44 @@ CHARACTER is the character, ARGS is a raw string that the handler can parse as n
         (character-send-message character (object-describe room))
         (character-send-message character "You are in a void!"))))
 
+(defun announce-movement (character direction from-room to-room)
+  "Announce CHARACTER moving from FROM-ROOM to TO-ROOM in DIRECTION
+to the other characters present.
+
+Characters left behind in FROM-ROOM are told \"<name> went <direction>\";
+characters already in TO-ROOM are told \"<name> arrives from <direction>\"
+(the direction as seen from TO-ROOM, i.e. the exit the mover came through).
+
+If CHARACTER is wearing black heels, the announcements are prefixed with
+the sound of heels on the ground: \"You hear a click-clack sound as ...\".
+
+Returns the canonical direction name (as seen from FROM-ROOM), which is
+useful for the mover's own message."
+  (let* ((conn (connection-find from-room direction))
+         (went-direction (if conn
+                             (connection-direction-to conn from-room)
+                             direction))
+         (arrive-direction (if conn
+                               (connection-direction-to conn to-room)
+                               direction))
+         (name (bright-green (object-name character)))
+         (prefix (if (character-wearing-keywords-p character '("black" "heels"))
+                     "You hear a click-clack sound as "
+                     "")))
+    ;; Announce departure to the room being left
+    (dolist (other (characters-in-room from-room))
+      (unless (eq other character)
+        (character-send-message
+         other
+         (format nil "~A~A went ~A" prefix name (yellow went-direction)))))
+    ;; Announce arrival to the room being entered
+    (dolist (other (characters-in-room to-room))
+      (unless (eq other character)
+        (character-send-message
+         other
+         (format nil "~A~A arrives from ~A" prefix name (yellow arrive-direction)))))
+    went-direction))
+
 (define-command "go" (world character args)
   "Move in a direction, e.g. 'go north', 'go east', 'go south', 'go west'."
   (declare (ignore world))
@@ -53,9 +91,10 @@ CHARACTER is the character, ARGS is a raw string that the handler can parse as n
               (let ((target-room (room-exit-target room direction)))
                 (if target-room
                     (progn
-                      (object-move character target-room)
-                      (character-send-message character (format nil "~A ~A~%" (bright-cyan "You go") (yellow direction)))
-                      (character-send-message character (object-describe target-room)))
+                      (let ((went-direction (announce-movement character direction room target-room)))
+                        (object-move character target-room)
+                        (character-send-message character (format nil "~A ~A~%" (bright-cyan "You went") (yellow went-direction)))
+                        (character-send-message character (object-describe target-room))))
                     (character-send-message character "You can't go that way."))))))))
 
 (define-command "n" (world character args)

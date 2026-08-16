@@ -354,6 +354,7 @@
    #:character-by-id
    #:characters
    #:find-character-in-room
+   #:characters-in-room
    #:find-character-by-owner
    #:world-broadcast
    #:world-object-by-id
@@ -369,6 +370,7 @@
    #:define-command
    #:parse-command
    #:process-command
+   #:announce-movement
    #:*eval-character*
    #:me
    #:*eval-location*
