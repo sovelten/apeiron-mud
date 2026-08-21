@@ -147,3 +147,18 @@ on the head).  Should record the message and return non-NIL.
   (:method (object writer)
     (declare (ignore object writer))
     nil))
+
+(defgeneric on-movement (object walker from-room to-room direction)
+  (:documentation "Called as a consequence of WALKER moving from FROM-ROOM to
+TO-ROOM in DIRECTION, once for each item WALKER is wearing or holding.  The
+item gets a chance to react to the movement (send messages, trigger effects,
+...).
+
+Returns a sound string (e.g. \"click-clack\") if the item makes a noticeable
+noise while moving, or NIL if it is silent.  The default method returns
+OBJECT's \"stepping-sound\" property (if any), so plain items can be given a
+stepping sound via OBJECT-SET-PROPERTY; subclasses may override for computed
+behavior.")
+  (:method ((object mud-object) walker from-room to-room direction)
+    (declare (ignore walker from-room to-room direction))
+    (object-get-property object "stepping-sound")))

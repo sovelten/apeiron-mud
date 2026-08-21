@@ -298,6 +298,7 @@
    #:unequip
    #:character-worn-items
    #:character-wearing-keywords-p
+   #:character-movement-sound
    #:character-admin-p
    #:find-limb-by-name
    #:find-limb-holding
@@ -410,6 +411,7 @@
    #:handle-write
    #:handle-hold
    #:handle-wear
+   #:on-movement
 
    ;; Hot reload
    #:reload-apeiron

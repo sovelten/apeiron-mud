@@ -48,12 +48,13 @@ Characters left behind in FROM-ROOM are told \"<name> went <direction>\";
 characters already in TO-ROOM are told \"<name> arrives from <direction>\"
 (the direction as seen from TO-ROOM, i.e. the exit the mover came through).
 
-If CHARACTER is wearing black heels, the announcements are prefixed with
-the sound of heels on the ground: \"You hear a click-clack sound as ...\".
+If CHARACTER is wearing or holding an item that reacts to movement (see
+ON-MOVEMENT), its sound prefixes the announcements: \"You hear a
+click-clack sound as ...\".
 
-Returns (values WENT-DIRECTION HEELS-P): the canonical direction name
-(as seen from FROM-ROOM, useful for the mover's own message) and whether
-CHARACTER is wearing black heels (so the mover can hear the heels too)."
+Returns (values WENT-DIRECTION SOUND): the canonical direction name
+(as seen from FROM-ROOM, useful for the mover's own message) and the
+sound made by CHARACTER's worn items (so the mover can hear it too)."
   (let* ((conn (connection-find from-room direction))
          (went-direction (if conn
                              (connection-direction-to conn from-room)
@@ -62,9 +63,9 @@ CHARACTER is wearing black heels (so the mover can hear the heels too)."
                                (connection-direction-to conn to-room)
                                direction))
          (name (bright-green (object-name character)))
-         (heels-p (character-wearing-keywords-p character '("black" "heels")))
-         (prefix (if heels-p
-                     "You hear a click-clack sound as "
+         (sound (character-movement-sound character from-room to-room direction))
+         (prefix (if sound
+                     (format nil "You hear a ~A sound as " sound)
                      "")))
     ;; Announce departure to the room being left
     (dolist (other (characters-in-room from-room))
@@ -78,7 +79,7 @@ CHARACTER is wearing black heels (so the mover can hear the heels too)."
         (character-send-message
          other
          (format nil "~A~A arrives from ~A" prefix name (yellow arrive-direction)))))
-    (values went-direction heels-p)))
+    (values went-direction sound)))
 
 (define-command "go" (world character args)
   "Move in a direction, e.g. 'go north', 'go east', 'go south', 'go west'."
@@ -93,14 +94,14 @@ CHARACTER is wearing black heels (so the mover can hear the heels too)."
               (let ((target-room (room-exit-target room direction)))
                 (if target-room
                     (progn
-                      (multiple-value-bind (went-direction heels-p)
+                      (multiple-value-bind (went-direction sound)
                           (announce-movement character direction room target-room)
                         (object-move character target-room)
                         (character-send-message
                          character
                          (format nil "~A ~A~%"
-                                 (if heels-p
-                                     (bright-cyan "You hear a click-clack sound as you went")
+                                 (if sound
+                                     (bright-cyan (format nil "You hear a ~A sound as you went" sound))
                                      (bright-cyan "You went"))
                                  (yellow went-direction)))
                         (character-send-message character (object-describe target-room))))
