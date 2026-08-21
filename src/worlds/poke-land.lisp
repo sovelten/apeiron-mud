@@ -186,11 +186,27 @@ main concourse.  Returns the area."
                         :name "black heels"
                         :description "A pair of sleek black high heels, polished to a mirror shine. They look like they'd announce your arrival with a satisfying click-clack on any hard floor."
                         :keywords '("heels" "black" "shoe")
-                        :aliases '("heels" "black heels"))))
+                        :aliases '("heels" "black heels")))
+          (squeaky-boots (new-object
+                          :name "squeaky boots"
+                          :description "A pair of sunny-yellow rubber rain boots that let out a cheerful squeak with every step. Impossible to sneak in."
+                          :keywords '("boot" "shoe" "rain" "rubber")
+                          :aliases '("squeaky boots" "boots")))
+          (clompy-platforms (new-object
+                             :name "clompy platform shoes"
+                             :description "Chunky platform sneakers with soles thick enough to add a couple of inches. Each step lands with a heavy clomp."
+                             :keywords '("shoe" "platform" "sneaker")
+                             :aliases '("platforms" "clompy shoes" "clompy platform shoes"))))
       (area-connect-north-south! area mall food-court)
       (area-connect-west-east! area mall arcade)
       (area-connect-west-east! area fashion mall)
-      ;; Display the black heels on a mannequin in the Fashion Wing
+      ;; Each pair of shoes announces its wearer with its own sound (see ON-MOVEMENT)
+      (object-set-property black-heels "stepping-sound" "click-clack")
+      (object-set-property squeaky-boots "stepping-sound" "squeak-squeak")
+      (object-set-property clompy-platforms "stepping-sound" "clomp-clomp")
+      ;; Display the shoes on mannequins in the Fashion Wing
       (container-add-object fashion black-heels)
+      (container-add-object fashion squeaky-boots)
+      (container-add-object fashion clompy-platforms)
       (area-set-entrance! area mall)
       area)))

@@ -119,6 +119,15 @@ keywords include every keyword in KEYWORDS (case-insensitive)."
                                       :test #'string-equal))
                             keywords))))
 
+(defun character-movement-sound (character from-room to-room direction)
+  "Return the sound (e.g. \"click-clack\") made by the first item CHARACTER
+is wearing or holding that reacts to moving from FROM-ROOM to TO-ROOM in
+DIRECTION, or NIL if no worn item makes a sound.  See ON-MOVEMENT."
+  (loop for pair in (character-worn-items character)
+        for item = (cdr pair)
+        for sound = (and item (on-movement item character from-room to-room direction))
+        thereis sound))
+
 (defmethod wear ((character mud-character) object &optional limb)
   "Equip OBJECT on CHARACTER — see the WEAR generic documentation."
   (let* ((requested-name (when (stringp limb) limb))

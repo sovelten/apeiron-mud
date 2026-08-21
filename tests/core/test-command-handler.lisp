@@ -889,6 +889,7 @@ characters hear the click-clack of the heels on the ground."
                     :description "Sleek black heels."
                     :keywords '("heels" "black" "shoe")
                     :aliases '("heels" "black heels"))))
+        (apeiron.core:object-set-property heels "stepping-sound" "click-clack")
         (apeiron.core:container-add-object alice heels)
         (multiple-value-bind (limb reason) (apeiron.core:wear alice heels)
           (declare (ignore limb))
@@ -917,4 +918,81 @@ characters hear the click-clack of the heels on the ground."
                (is (some (lambda (m)
                            (search "You hear a click-clack sound as Alice arrives from north" m))
                          msgs-carol)))
+          (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))
+
+(test command-go-announces-movement-with-other-stepping-sound
+  "Any worn item with a \"stepping-sound\" property announces that sound
+when its wearer moves."
+  (multiple-value-bind (world north south)
+      (make-movement-test-world)
+    (let ((alice (make-movement-test-character world "Alice"))
+          (bob (make-movement-test-character world "Bob"))
+          (msgs-alice '())
+          (msgs-bob '()))
+      (let ((squeakers (apeiron.core:new-object
+                        :name "squeaky boots"
+                        :description "Well-worn boots that squeak."
+                        :keywords '("boot" "shoe")
+                        :aliases '("boots"))))
+        (apeiron.core:object-set-property squeakers "stepping-sound" "squeak")
+        (apeiron.core:container-add-object alice squeakers)
+        (multiple-value-bind (limb reason) (apeiron.core:wear alice squeakers)
+          (declare (ignore limb))
+          (is (eq reason :ok))))
+      (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
+        (unwind-protect
+             (progn
+               (setf (fdefinition 'apeiron.core:character-send-message)
+                     (lambda (p msg &key newline)
+                       (declare (ignore newline))
+                       (cond
+                         ((eq p alice) (push msg msgs-alice))
+                         ((eq p bob) (push msg msgs-bob)))))
+               (setf msgs-alice '() msgs-bob '())
+               (apeiron.core:process-command world alice "go south")
+               ;; The mover hears the squeak
+               (is (some (lambda (m)
+                           (search "You hear a squeak sound as you went south" m))
+                         msgs-alice))
+               ;; Bob hears the squeak as Alice leaves
+               (is (some (lambda (m)
+                           (search "You hear a squeak sound as Alice went south" m))
+                         msgs-bob)))
+          (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))
+
+(test command-go-worn-item-without-stepping-sound-is-silent
+  "Wearing an item that has no \"stepping-sound\" property leaves the
+movement announcements unchanged."
+  (multiple-value-bind (world north south)
+      (make-movement-test-world)
+    (let ((alice (make-movement-test-character world "Alice"))
+          (bob (make-movement-test-character world "Bob"))
+          (msgs-alice '())
+          (msgs-bob '()))
+      (let ((boots (apeiron.core:new-object
+                    :name "plain boots"
+                    :description "Sturdy but unremarkable boots."
+                    :keywords '("boot" "shoe")
+                    :aliases '("boots"))))
+        (apeiron.core:container-add-object alice boots)
+        (multiple-value-bind (limb reason) (apeiron.core:wear alice boots)
+          (declare (ignore limb))
+          (is (eq reason :ok))))
+      (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
+        (unwind-protect
+             (progn
+               (setf (fdefinition 'apeiron.core:character-send-message)
+                     (lambda (p msg &key newline)
+                       (declare (ignore newline))
+                       (cond
+                         ((eq p alice) (push msg msgs-alice))
+                         ((eq p bob) (push msg msgs-bob)))))
+               (setf msgs-alice '() msgs-bob '())
+               (apeiron.core:process-command world alice "go south")
+               ;; The mover sees the plain message, no sound prefix
+               (is (some (lambda (m) (search "You went south" m)) msgs-alice))
+               (is (notany (lambda (m) (search "You hear a " m)) msgs-alice))
+               ;; Bob sees the plain departure, no sound prefix
+               (is (some (lambda (m) (search "Alice went south" m)) msgs-bob))
+               (is (notany (lambda (m) (search "You hear a " m)) msgs-bob)))
           (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))))
