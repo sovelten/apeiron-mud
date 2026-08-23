@@ -371,7 +371,7 @@
    #:define-command
    #:mud-parser
    #:world-parser
-   #:parse-command
+   #:handle-command
    #:split-command
    #:process-command
    #:announce-movement

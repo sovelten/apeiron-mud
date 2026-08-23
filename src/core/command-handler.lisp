@@ -5,7 +5,7 @@
 (defsection @commands (:title "Commands")
   """The command system turns raw player input into handler calls.
   Every command is registered in *COMMANDS* by DEFINE-COMMAND and
-  processed by PARSE-COMMAND — the full command pipeline, run through
+  processed by HANDLE-COMMAND — the full command pipeline, run through
   the world's parser (WORLD-PARSER).  PROCESS-COMMAND is a convenience
   wrapper that routes input through the world's parser.
 
@@ -14,7 +14,7 @@
   handy inside the in-game `eval` command."""
   (*commands* variable)
   (define-command macro)
-  (parse-command generic-function)
+  (handle-command generic-function)
   (split-command function)
   (process-command function)
   (world-parser function)
@@ -26,16 +26,16 @@
 (defclass mud-parser ()
   ()
   (:documentation "Base command parser.  A parser runs the full command
-pipeline for a line of player input via the PARSE-COMMAND generic: it
+pipeline for a line of player input via the HANDLE-COMMAND generic: it
 extracts the command name and arguments (resolving them against the
 player and world when the parser is context-aware), looks up the
 handler, and runs it.  The default method does a plain first-token
 split and executes the registered handler.  Subclass MUD-PARSER (or
-define your own methods on PARSE-COMMAND) to build derived parsers —
+define your own methods on HANDLE-COMMAND) to build derived parsers —
 for example one that understands prepositions and direct/indirect
 objects."))
 
-(defgeneric parse-command (parser input player world)
+(defgeneric handle-command (parser input player world)
   (:documentation
    "Process INPUT — a raw command line typed by PLAYER in WORLD — into a
 command and run it.  This is the full command pipeline: the parser
@@ -47,7 +47,7 @@ NIL).
 PARSER is the parser object doing the work.  The default MUD-PARSER
 method does a plain first-token split (see SPLIT-COMMAND) and executes
 the registered handler.  Subclass MUD-PARSER (or define your own methods
-on PARSE-COMMAND) to build derived parsers — for example one that
+on HANDLE-COMMAND) to build derived parsers — for example one that
 understands prepositions and direct/indirect objects before dispatch."))
 
 ;; Command processor
@@ -680,7 +680,7 @@ directly to reuse the plain first-token split."
                       (string-trim '(#\Space #\Tab) (subseq trimmed (1+ space-pos))))
               (values (string-downcase trimmed) ""))))))
 
-(defmethod parse-command ((parser mud-parser) input player world)
+(defmethod handle-command ((parser mud-parser) input player world)
   "Default command processing: split INPUT into a command name and raw
 args, look up the handler in *COMMANDS*, and run it.  Honors the
 character's session color preference by binding *COLORIZE*.
@@ -695,11 +695,11 @@ Returns whatever the command handler returns (usually NIL)."
 
   (when (> (length input) +max-command-length+)
     (character-send-message player "Command too long.")
-    (return-from parse-command nil))
+    (return-from handle-command nil))
 
   (multiple-value-bind (command args) (split-command input)
     (if (not command)
-        (return-from parse-command nil))
+        (return-from handle-command nil))
 
     (let ((handler (gethash command *commands*)))
       (if handler
@@ -713,5 +713,5 @@ Returns whatever the command handler returns (usually NIL)."
 
 (defun process-command (world character command-string)
   "Process a command from a character.
-Convenience wrapper around PARSE-COMMAND using the world's parser."
-  (parse-command (world-parser world) command-string character world))
+Convenience wrapper around HANDLE-COMMAND using the world's parser."
+  (handle-command (world-parser world) command-string character world))

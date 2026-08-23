@@ -11,11 +11,11 @@ admin account or a wizard hat."
 
 (defclass test-shouty-parser (mud-parser) ()
   (:documentation "Test parser that uppercases the command name, to prove
-that PARSE-COMMAND dispatches on the parser object."))
+that HANDLE-COMMAND dispatches on the parser object."))
 
-(defmethod parse-command ((parser test-shouty-parser) input player world)
+(defmethod handle-command ((parser test-shouty-parser) input player world)
   "Shouty test parser: doesn't run the command, just returns the
-uppercased input to prove that PARSE-COMMAND dispatches on the parser
+uppercased input to prove that HANDLE-COMMAND dispatches on the parser
 object."
   (declare (ignore parser player world))
   (values :shouty (string-upcase input)))
@@ -42,7 +42,7 @@ building block the default parser uses."
 
 (test world-custom-parser-dispatch
   "A world can be given its own parser via WORLD-PARSER; both
-PARSE-COMMAND and PROCESS-COMMAND (which routes through the world's
+HANDLE-COMMAND and PROCESS-COMMAND (which routes through the world's
 parser) dispatch on that parser object."
   (let* ((world (new-world))
          (character (new-character
@@ -50,9 +50,9 @@ parser) dispatch on that parser object."
                      (make-instance 'stream-session
                                     :stream (make-string-output-stream)))))
     (setf (world-parser world) (make-instance 'test-shouty-parser))
-    ;; parse-command dispatches on the world's parser
+    ;; handle-command dispatches on the world's parser
     (multiple-value-bind (tag text)
-        (parse-command (world-parser world) "look sword" character world)
+        (handle-command (world-parser world) "look sword" character world)
       (is (eq :shouty tag))
       (is (equal "LOOK SWORD" text)))
     ;; process-command routes through the world's parser too
