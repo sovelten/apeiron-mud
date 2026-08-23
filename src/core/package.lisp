@@ -372,6 +372,7 @@
    #:mud-parser
    #:world-parser
    #:parse-command
+   #:split-command
    #:process-command
    #:announce-movement
    #:*eval-character*

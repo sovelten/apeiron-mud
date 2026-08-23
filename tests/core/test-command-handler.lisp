@@ -14,50 +14,51 @@ admin account or a wizard hat."
 that PARSE-COMMAND dispatches on the parser object."))
 
 (defmethod parse-command ((parser test-shouty-parser) input player world)
-  "Uppercase-command variant of the default raw parser."
-  (declare (ignore player world))
-  (multiple-value-bind (command args) (call-next-method)
-    (values (and command (string-upcase command)) args)))
+  "Shouty test parser: doesn't run the command, just returns the
+uppercased input to prove that PARSE-COMMAND dispatches on the parser
+object."
+  (declare (ignore parser player world))
+  (values :shouty (string-upcase input)))
 
-(test parse-command-default-splits-input
-  "The default MUD-PARSER splits raw input into a command name and args."
-  (let* ((world (new-world))
-         (parser (world-parser world)))
-    ;; Command with args
-    (multiple-value-bind (command args) (parse-command parser "go north" nil world)
-      (is (equal "go" command))
-      (is (equal "north" args)))
-    ;; Bare command, no args
-    (multiple-value-bind (command args) (parse-command parser "look" nil world)
-      (is (equal "look" command))
-      (is (equal "" args)))
-    ;; Command names are lowercased; args keep their case
-    (multiple-value-bind (command args) (parse-command parser "GO North" nil world)
-      (is (equal "go" command))
-      (is (equal "North" args)))
-    ;; Whitespace-only input → no command
-    (multiple-value-bind (command args) (parse-command parser "   " nil world)
-      (is (null command))
-      (is (equal "" args)))))
+(test split-command-splits-input
+  "SPLIT-COMMAND splits raw input into a command name and args — the raw
+building block the default parser uses."
+  ;; Command with args
+  (multiple-value-bind (command args) (split-command "go north")
+    (is (equal "go" command))
+    (is (equal "north" args)))
+  ;; Bare command, no args
+  (multiple-value-bind (command args) (split-command "look")
+    (is (equal "look" command))
+    (is (equal "" args)))
+  ;; Command names are lowercased; args keep their case
+  (multiple-value-bind (command args) (split-command "GO North")
+    (is (equal "go" command))
+    (is (equal "North" args)))
+  ;; Whitespace-only input → no command
+  (multiple-value-bind (command args) (split-command "   ")
+    (is (null command))
+    (is (equal "" args))))
 
 (test world-custom-parser-dispatch
-  "A world can be given its own parser via WORLD-PARSER; PARSE-COMMAND
-dispatches on that parser object."
+  "A world can be given its own parser via WORLD-PARSER; both
+PARSE-COMMAND and PROCESS-COMMAND (which routes through the world's
+parser) dispatch on that parser object."
   (let* ((world (new-world))
          (character (new-character
                      "Tester"
                      (make-instance 'stream-session
                                     :stream (make-string-output-stream)))))
     (setf (world-parser world) (make-instance 'test-shouty-parser))
-    (multiple-value-bind (command args)
+    ;; parse-command dispatches on the world's parser
+    (multiple-value-bind (tag text)
         (parse-command (world-parser world) "look sword" character world)
-      (is (equal "LOOK" command))
-      (is (equal "sword" args)))
-    ;; The same parser object handles other inputs too.
-    (multiple-value-bind (command args)
-        (parse-command (world-parser world) "go north" character world)
-      (is (equal "GO" command))
-      (is (equal "north" args)))))
+      (is (eq :shouty tag))
+      (is (equal "LOOK SWORD" text)))
+    ;; process-command routes through the world's parser too
+    (multiple-value-bind (tag text) (process-command world character "go north")
+      (is (eq :shouty tag))
+      (is (equal "GO NORTH" text)))))
 
 (test command-processing-look
   "Test the look command"
