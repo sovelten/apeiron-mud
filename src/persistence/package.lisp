@@ -24,8 +24,10 @@
 
    ;; Declarative persistent class registry
    #:define-persistent-classes
+   #:define-persistent-class
    #:*persistent-class-registry*
    #:transient->persistent-class
+   #:world-register-persistent-class!
 
    ;; Persistent classes
    #:persistent-object

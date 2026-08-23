@@ -37,9 +37,13 @@ entrance is the nexus.  Returns the area."
                                   :keywords '("weapon" "sword")
                                   :aliases '("sword")))
          (guestbook (new-guestbook :name "an oak guestbook"))
+         (decorator (new-decorator :name "a decorator"
+                                   :description "A cheerful decorator that can refresh this room. Tell it 'set name' or 'set description'."
+                                   :aliases '("decorator")))
          (area (new-area :name "Apeiron Hub")))
-    ;; Place the guestbook and the starter equipment in the nexus
+    ;; Place the guestbook, decorator, and starter equipment in the nexus
     (container-add-object nexus guestbook)
+    (container-add-object nexus decorator)
     (container-add-object nexus wizard-hat)
     (container-add-object nexus rusty-sword)
     ;; Connect the nexus (hub) to the biomes
@@ -51,8 +55,6 @@ entrance is the nexus.  Returns the area."
     (area-set-entrance! area nexus)
     area))
 
-;; ─── Default world ───────────────────────────────────────────────────────────
-
 (defun new-default-world ()
   "Create the default Apeiron world with all areas (hub, mall, cavern,
 eridu), registered via WORLD-ADD-AREA! and linked to one another.  The
@@ -61,6 +63,10 @@ direction from the nexus (e.g. 'Poké Land' leads to the shopping mall,
 'Eridu' leads to the first city of Sumer).  Each area's entrance is used
 for the cross-area links and the world's starting room."
   (let ((world (make-instance 'mud-world)))
+    ;; Register worlds-package classes in the world's per-world persistent
+    ;; class registry (extends the default registry), so they can be
+    ;; materialized without polluting the global registry.
+    (apeiron.persistence::world-register-persistent-class! world 'mud-decorator)
     (let ((hub (build-apeiron-hub))
           (mall (build-shopping-mall))
           (cavern (build-team-rocket-cavern))

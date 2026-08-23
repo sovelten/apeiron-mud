@@ -259,3 +259,94 @@
      (when (boundp 'bknr.datastore:*store*)
        (ignore-errors (bknr.datastore:close-store))
        (makunbound 'bknr.datastore:*store*)))))
+
+(test decorator-set-name-and-description
+  "Telling a decorator 'set name' / 'set description' prompts for input
+  (like the guestbook write command) and updates the room the decorator
+  occupies."
+  (let* ((world (apeiron.core:new-world))
+         (room (apeiron.core:new-room :name "Plain Room" :description "An unremarkable room."))
+         (decorator (apeiron.worlds:new-decorator :name "a decorator" :aliases '("decorator")))
+         (output (make-string-output-stream))
+         (input (make-string-input-stream "The Sparkling Salon
+A glittering hall of mirrors.
+"))
+         (io (make-two-way-stream input output))
+         (character (apeiron.core:new-character "Decorator" (make-instance 'apeiron.core:stream-session
+                                                                          :stream io
+                                                                          :use-colors nil))))
+    (apeiron.core:world-add-object! world room)
+    (apeiron.core:world-add-object! world decorator)
+    (apeiron.core:world-set-starting-room! world room)
+    (apeiron.core:world-add-object! world character)
+    (apeiron.core:create-object! world character)
+    (apeiron.core:place-character! world character)
+    (apeiron.core:container-add-object room decorator)
+    ;; Rename via tell decorator set name — prompts for input.
+    (apeiron.core:process-command world character "tell decorator set name")
+    (is (equal "The Sparkling Salon" (apeiron.core:object-name room)))
+    ;; Re-describe via tell decorator set description — prompts for input.
+    (apeiron.core:process-command world character "tell decorator set description")
+    (is (equal "A glittering hall of mirrors." (apeiron.core:object-description room)))
+    ;; The prompts were actually asked (ask-input flow, like guestbook write).
+    (let ((text (get-output-stream-string output)))
+      (is (search "What should this room be called?" text))
+      (is (search "Describe this room" text)))
+    ;; Unrecognized speech falls through to the default 'doesn't understand'.
+    (let* ((output2 (make-string-output-stream))
+           (io2 (make-two-way-stream (make-string-input-stream "")
+                                     output2)))
+      (setf (apeiron.core:character-session character)
+            (make-instance 'apeiron.core:stream-session
+                           :stream io2
+                           :use-colors nil))
+      (apeiron.core:process-command world character "tell decorator gibberish")
+      (let ((text2 (get-output-stream-string output2)))
+        (is (search "doesn't seem to understand" text2))))))
+
+(test decorator-persists-in-default-world
+  "The decorator placed in the Apeiron hub is registered in the world's
+  per-world persistent class registry and survives materialization and a
+  snapshot + restart — without polluting the global *PERSISTENT-CLASS-REGISTRY*."
+  (unwind-protect
+       (let* ((world (apeiron.persistence:world-restore-or-initialize
+                      :force-new t
+                      :initializer #'apeiron.worlds:new-default-world))
+              (nexus (apeiron.core:starting-room world))
+              (decorator (find-if (lambda (obj) (typep obj 'apeiron.worlds:mud-decorator))
+                                  (apeiron.core:container-all-objects nexus))))
+         ;; Materialized into the persistent store as a persistent-decorator.
+         (is (not (null decorator)))
+         (is (typep decorator 'apeiron.persistence:persistent-object))
+         ;; The global default registry is untouched — the class resolves
+         ;; through the world's per-world registry.
+         (is (null (gethash 'apeiron.worlds::mud-decorator
+                            apeiron.persistence::*persistent-class-registry*)))
+         (is (eq (class-name (apeiron.persistence:transient->persistent-class
+                              (find-class 'apeiron.worlds::mud-decorator) world))
+                 'apeiron.persistence::persistent-decorator))
+         ;; Rename works on the materialized (persistent) decorator too.
+         (let* ((output (make-string-output-stream))
+                (input (make-string-input-stream "Apex Nexus
+"))
+                (io (make-two-way-stream input output))
+                (character (apeiron.core:new-character "Redecorator"
+                                                       (make-instance 'apeiron.core:stream-session
+                                                                      :stream io
+                                                                      :use-colors nil))))
+           (apeiron.core:object-move character nexus)
+           (apeiron.core:process-command world character "tell decorator set name")
+           (is (equal "Apex Nexus" (apeiron.core:object-name nexus))))
+         ;; Survives a snapshot + restart.
+         (apeiron.persistence:sync-world)
+         (bknr.datastore:close-store)
+         (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
+                (new-nexus (apeiron.core:starting-room new-world))
+                (new-decorator (find-if (lambda (obj) (typep obj 'apeiron.worlds:mud-decorator))
+                                        (apeiron.core:container-all-objects new-nexus))))
+           (is (not (null new-decorator)))
+           (is (equal "Apex Nexus" (apeiron.core:object-name new-nexus)))))
+    (ignore-errors
+     (when (boundp 'bknr.datastore:*store*)
+       (ignore-errors (bknr.datastore:close-store))
+       (makunbound 'bknr.datastore:*store*)))))

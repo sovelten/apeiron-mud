@@ -83,7 +83,7 @@ Already-persistent objects (e.g., reconnected characters) are registered
 directly without re-materialization."
   (bknr.datastore:with-transaction ("create-object")
     (unless (typep object 'bknr.datastore:store-object)
-      (materialize-object object)
+      (materialize-object object world)
       ;; CHANGE-CLASS preserves slot values without going through
       ;; (SETF SLOT-VALUE), so BKNR never records them in the
       ;; transaction log.  Touch every persistent slot so its value
@@ -144,14 +144,14 @@ Enforces the one-area-per-room invariant first.  Returns AREA."
     ;; already be a persistent store-object — otherwise ENCODE-OBJECT
     ;; gets a still-transient MUD-ROOM and fails.
     (dolist (room (area-room-list area))
-      (materialize-object room))
+      (materialize-object room world))
     (dolist (room (area-room-list area))
       (dolist (obj (container-all-objects room))
         (unless (typep obj 'mud-character)
-          (materialize-object obj))))
+          (materialize-object obj world))))
     (dolist (conn (area-connections area))
-      (materialize-object conn))
-    (materialize-object area))
+      (materialize-object conn world))
+    (materialize-object area world))
   ;; Now index everything in the world (IDs are already assigned by BKNR;
   ;; WORLD-ADD-OBJECT! registers into the world's hash tables).
   (dolist (room (area-room-list area))
@@ -253,21 +253,45 @@ and the redundant second snapshot is skipped."
 
 ;; ─── Persistent class mapping ───────────────────────────────────────────────
 
-(defun transient->persistent-class (transient-class)
+(defun transient->persistent-class (transient-class &optional (world nil))
   "Return the persistent class that wraps TRANSIENT-CLASS.
 
 The persistent class name is derived from TRANSIENT-CLASS's entry in
 *PERSISTENT-CLASS-REGISTRY* (the declarative data in registry.lisp) —
-no class-hierarchy walking needed."
+no class-hierarchy walking needed.
+
+When WORLD is provided, its per-world registry
+(WORLD-PERSISTENT-CLASS-REGISTRY) is consulted first and extends the
+default registry, so world builders can register world-specific classes
+(e.g. the decorator in the worlds module) without polluting the global
+registry."
   (let* ((transient-name (class-name transient-class))
-         (entry (gethash transient-name *persistent-class-registry*)))
+         (entry (or (and world
+                         (gethash transient-name
+                                  (world-persistent-class-registry world)))
+                    (gethash transient-name *persistent-class-registry*))))
     (or (and entry (find-class (persistent-class-name transient-name entry)))
-        (error "No persistent class registered for ~A -- add it to *PERSISTENT-CLASS-REGISTRY*."
+        (error "No persistent class registered for ~A -- add it to *PERSISTENT-CLASS-REGISTRY* or register it in the world's registry."
                transient-class))))
+
+(defun world-register-persistent-class! (world transient-class &optional (options (make-hash-table)))
+  "Register TRANSIENT-CLASS in WORLD's per-world persistent class registry
+and define its wrapping persistent class.
+
+The per-world registry extends the global *PERSISTENT-CLASS-REGISTRY*:
+world builders register world-specific classes (e.g. the decorator from
+the worlds module) here instead of the global registry, so the default
+registry stays clean and the registrations are scoped to WORLD.
+
+OPTIONS uses the same keys as entries in *PERSISTENT-CLASS-REGISTRY*
+(:transient-slots, :persistent-name, :superclasses).  Returns WORLD."
+  (setf (gethash transient-class (world-persistent-class-registry world)) options)
+  (define-persistent-class transient-class options)
+  world)
 
 ;; ─── World materialization ──────────────────────────────────────────────────
 
-(defgeneric materialize-object (obj)
+(defgeneric materialize-object (obj &optional world)
   (:documentation
    "Convert OBJ into its persistent counterpart and register it with BKNR.
 
@@ -275,10 +299,14 @@ Dispatching on the class of OBJ allows adding new object types without
 modifying this generic function -- just add a DEFWRAPPING-PERSISTENT-CLASS
 and optionally specialize MATERIALIZE-OBJECT if extra steps are needed.
 
+WORLD, when supplied, is used to resolve the persistent class via the
+world's per-world registry (see TRANSIENT->PERSISTENT-CLASS); callers
+that only materialize core-registry objects may omit it.
+
 Uses CHANGE-CLASS (preserving object identity and all cross-references)
 followed by INITIALIZE-INSTANCE to trigger BKNR registration."))
 
-(defmethod materialize-object (obj)
+(defmethod materialize-object (obj &optional world)
   "Generic materialization: change class in-place and register with BKNR.
 
 CHANGE-CLASS preserves all slot values and object identity -- every
@@ -286,7 +314,7 @@ cross-reference (location, room-a, connections, contents, etc.) stays
 valid because the same objects are still in memory.  INITIALIZE-INSTANCE
 triggers BKNR's store-object registration (ID allocation, transaction
 logging)."
-  (let ((pclass (transient->persistent-class (class-of obj))))
+  (let ((pclass (transient->persistent-class (class-of obj) world)))
     (change-class obj pclass)
     (initialize-instance obj)
     ;; INITIALIZE-INSTANCE sets up the store-object ID and transaction log
@@ -298,7 +326,7 @@ logging)."
       (bknr.indices:index-add (bknr.indices::index-holder-index holder) obj))
     obj))
 
-(defmethod materialize-object ((obj mud-character))
+(defmethod materialize-object ((obj mud-character) &optional world)
   "Materialize a character's limbs first, then the character itself.
 
 The limbs (head/hand instances) are plain objects whose
@@ -307,7 +335,7 @@ PERSISTENT-LIMB store-objects before the character's LIMBS slot is
 encoded lets BKNR track what the character wears."
   (dolist (limb (character-limbs obj))
     (unless (typep limb 'bknr.datastore:store-object)
-      (materialize-object limb)))
+      (materialize-object limb world)))
   (call-next-method))
 
 (defun materialize-world (transient-world)
@@ -323,9 +351,9 @@ Returns TRANSIENT-WORLD (now a persistent-world)."
   (bknr.datastore:with-transaction ("materialize-world")
     ;; Convert all game objects in-place (including characters)
     (dolist (obj (world-all-objects transient-world))
-      (materialize-object obj))
+      (materialize-object obj transient-world))
     ;; Convert the world itself via the same generic mechanism
-    (materialize-object transient-world)
+    (materialize-object transient-world transient-world)
     ;; Ensure the id-counter is tracked in the transaction log
     (setf (world-id-counter transient-world) (world-id-counter transient-world)))
   transient-world)
