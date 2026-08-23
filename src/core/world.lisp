@@ -12,6 +12,7 @@
   player-facing command layer. The full API of this package is
   generated automatically in the manual's API reference."""
   (new-world function)
+  (world-parser function)
   (world-add-object! function)
   (connect-rooms! generic-function)
   (place-character! function)
@@ -43,7 +44,11 @@
    (areas :initarg :areas
           :accessor world-areas
           :initform (make-hash-table :test #'eql)
-          :documentation "All areas in the world, keyed by world-level ID."))
+          :documentation "All areas in the world, keyed by world-level ID.")
+   (parser :initarg :parser
+           :accessor world-parser
+           :initform (make-instance 'mud-parser)
+           :documentation "Command parser used to turn player input into command name and args."))
   (:documentation "Configuration root for the MUD world.  Rooms, guestbooks,
    and other objects are stored as independent BKNR persistent objects."))
 

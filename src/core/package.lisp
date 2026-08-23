@@ -369,6 +369,8 @@
    ;; Command system
    #:*commands*
    #:define-command
+   #:mud-parser
+   #:world-parser
    #:parse-command
    #:process-command
    #:announce-movement

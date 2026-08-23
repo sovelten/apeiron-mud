@@ -12,12 +12,32 @@
   handy inside the in-game `eval` command."""
   (*commands* variable)
   (define-command macro)
-  (parse-command function)
+  (parse-command generic-function)
   (process-command function)
+  (world-parser function)
   (me function)
   (here function)
   (world function)
   (eval-allowed-p function))
+
+(defclass mud-parser ()
+  ()
+  (:documentation "Base command parser.  A parser turns raw player input
+into a command name and args string via the PARSE-COMMAND generic.  The
+default method splits on the first whitespace.  Subclass MUD-PARSER (or
+define your own methods on PARSE-COMMAND) to build derived parsers — for
+example one that understands prepositions and direct/indirect objects."))
+
+(defgeneric parse-command (parser input player world)
+  (:documentation
+   "Parse INPUT — a raw command string typed by PLAYER — into a command
+name and raw args string.  Returns (values COMMAND-NAME RAW-ARGS-STRING).
+
+PARSER is the parser object doing the work.  PLAYER is the character
+typing the command and WORLD the world they are in; they are passed so
+context-aware parsers (ones that resolve objects, prepositions,
+direct/indirect objects, ...) can use them.  The default MUD-PARSER
+method ignores PLAYER and WORLD and does a plain first-token split."))
 
 ;; Command processor
 (defvar *commands* (make-hash-table :test #'equal)
@@ -141,8 +161,7 @@ sound made by CHARACTER's worn items (so the mover can hear it too)."
 (define-command "examine" (world character args)
   "Examine an object, NPC, or character in the current room, e.g. 'examine sword'."
   (declare (ignore world))
-  (let* ((room (object-location character))
-         (target-name (string-downcase args)))
+  (let ((room (object-location character)))
     (if (zerop (length args))
         (character-send-message character "Examine what? Usage: examine <name>")
         (let ((target (first (container-objects-matching room args))))
@@ -331,7 +350,6 @@ Use (me) for the current character, (here) for current room, (world) for the wor
 Debug helpers: (d obj), (slots-of obj), (props obj), (inv obj), (loc obj), (obj-type obj), (obj-find name-or-id)
 Only administrators (admin accounts) or characters wearing a wizard hat
 (an object with both the \"hat\" and \"wizard\" keywords) may use this command."
-  (declare (ignore world))
   (if (not (eval-allowed-p character))
       (character-send-message
        character
@@ -637,9 +655,11 @@ player asked for (for :no-such-limb)."
                    ;; Object didn't respond
                    (character-send-message character (format nil "~A doesn't seem to understand." (object-name target)))))))))))
 
-(defun parse-command (input)
-  "Parse a command string into command name and raw args string.
-   Returns: (values command-name raw-args-string)"
+(defmethod parse-command ((parser mud-parser) input player world)
+  "Default raw parser: split INPUT into a command name and raw args string.
+Returns (values COMMAND-NAME RAW-ARGS-STRING).  PLAYER and WORLD are
+ignored by this method."
+  (declare (ignore parser player world))
   (let ((trimmed (string-trim '(#\Space #\Tab) input)))
     (if (zerop (length trimmed))
         (values nil "")
@@ -662,7 +682,7 @@ Honors the character's session color preference by binding *COLORIZE*."
     (character-send-message character "Command too long.")
     (return-from process-command nil))
   
-  (multiple-value-bind (command args) (parse-command command-string)
+  (multiple-value-bind (command args) (parse-command (world-parser world) command-string character world)
     (if (not command)
         (return-from process-command nil))
     
