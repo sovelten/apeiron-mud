@@ -126,7 +126,7 @@ classes (e.g. on PERSISTENT-OBJECT) are resolved automatically."
    'mud-area          (dict :transient-slots '(graph))
    ;; the cl-graph index is derived from rooms/connections and rebuilt on
    ;; restore (see INITIALIZE-TRANSIENT-INSTANCE in persistent-world.lisp).
-   'mud-world         (dict :transient-slots '(characters objects rooms areas)))
+   'mud-world         (dict :transient-slots '(characters objects rooms areas parser)))
   "Declarative registry of persistent classes: a serapeum dict mapping
 each transient game class name to an options dict (see
 DEFINE-PERSISTENT-CLASSES).")

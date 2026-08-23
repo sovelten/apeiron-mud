@@ -369,7 +369,10 @@
    ;; Command system
    #:*commands*
    #:define-command
-   #:parse-command
+   #:mud-parser
+   #:world-parser
+   #:handle-command
+   #:split-command
    #:process-command
    #:announce-movement
    #:*eval-character*

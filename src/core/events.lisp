@@ -72,7 +72,6 @@ can select for all MUD events with a single event-type specifier."))
 
 (deeds:define-handler (log-character-input character-input-event)
     (ev input session-id character-name)
-  (declare (ignore ev))
   (log:info "INPUT ~A [session=~A char=~A]" input session-id character-name))
 
 (defun issue-character-output-event (session-id character-name output-text)

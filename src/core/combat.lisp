@@ -22,6 +22,7 @@
     (object-set-property character "hp" (character-max-hp character))))
 
 (defun character-roll-attack (character)
+  (declare (ignore character))
   (+ +character-default-attack-min+
      (random (1+ (- +character-default-attack-max+ +character-default-attack-min+)))))
 

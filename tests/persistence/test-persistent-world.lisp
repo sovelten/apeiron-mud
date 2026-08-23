@@ -48,7 +48,7 @@ walking."
   (is (equal '("CONTENTS")
              (mapcar #'symbol-name
                      (gethash :transient-slots (gethash 'mud-room *persistent-class-registry*)))))
-  (is (equal '("CHARACTERS" "OBJECTS" "ROOMS" "AREAS")
+  (is (equal '("CHARACTERS" "OBJECTS" "ROOMS" "AREAS" "PARSER")
              (mapcar #'symbol-name
                      (gethash :transient-slots (gethash 'mud-world *persistent-class-registry*))))))
 

@@ -4,20 +4,51 @@
 
 (defsection @commands (:title "Commands")
   """The command system turns raw player input into handler calls.
-  Every command is registered in *COMMANDS* by DEFINE-COMMAND, parsed
-  by PARSE-COMMAND, and dispatched by PROCESS-COMMAND.
+  Every command is registered in *COMMANDS* by DEFINE-COMMAND and
+  processed by HANDLE-COMMAND — the full command pipeline, run through
+  the world's parser (WORLD-PARSER).  PROCESS-COMMAND is a convenience
+  wrapper that routes input through the world's parser.
 
   While a command runs, the eval helpers ME, HERE and WORLD are bound
   to the current character, room and world, which also makes them
   handy inside the in-game `eval` command."""
   (*commands* variable)
   (define-command macro)
-  (parse-command function)
+  (handle-command generic-function)
+  (split-command function)
   (process-command function)
+  (world-parser function)
   (me function)
   (here function)
   (world function)
   (eval-allowed-p function))
+
+(defclass mud-parser ()
+  ()
+  (:documentation "Base command parser.  A parser runs the full command
+pipeline for a line of player input via the HANDLE-COMMAND generic: it
+extracts the command name and arguments (resolving them against the
+player and world when the parser is context-aware), looks up the
+handler, and runs it.  The default method does a plain first-token
+split and executes the registered handler.  Subclass MUD-PARSER (or
+define your own methods on HANDLE-COMMAND) to build derived parsers —
+for example one that understands prepositions and direct/indirect
+objects."))
+
+(defgeneric handle-command (parser input player world)
+  (:documentation
+   "Process INPUT — a raw command line typed by PLAYER in WORLD — into a
+command and run it.  This is the full command pipeline: the parser
+extracts the command name and arguments (resolving them against PLAYER
+and WORLD when it is context-aware), looks up the handler in *COMMANDS*,
+and runs it.  Returns whatever the command handler returns (usually
+NIL).
+
+PARSER is the parser object doing the work.  The default MUD-PARSER
+method does a plain first-token split (see SPLIT-COMMAND) and executes
+the registered handler.  Subclass MUD-PARSER (or define your own methods
+on HANDLE-COMMAND) to build derived parsers — for example one that
+understands prepositions and direct/indirect objects before dispatch."))
 
 ;; Command processor
 (defvar *commands* (make-hash-table :test #'equal)
@@ -141,8 +172,7 @@ sound made by CHARACTER's worn items (so the mover can hear it too)."
 (define-command "examine" (world character args)
   "Examine an object, NPC, or character in the current room, e.g. 'examine sword'."
   (declare (ignore world))
-  (let* ((room (object-location character))
-         (target-name (string-downcase args)))
+  (let ((room (object-location character)))
     (if (zerop (length args))
         (character-send-message character "Examine what? Usage: examine <name>")
         (let ((target (first (container-objects-matching room args))))
@@ -331,7 +361,6 @@ Use (me) for the current character, (here) for current room, (world) for the wor
 Debug helpers: (d obj), (slots-of obj), (props obj), (inv obj), (loc obj), (obj-type obj), (obj-find name-or-id)
 Only administrators (admin accounts) or characters wearing a wizard hat
 (an object with both the \"hat\" and \"wizard\" keywords) may use this command."
-  (declare (ignore world))
   (if (not (eval-allowed-p character))
       (character-send-message
        character
@@ -637,9 +666,11 @@ player asked for (for :no-such-limb)."
                    ;; Object didn't respond
                    (character-send-message character (format nil "~A doesn't seem to understand." (object-name target)))))))))))
 
-(defun parse-command (input)
-  "Parse a command string into command name and raw args string.
-   Returns: (values command-name raw-args-string)"
+(defun split-command (input)
+  "Split INPUT into a command name and raw args string.
+Returns (values COMMAND-NAME RAW-ARGS-STRING).  This is the raw
+building block the default parser uses; derived parsers can call it
+directly to reuse the plain first-token split."
   (let ((trimmed (string-trim '(#\Space #\Tab) input)))
     (if (zerop (length trimmed))
         (values nil "")
@@ -649,29 +680,38 @@ player asked for (for :no-such-limb)."
                       (string-trim '(#\Space #\Tab) (subseq trimmed (1+ space-pos))))
               (values (string-downcase trimmed) ""))))))
 
-(defun process-command (world character command-string)
-  "Process a command from a character.
-Honors the character's session color preference by binding *COLORIZE*."
+(defmethod handle-command ((parser mud-parser) input player world)
+  "Default command processing: split INPUT into a command name and raw
+args, look up the handler in *COMMANDS*, and run it.  Honors the
+character's session color preference by binding *COLORIZE*.
+
+Returns whatever the command handler returns (usually NIL)."
+  (declare (ignore parser))
   ;; Issue an event for every line of character input (for debugging/logging).
-  (let ((session (character-session character)))
+  (let ((session (character-session player)))
     (issue-character-input-event (session-id session)
-                              (object-name character)
-                              command-string))
-  
-  (when (> (length command-string) +max-command-length+)
-    (character-send-message character "Command too long.")
-    (return-from process-command nil))
-  
-  (multiple-value-bind (command args) (parse-command command-string)
+                                 (object-name player)
+                                 input))
+
+  (when (> (length input) +max-command-length+)
+    (character-send-message player "Command too long.")
+    (return-from handle-command nil))
+
+  (multiple-value-bind (command args) (split-command input)
     (if (not command)
-        (return-from process-command nil))
-    
+        (return-from handle-command nil))
+
     (let ((handler (gethash command *commands*)))
       (if handler
-          (let ((*colorize* (session-use-colors (character-session character))))
+          (let ((*colorize* (session-use-colors (character-session player))))
             (handler-case
-                (funcall handler world character args)
+                (funcall handler world player args)
               (error (e)
-                (log-error "Command error for ~A: ~A" (object-name character) e)
-                (character-send-message character "Error executing command."))))
-          (character-send-message character "Unknown command. Type 'help' for available commands.")))))
+                (log-error "Command error for ~A: ~A" (object-name player) e)
+                (character-send-message player "Error executing command."))))
+          (character-send-message player "Unknown command. Type 'help' for available commands.")))))
+
+(defun process-command (world character command-string)
+  "Process a command from a character.
+Convenience wrapper around HANDLE-COMMAND using the world's parser."
+  (handle-command (world-parser world) command-string character world))

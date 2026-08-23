@@ -9,6 +9,57 @@ admin account or a wizard hat."
   (or (find-account name)
       (register-account name "pw" :admin t)))
 
+(defclass test-shouty-parser (mud-parser) ()
+  (:documentation "Test parser that uppercases the command name, to prove
+that HANDLE-COMMAND dispatches on the parser object."))
+
+(defmethod handle-command ((parser test-shouty-parser) input player world)
+  "Shouty test parser: doesn't run the command, just returns the
+uppercased input to prove that HANDLE-COMMAND dispatches on the parser
+object."
+  (declare (ignore parser player world))
+  (values :shouty (string-upcase input)))
+
+(test split-command-splits-input
+  "SPLIT-COMMAND splits raw input into a command name and args — the raw
+building block the default parser uses."
+  ;; Command with args
+  (multiple-value-bind (command args) (split-command "go north")
+    (is (equal "go" command))
+    (is (equal "north" args)))
+  ;; Bare command, no args
+  (multiple-value-bind (command args) (split-command "look")
+    (is (equal "look" command))
+    (is (equal "" args)))
+  ;; Command names are lowercased; args keep their case
+  (multiple-value-bind (command args) (split-command "GO North")
+    (is (equal "go" command))
+    (is (equal "North" args)))
+  ;; Whitespace-only input → no command
+  (multiple-value-bind (command args) (split-command "   ")
+    (is (null command))
+    (is (equal "" args))))
+
+(test world-custom-parser-dispatch
+  "A world can be given its own parser via WORLD-PARSER; both
+HANDLE-COMMAND and PROCESS-COMMAND (which routes through the world's
+parser) dispatch on that parser object."
+  (let* ((world (new-world))
+         (character (new-character
+                     "Tester"
+                     (make-instance 'stream-session
+                                    :stream (make-string-output-stream)))))
+    (setf (world-parser world) (make-instance 'test-shouty-parser))
+    ;; handle-command dispatches on the world's parser
+    (multiple-value-bind (tag text)
+        (handle-command (world-parser world) "look sword" character world)
+      (is (eq :shouty tag))
+      (is (equal "LOOK SWORD" text)))
+    ;; process-command routes through the world's parser too
+    (multiple-value-bind (tag text) (process-command world character "go north")
+      (is (eq :shouty tag))
+      (is (equal "GO NORTH" text)))))
+
 (test command-processing-look
   "Test the look command"
   (let ((world (apeiron.persistence:world-restore-or-initialize)))
