@@ -289,6 +289,38 @@ must survive a snapshot + close-store + reopen cycle."
       (is (equal "green" (object-get-property restored "color"))
           "Property should survive snapshot + restart"))))
 
+(test create-object!-with-room-on-persistent-world
+  "create-object! with the optional ROOM argument materializes the object
+and places it in the room (location set + added to room contents).  The
+placement must survive a snapshot + restart."
+  (unwind-protect
+       (let* ((world (world-restore-or-initialize :force-new t))
+              (room (starting-room world))
+              (obj (create-object! world (new-object :name "Persistent Vase") room)))
+         ;; Materialized into the datastore and placed in the room.
+         (is (typep obj 'persistent-object))
+         (is (eq room (object-location obj)))
+         (is (member obj (container-all-objects room) :test #'eq))
+         ;; Registered in the world's object index.
+         (is (eq obj (world-object-by-id world (object-id obj))))
+         ;; Survives a snapshot + restart, still in the room's contents.
+         (sync-world)
+         (bknr.datastore:close-store)
+         (let* ((new-world (world-restore-or-initialize))
+                (restored (world-object-by-id new-world (object-id obj)))
+                (new-room (starting-room new-world)))
+           (is (not (null restored))
+               "Object should be found after restart")
+           (is (equal "Persistent Vase" (object-name restored)))
+           (is (eq new-room (object-location restored))
+               "Location should survive restart")
+           (is (member restored (container-all-objects new-room) :test #'eq)
+               "Object should remain in the room's contents after restart")))
+    (ignore-errors
+     (when (boundp 'bknr.datastore:*store*)
+       (ignore-errors (bknr.datastore:close-store))
+       (makunbound 'bknr.datastore:*store*)))))
+
 (test guestbook-present-after-restore
   "After closing and reopening the BKNR store, the guestbook should still
 be present in the starting room.  This guards against a bug where

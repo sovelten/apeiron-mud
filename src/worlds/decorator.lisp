@@ -91,6 +91,3 @@ handled, NIL otherwise."
                     (format nil "~A rewrites the room's description." (object-name speaker))))))))
        t)
       (t nil))))
-
-
-

@@ -75,12 +75,14 @@ change in the outer transaction's buffer."
   ;; Write the slot so BKNR records the change — see docstring above.
   (setf (object-properties obj) (object-properties obj)))
 
-(defmethod create-object! ((world persistent-world) object)
+(defmethod create-object! ((world persistent-world) object &optional room)
   "Register OBJECT in WORLD by converting it to a persistent object in-place.
 The transient OBJECT is converted in-place via MATERIALIZE-OBJECT, which
 uses CHANGE-CLASS to preserve slot values and object identity.
 Already-persistent objects (e.g., reconnected characters) are registered
-directly without re-materialization."
+directly without re-materialization.
+When ROOM is provided, OBJECT is also placed in ROOM (location set and
+added to ROOM's contents) inside the same transaction."
   (bknr.datastore:with-transaction ("create-object")
     (unless (typep object 'bknr.datastore:store-object)
       (materialize-object object)
@@ -95,7 +97,9 @@ directly without re-materialization."
                        (slot-boundp object sname))
               (setf (slot-value object sname)
                     (slot-value object sname)))))))
-    (world-add-object! world object))
+    (world-add-object! world object)
+    (when room
+      (container-add-object room object)))
   object)
 
 (defmethod world-remove-object! ((world persistent-world) object)
@@ -258,9 +262,7 @@ and the redundant second snapshot is skipped."
 
 The persistent class name is derived from TRANSIENT-CLASS's entry in
 *PERSISTENT-CLASS-REGISTRY* (the declarative data in registry.lisp) —
-no class-hierarchy walking needed.  The registry is global: persistence
-depends on the worlds package, so worlds-specific classes (e.g. the
-decorator) are registered there too, exactly like core classes."
+no class-hierarchy walking needed."
   (let* ((transient-name (class-name transient-class))
          (entry (gethash transient-name *persistent-class-registry*)))
     (or (and entry (find-class (persistent-class-name transient-name entry)))
