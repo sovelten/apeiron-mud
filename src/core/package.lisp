@@ -325,7 +325,6 @@
    ;; World
    #:mud-world
    #:new-world
-   #:world-persistent-class-registry
    #:connect-rooms!
    #:connect-north-south!
    #:connect-west-east!

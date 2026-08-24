@@ -63,10 +63,6 @@ direction from the nexus (e.g. 'Poké Land' leads to the shopping mall,
 'Eridu' leads to the first city of Sumer).  Each area's entrance is used
 for the cross-area links and the world's starting room."
   (let ((world (make-instance 'mud-world)))
-    ;; Register worlds-package classes in the world's per-world persistent
-    ;; class registry (extends the default registry), so they can be
-    ;; materialized without polluting the global registry.
-    (apeiron.persistence::world-register-persistent-class! world 'mud-decorator)
     (let ((hub (build-apeiron-hub))
           (mall (build-shopping-mall))
           (cavern (build-team-rocket-cavern))

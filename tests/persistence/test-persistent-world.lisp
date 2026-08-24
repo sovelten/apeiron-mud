@@ -23,7 +23,8 @@ walking."
             (mud-wordle-puzzle . persistent-wordle)
             (mud-connection . persistent-connection)
             (mud-area . persistent-area)
-            (mud-world . persistent-world))))
+            (mud-world . persistent-world)
+            (apeiron.worlds:mud-decorator . apeiron.persistence::persistent-decorator))))
     (is (= (length expected) (hash-table-count *persistent-class-registry*))
         "Registry should have one entry per persistent class")
     (dolist (pair expected)
@@ -58,7 +59,7 @@ unchanged when the classes are redefined from the same registry — the
 signal SAFE-UPDATE uses to decide whether a second snapshot is needed
 after a reload."
   (let ((schemas (apeiron.persistence::persistent-class-schemas)))
-    (is (= 10 (length schemas))
+    (is (= 11 (length schemas))
         "One schema fingerprint per registered class")
     (is (equal schemas (apeiron.persistence::persistent-class-schemas))
         "Fingerprints must be deterministic")

@@ -305,9 +305,9 @@ A glittering hall of mirrors.
         (is (search "doesn't seem to understand" text2))))))
 
 (test decorator-persists-in-default-world
-  "The decorator placed in the Apeiron hub is registered in the world's
-  per-world persistent class registry and survives materialization and a
-  snapshot + restart — without polluting the global *PERSISTENT-CLASS-REGISTRY*."
+  "The decorator placed in the Apeiron hub is registered in the global
+  *PERSISTENT-CLASS-REGISTRY* (persistence depends on worlds) and
+  survives materialization and a snapshot + restart."
   (unwind-protect
        (let* ((world (apeiron.persistence:world-restore-or-initialize
                       :force-new t
@@ -318,12 +318,12 @@ A glittering hall of mirrors.
          ;; Materialized into the persistent store as a persistent-decorator.
          (is (not (null decorator)))
          (is (typep decorator 'apeiron.persistence:persistent-object))
-         ;; The global default registry is untouched — the class resolves
-         ;; through the world's per-world registry.
-         (is (null (gethash 'apeiron.worlds::mud-decorator
-                            apeiron.persistence::*persistent-class-registry*)))
+         ;; The class is registered in the global registry, exactly like
+         ;; core classes — persistence depends on the worlds package.
+         (is (not (null (gethash 'apeiron.worlds::mud-decorator
+                                 apeiron.persistence::*persistent-class-registry*))))
          (is (eq (class-name (apeiron.persistence:transient->persistent-class
-                              (find-class 'apeiron.worlds::mud-decorator) world))
+                              (find-class 'apeiron.worlds::mud-decorator)))
                  'apeiron.persistence::persistent-decorator))
          ;; Rename works on the materialized (persistent) decorator too.
          (let* ((output (make-string-output-stream))

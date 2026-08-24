@@ -27,7 +27,6 @@
    #:define-persistent-class
    #:*persistent-class-registry*
    #:transient->persistent-class
-   #:world-register-persistent-class!
 
    ;; Persistent classes
    #:persistent-object
@@ -37,6 +36,7 @@
    #:persistent-wordle
    #:persistent-connection
    #:persistent-area
+   #:persistent-decorator
    #:persistent-world
 
    ;; Persistent factory functions

@@ -77,6 +77,7 @@
   :author "Sophia Velten"
   :license "MIT"
   :depends-on ("apeiron/core"
+               "apeiron/worlds"
                "bknr.datastore"
                "bknr.indices"
                "bknr.utils"
@@ -93,8 +94,7 @@
   :description "Transient world definitions for the Apeiron MUD."
   :author "Sophia Velten"
   :license "MIT"
-  :depends-on ("apeiron/core"
-               "apeiron/persistence")
+  :depends-on ("apeiron/core")
   :components ((:module "src/worlds"
                 :components
                 ((:file "package")

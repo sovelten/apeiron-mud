@@ -92,22 +92,5 @@ handled, NIL otherwise."
        t)
       (t nil))))
 
-;; ─── Persistence ─────────────────────────────────────────────────────────────
-;; MUD-DECORATOR is a worlds-package class (not core), so it is NOT entered
-;; into the global *PERSISTENT-CLASS-REGISTRY*.  Two things make it
-;; persistable anyway:
-;;
-;;   1. The persistent wrapper class (PERSISTENT-DECORATOR) is defined at
-;;      load time here, so BKNR can restore decorators already stored in
-;;      the datastore after a restart.
-;;
-;;   2. World builders register MUD-DECORATOR in their world's per-world
-;;      registry (see WORLD-REGISTER-PERSISTENT-CLASS! and
-;;      NEW-DEFAULT-WORLD), which TRANSIENT->PERSISTENT-CLASS consults
-;;      before falling back to the global registry.  This keeps the
-;;      default registry clean while still letting materialization
-;;      resolve the class.
-;;
-;; Defining the wrapper class does NOT mutate the global registry.
 
-(apeiron.persistence:define-persistent-class 'mud-decorator (make-hash-table))
+

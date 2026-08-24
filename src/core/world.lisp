@@ -48,16 +48,7 @@
    (parser :initarg :parser
            :accessor world-parser
            :initform (make-instance 'mud-parser)
-           :documentation "Command parser used to turn player input into command name and args.")
-   (persistent-class-registry :initarg :persistent-class-registry
-                              :accessor world-persistent-class-registry
-                              :initform (make-hash-table :test #'equal)
-                              :documentation "Per-world extension registry for persistent
-classes: maps transient class-name symbols to persistent-class options, exactly like the
-global *PERSISTENT-CLASS-REGISTRY* in the persistence module.  World builders register
-world-specific classes (e.g. the decorator from the worlds module) here so they can be
-materialized without polluting the global registry.  The persistence layer consults this
-registry first, then falls back to the default registry."))
+           :documentation "Command parser used to turn player input into command name and args."))
   (:documentation "Configuration root for the MUD world.  Rooms, guestbooks,
    and other objects are stored as independent BKNR persistent objects."))
 
