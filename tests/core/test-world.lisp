@@ -48,6 +48,31 @@
     (apeiron.core:world-add-object! world room)
     (is (eq room (apeiron.core:world-room-by-id world (apeiron.core:object-id room))))))
 
+(test create-object!-without-room
+  "create-object! without ROOM registers the object in the world but
+does not place it anywhere (location stays NIL)."
+  (let ((world (apeiron.core:new-world))
+        (obj (apeiron.core:new-object :name "Vase")))
+    (let ((created (apeiron.core:create-object! world obj)))
+      (is (eq created obj))
+      (is (null (apeiron.core:object-location obj)))
+      (is (eq obj (apeiron.core:world-object-by-id world (apeiron.core:object-id obj)))))))
+
+(test create-object!-with-room
+  "create-object! with the optional ROOM argument registers the object
+in the world AND places it in the room: its location is set to the room
+and it is added to the room's contents."
+  (let ((world (apeiron.core:new-world))
+        (room (apeiron.core:new-room :name "Lounge"))
+        (obj (apeiron.core:new-object :name "Vase")))
+    (apeiron.core:world-add-object! world room)
+    (let ((created (apeiron.core:create-object! world obj room)))
+      (is (eq created obj))
+      (is (eq room (apeiron.core:object-location obj)))
+      (is (member obj (apeiron.core:container-all-objects room) :test #'eq))
+      ;; Also registered in the world's object index
+      (is (eq obj (apeiron.core:world-object-by-id world (apeiron.core:object-id obj)))))))
+
 (test world-set-starting-room!
   "Test setting the starting room in world config"
   (let ((world (apeiron.core:new-world))

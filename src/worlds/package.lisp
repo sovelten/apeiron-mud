@@ -10,4 +10,7 @@
                 #:pythonic-string-syntax)
   (:export
    ;; World definition entry point
-   #:new-default-world))
+   #:new-default-world
+   ;; Decorator object
+   #:mud-decorator
+   #:new-decorator))

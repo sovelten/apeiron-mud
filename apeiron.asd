@@ -77,6 +77,7 @@
   :author "Sophia Velten"
   :license "MIT"
   :depends-on ("apeiron/core"
+               "apeiron/worlds"
                "bknr.datastore"
                "bknr.indices"
                "bknr.utils"
@@ -97,9 +98,10 @@
   :components ((:module "src/worlds"
                 :components
                 ((:file "package")
+                 (:file "decorator" :depends-on ("package"))
                  (:file "poke-land" :depends-on ("package"))
                  (:file "eridu" :depends-on ("package"))
-                 (:file "apeiron" :depends-on ("package" "poke-land" "eridu"))))))
+                 (:file "apeiron" :depends-on ("package" "decorator" "poke-land" "eridu"))))))
 
 (defsystem "apeiron/server"
   :version "0.0.1"

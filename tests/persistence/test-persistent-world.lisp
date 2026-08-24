@@ -23,7 +23,8 @@ walking."
             (mud-wordle-puzzle . persistent-wordle)
             (mud-connection . persistent-connection)
             (mud-area . persistent-area)
-            (mud-world . persistent-world))))
+            (mud-world . persistent-world)
+            (apeiron.worlds:mud-decorator . apeiron.persistence::persistent-decorator))))
     (is (= (length expected) (hash-table-count *persistent-class-registry*))
         "Registry should have one entry per persistent class")
     (dolist (pair expected)
@@ -58,7 +59,7 @@ unchanged when the classes are redefined from the same registry — the
 signal SAFE-UPDATE uses to decide whether a second snapshot is needed
 after a reload."
   (let ((schemas (apeiron.persistence::persistent-class-schemas)))
-    (is (= 10 (length schemas))
+    (is (= 11 (length schemas))
         "One schema fingerprint per registered class")
     (is (equal schemas (apeiron.persistence::persistent-class-schemas))
         "Fingerprints must be deterministic")
@@ -287,6 +288,38 @@ must survive a snapshot + close-store + reopen cycle."
           "Object should be found after restart")
       (is (equal "green" (object-get-property restored "color"))
           "Property should survive snapshot + restart"))))
+
+(test create-object!-with-room-on-persistent-world
+  "create-object! with the optional ROOM argument materializes the object
+and places it in the room (location set + added to room contents).  The
+placement must survive a snapshot + restart."
+  (unwind-protect
+       (let* ((world (world-restore-or-initialize :force-new t))
+              (room (starting-room world))
+              (obj (create-object! world (new-object :name "Persistent Vase") room)))
+         ;; Materialized into the datastore and placed in the room.
+         (is (typep obj 'persistent-object))
+         (is (eq room (object-location obj)))
+         (is (member obj (container-all-objects room) :test #'eq))
+         ;; Registered in the world's object index.
+         (is (eq obj (world-object-by-id world (object-id obj))))
+         ;; Survives a snapshot + restart, still in the room's contents.
+         (sync-world)
+         (bknr.datastore:close-store)
+         (let* ((new-world (world-restore-or-initialize))
+                (restored (world-object-by-id new-world (object-id obj)))
+                (new-room (starting-room new-world)))
+           (is (not (null restored))
+               "Object should be found after restart")
+           (is (equal "Persistent Vase" (object-name restored)))
+           (is (eq new-room (object-location restored))
+               "Location should survive restart")
+           (is (member restored (container-all-objects new-room) :test #'eq)
+               "Object should remain in the room's contents after restart")))
+    (ignore-errors
+     (when (boundp 'bknr.datastore:*store*)
+       (ignore-errors (bknr.datastore:close-store))
+       (makunbound 'bknr.datastore:*store*)))))
 
 (test guestbook-present-after-restore
   "After closing and reopening the BKNR store, the guestbook should still

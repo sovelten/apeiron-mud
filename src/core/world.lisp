@@ -375,9 +375,14 @@ is unambiguous."
               when (area-room-p candidate room)
               return candidate))))
 
-(defgeneric create-object! (world object)
+(defgeneric create-object! (world object &optional room)
   (:documentation "Register OBJECT in WORLD, materializing it for persistent worlds.
 For transient worlds this is equivalent to WORLD-ADD-OBJECT!.
-For persistent worlds a persistent copy is created in the datastore.")
-  (:method ((world mud-world) object)
-    (world-add-object! world object)))
+For persistent worlds a persistent copy is created in the datastore.
+When ROOM is provided, OBJECT is also placed in ROOM: its location is
+set to ROOM and it is added to ROOM's contents.")
+  (:method ((world mud-world) object &optional room)
+    (world-add-object! world object)
+    (when room
+      (container-add-object room object))
+    object))

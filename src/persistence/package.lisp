@@ -24,6 +24,7 @@
 
    ;; Declarative persistent class registry
    #:define-persistent-classes
+   #:define-persistent-class
    #:*persistent-class-registry*
    #:transient->persistent-class
 
@@ -35,6 +36,7 @@
    #:persistent-wordle
    #:persistent-connection
    #:persistent-area
+   #:persistent-decorator
    #:persistent-world
 
    ;; Persistent factory functions

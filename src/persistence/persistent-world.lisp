@@ -75,12 +75,14 @@ change in the outer transaction's buffer."
   ;; Write the slot so BKNR records the change — see docstring above.
   (setf (object-properties obj) (object-properties obj)))
 
-(defmethod create-object! ((world persistent-world) object)
+(defmethod create-object! ((world persistent-world) object &optional room)
   "Register OBJECT in WORLD by converting it to a persistent object in-place.
 The transient OBJECT is converted in-place via MATERIALIZE-OBJECT, which
 uses CHANGE-CLASS to preserve slot values and object identity.
 Already-persistent objects (e.g., reconnected characters) are registered
-directly without re-materialization."
+directly without re-materialization.
+When ROOM is provided, OBJECT is also placed in ROOM (location set and
+added to ROOM's contents) inside the same transaction."
   (bknr.datastore:with-transaction ("create-object")
     (unless (typep object 'bknr.datastore:store-object)
       (materialize-object object)
@@ -95,7 +97,9 @@ directly without re-materialization."
                        (slot-boundp object sname))
               (setf (slot-value object sname)
                     (slot-value object sname)))))))
-    (world-add-object! world object))
+    (world-add-object! world object)
+    (when room
+      (container-add-object room object)))
   object)
 
 (defmethod world-remove-object! ((world persistent-world) object)
@@ -274,6 +278,9 @@ no class-hierarchy walking needed."
 Dispatching on the class of OBJ allows adding new object types without
 modifying this generic function -- just add a DEFWRAPPING-PERSISTENT-CLASS
 and optionally specialize MATERIALIZE-OBJECT if extra steps are needed.
+
+The persistent class is resolved through the global
+*PERSISTENT-CLASS-REGISTRY* (see TRANSIENT->PERSISTENT-CLASS).
 
 Uses CHANGE-CLASS (preserving object identity and all cross-references)
 followed by INITIALIZE-INSTANCE to trigger BKNR registration."))
