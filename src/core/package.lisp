@@ -126,6 +126,12 @@
    #:object-set-property
    #:object-move
 
+   ;; Readable objects
+   #:readable-mixin
+   #:readable-message
+   #:mud-sign
+   #:new-sign
+
    ;; NPC / Combat
    #:mud-npc
    #:new-npc

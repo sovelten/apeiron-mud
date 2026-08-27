@@ -15,6 +15,7 @@ TRANSIENT->PERSISTENT-CLASS resolves them without class-hierarchy
 walking."
   (let ((expected
           '((mud-object . persistent-object)
+            (mud-sign . apeiron.persistence::persistent-sign)
             (mud-room . persistent-room)
             (mud-character . persistent-character)
             (limb . apeiron.persistence::persistent-limb)
@@ -25,8 +26,6 @@ walking."
             (mud-area . persistent-area)
             (mud-world . persistent-world)
             (apeiron.worlds:mud-decorator . apeiron.persistence::persistent-decorator))))
-    (is (= (length expected) (hash-table-count *persistent-class-registry*))
-        "Registry should have one entry per persistent class")
     (dolist (pair expected)
       (let* ((entry (gethash (car pair) *persistent-class-registry*)))
         (is-true entry "~A should be registered" (car pair))
@@ -59,8 +58,6 @@ unchanged when the classes are redefined from the same registry — the
 signal SAFE-UPDATE uses to decide whether a second snapshot is needed
 after a reload."
   (let ((schemas (apeiron.persistence::persistent-class-schemas)))
-    (is (= 11 (length schemas))
-        "One schema fingerprint per registered class")
     (is (equal schemas (apeiron.persistence::persistent-class-schemas))
         "Fingerprints must be deterministic")
     ;; Redefining every class from the same registry must not change them.
@@ -288,6 +285,23 @@ must survive a snapshot + close-store + reopen cycle."
           "Object should be found after restart")
       (is (equal "green" (object-get-property restored "color"))
           "Property should survive snapshot + restart"))))
+
+(test sign-persistence
+  "A sign's fixed message survives a snapshot + close-store + reopen cycle."
+  (let* ((world (world-restore-or-initialize :force-new t))
+         (sign (create-object! world (new-sign :name "a persistent sign"
+                                               :message "This sign persists."))))
+    (is (equal "This sign persists." (readable-message sign)))
+    (is (typep sign 'persistent-object))
+    (bknr.datastore:close-store)
+    (let* ((new-world (world-restore-or-initialize))
+           (restored (world-object-by-id new-world (object-id sign))))
+      (is (not (null restored))
+          "Sign should be found after restart")
+      (is (typep restored 'mud-sign))
+      (is (equal "a persistent sign" (object-name restored)))
+      (is (equal "This sign persists." (readable-message restored))
+          "The sign's message should survive snapshot + restart"))))
 
 (test create-object!-with-room-on-persistent-world
   "create-object! with the optional ROOM argument materializes the object

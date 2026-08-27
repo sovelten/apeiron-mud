@@ -9,6 +9,7 @@
                 ((:file "test-package")
                  (:file "telnet/test-telnet" :depends-on ("test-package"))
                  (:file "core/test-object" :depends-on ("test-package"))
+                 (:file "core/test-sign" :depends-on ("test-package"))
                  (:file "core/test-room" :depends-on ("test-package"))
                  (:file "core/test-guestbook" :depends-on ("test-package"))
                  (:file "core/test-character" :depends-on ("test-package"))
