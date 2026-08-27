@@ -113,6 +113,7 @@ classes (e.g. on PERSISTENT-OBJECT) are resolved automatically."
 (defparameter *persistent-class-registry*
   (dict
    'mud-object        (dict)
+   'mud-sign          (dict)
    'mud-room          (dict :transient-slots '(contents))
    'mud-character     (dict :transient-slots '(session))
    'limb              (dict)
@@ -122,7 +123,7 @@ classes (e.g. on PERSISTENT-OBJECT) are resolved automatically."
                             :persistent-name 'persistent-wordle)
    'mud-connection    (dict)
    'mud-area          (dict :transient-slots '(graph))
-  'mud-world         (dict :transient-slots '(characters objects rooms areas parser))
+   'mud-world         (dict :transient-slots '(characters objects rooms areas parser))
    ;; Worlds-package classes.  Persistence depends on APEIRON/WORLDS, so
    ;; it can see MUD-DECORATOR and register it in the global registry
    ;; like any core class — no per-world registry needed.

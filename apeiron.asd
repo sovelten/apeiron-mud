@@ -52,6 +52,8 @@
                  (:file "session" :depends-on ("utils"))
                  (:file "account" :depends-on ("utils" "constants"))
                  (:file "character" :depends-on ("object" "session" "container" "account" "equipment"))
+                 (:file "readable" :depends-on ("object" "character"))
+                 (:file "sign" :depends-on ("readable"))
                  (:file "command-handler" :depends-on ("session"))
                  (:file "world" :depends-on ("room" "connection" "guestbook" "character"))))))
 
