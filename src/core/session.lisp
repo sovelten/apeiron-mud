@@ -102,20 +102,29 @@ this method to provide their own line-reading implementation."
 Subclasses with I/O capabilities should override this."
   (mud-read-line obj :timeout timeout))
 
-(defun ask-input (obj question &key (default "") secret)
+(defun ask-input (obj question &key (default "") secret (timeout 300))
   "Asks input from the user.  When SECRET is non-NIL the input is not
-echoed (for passwords etc.)."
+echoed (for passwords etc.).  TIMEOUT is the maximum seconds to wait
+for input (default 300); on timeout the read returns the default with
+status :TIMEOUT so idle-but-connected callers can keep the connection
+alive and re-ask.
+
+Returns (values ANSWER STATUS).  ANSWER is the trimmed input, or DEFAULT
+when the user gave no usable input.  STATUS is NIL on success, or the
+read status (:eof, :timeout, :connection-lost) when no input could be
+read — callers that need to detect a disconnected client should check
+STATUS."
   (mud-write obj question :newline t)
   (multiple-value-bind (line status)
       (if secret
-          (mud-read-secret obj)
-          (mud-read-line obj))
+          (mud-read-secret obj :timeout timeout)
+          (mud-read-line obj :timeout timeout))
     (if (and line (null status))
         (let ((trimmed (string-trim '(#\Return #\Newline) line)))
           (if (and trimmed (> (length trimmed) 0))
-              trimmed
-              default))
-        default)))
+              (values trimmed nil)
+              (values default nil)))
+        (values default status))))
 
 ;;
 ;; Basic Stream Session
