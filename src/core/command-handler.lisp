@@ -68,7 +68,7 @@ CHARACTER is the character, ARGS is a raw string that the handler can parse as n
   (declare (ignore world args))
   (let ((room (object-location character)))
     (if room
-        (character-send-message character (object-describe room))
+        (character-send-message character (object-long-description room))
         (character-send-message character "You are in a void!"))))
 
 (defun announce-movement (character direction from-room to-room)
@@ -135,7 +135,7 @@ sound made by CHARACTER's worn items (so the mover can hear it too)."
                                      (bright-cyan (format nil "You hear a ~A sound as you went" sound))
                                      (bright-cyan "You went"))
                                  (yellow went-direction)))
-                        (character-send-message character (object-describe target-room))))
+                        (character-send-message character (object-long-description target-room))))
                     (character-send-message character "You can't go that way."))))))))
 
 (define-command "n" (world character args)
@@ -179,7 +179,7 @@ sound made by CHARACTER's worn items (so the mover can hear it too)."
           (if target
               (character-send-message
                character
-               (object-describe target))
+               (object-long-description target))
               (character-send-message character "You don't see that here."))))))
 
 (define-command "answer" (world character args)
@@ -313,7 +313,7 @@ Example: (inv (here))"
         (with-output-to-string (*standard-output*)
           (format t "Contents of ~A:~%" (object-name container))
           (dolist (obj objects)
-            (format t "  ~A~%" (object-describe obj)))))))
+            (format t "  ~A~%" (object-short-description obj)))))))
 
 (defun loc (object)
   "Return the location chain of OBJECT as a string, from innermost to outermost.
@@ -407,7 +407,7 @@ Only administrators (admin accounts) or characters wearing a wizard hat
                              (format nil "~A~%~{~A~%~}"
                                      (bold-white "You are carrying:")
                                      (mapcar (lambda (obj)
-                                               (format nil "  - ~A" (object-describe obj)))
+                                               (format nil "  - ~A" (object-short-description obj)))
                                              inv))))))
 
 (defun wear-result-message (item limb reason &optional requested-limb)

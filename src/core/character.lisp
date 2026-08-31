@@ -162,21 +162,30 @@ DIRECTION, or NIL if no worn item makes a sound.  See ON-MOVEMENT."
           (values object limb))
         (values nil nil))))
 
-(defmethod object-describe ((obj mud-character))
-  "Bright green for character characters, listing any worn/held items."
+(defmethod object-short-description ((obj mud-character))
+  "Bright green for characters, name and ID only — no worn items."
+  (bright-green (format nil "~A (ID: ~D)"
+                       (object-name obj) (object-id obj))))
+
+(defmethod object-long-description ((obj mud-character))
+  "Bright green for characters, listing the description slot (if any)
+and any worn/held items."
   (let ((base (bright-green (format nil "~A (ID: ~D)"
                                     (object-name obj) (object-id obj))))
+        (desc (object-description obj))
         (worn (character-worn-items obj)))
-    (if worn
-        (format nil "~A~%~A~{~A~^~%~}"
-                base
+    (with-output-to-string (stream)
+      (format stream "~A" base)
+      (when (plusp (length desc))
+        (format stream "~%~A" desc))
+      (when worn
+        (format stream "~%~A~%~{~A~^~%~}"
                 (bold-white "Wearing/holding:")
                 (mapcar (lambda (pair)
                           (format nil "  - ~A (~A)"
-                                  (object-describe (cdr pair))
+                                  (object-short-description (cdr pair))
                                   (object-name (car pair))))
-                        worn))
-        base)))
+                        worn))))))
 
 (defun guest? (character)
   (null (character-owner character)))

@@ -10,7 +10,7 @@
              :documentation "File where the guestbook entries will be stored"))
   (:documentation "A guestbook in which characters can read and write messages."))
 
-(defmethod object-describe ((obj mud-guestbook))
+(defmethod object-short-description ((obj mud-guestbook))
   "Cyan for guestbooks."
   (cyan (format nil "~A (ID: ~D)" (object-name obj) (object-id obj))))
 

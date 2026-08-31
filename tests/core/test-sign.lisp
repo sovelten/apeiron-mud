@@ -52,13 +52,13 @@
                                      :message "Read me.")))
     (is (apeiron.core:handle-read sign character))))
 
-(test sign-object-describe
-  "OBJECT-DESCRIBE on a sign returns a string naming the sign."
+(test sign-object-short-description
+  "OBJECT-SHORT-DESCRIPTION on a sign returns a string naming the sign."
   (let ((sign (apeiron.core:new-sign :name "a trail marker" :message "North"))
         (reader (make-test-reader)))
     (declare (ignore reader))
-    (is (stringp (apeiron.core:object-describe sign)))
-    (is (search "a trail marker" (apeiron.core:object-describe sign)))))
+    (is (stringp (apeiron.core:object-short-description sign)))
+    (is (search "a trail marker" (apeiron.core:object-short-description sign)))))
 
 (test sign-read-command-end-to-end
   "The `read` command shows the sign's message to a character in the room."

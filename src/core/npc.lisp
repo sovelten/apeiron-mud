@@ -31,15 +31,22 @@
                  :documentation "Character property key set when this NPC is defeated"))
   (:documentation "A non-character character that can be fought in the MUD"))
 
-(defmethod object-describe ((obj mud-npc))
-  "Describe an NPC for examine/inventory output."
+(defmethod object-short-description ((obj mud-npc))
+  "Bright red for NPCs, name and ID only — no HP or description."
+  (bright-red (format nil "~A (ID: ~D)" (object-name obj) (object-id obj))))
+
+(defmethod object-long-description ((obj mud-npc))
+  "Describe an NPC for examine output: name, HP, and description."
   (if (npc-defeated-p obj)
       (format nil "~A (defeated)"
               (bright-red (format nil "~A (ID: ~D)" (object-name obj) (object-id obj))))
-      (format nil "~A ~A — ~A"
-              (bright-red (format nil "~A (ID: ~D)" (object-name obj) (object-id obj)))
-              (yellow (format nil "[HP: ~D/~D]" (npc-hp obj) (npc-max-hp obj)))
-              (object-description obj))))
+      (let ((base (bright-red (format nil "~A (ID: ~D) [HP: ~D/~D]"
+                                      (object-name obj) (object-id obj)
+                                      (npc-hp obj) (npc-max-hp obj))))
+            (desc (object-description obj)))
+        (if (plusp (length desc))
+            (format nil "~A~%~A" base desc)
+            base))))
 
 (defun new-npc (&key name description hp max-hp attack-min attack-max
                       defeat-message victory-flag)

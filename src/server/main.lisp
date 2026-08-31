@@ -191,7 +191,7 @@ disconnected during the flow."
                ;; objects (reconnected characters).  Then place in the starting room.
                (create-object! world character)
                (place-character! world character)
-               (mud-write session (object-describe (object-location character)))
+               (mud-write session (object-long-description (object-location character)))
                (mud-write session "Welcome to the MUD!")
 
                (let ((char-name (object-name character)))

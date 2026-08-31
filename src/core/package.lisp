@@ -114,7 +114,8 @@
    #:object-id
    #:object-name
    #:object-description
-   #:object-describe
+   #:object-short-description
+   #:object-long-description
    #:object-location
    #:object-aliases
    #:object-keywords

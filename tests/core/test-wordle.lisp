@@ -513,10 +513,10 @@
       (is (search "tell <puzzle>" help))
       (is (search "Colour guide" help)))))
 
-(test wordle-object-describe-color
-  "Object-describe identifies wordle puzzles"
+(test wordle-object-short-description-color
+  "Object-short-description identifies wordle puzzles"
   (let ((puzzle (make-test-puzzle :target-word "crane")))
-    (let ((desc (object-describe puzzle)))
+    (let ((desc (object-short-description puzzle)))
       (is (search "a test wordle board" desc))
       (is (search (write-to-string (object-id puzzle)) desc)))))
 

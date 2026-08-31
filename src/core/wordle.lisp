@@ -278,7 +278,7 @@ on the same date.
 Each puzzle instance also tracks its own leaderboard of registered (non-guest)
 accounts — number of plays and correct solves."))
 
-(defmethod object-describe ((obj mud-wordle-puzzle))
+(defmethod object-short-description ((obj mud-wordle-puzzle))
   "Magenta for Wordle puzzles."
   (magenta (format nil "~A (ID: ~D)" (object-name obj) (object-id obj))))
 
