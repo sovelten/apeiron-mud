@@ -70,8 +70,9 @@ and reachability queries can run on top of the plain room/connection data."))
 
 (defmethod print-object ((area mud-area) stream)
   (print-unreadable-object (area stream :type t)
-    (format stream "~A (~D rooms, ~D connections)~@[ — entrance: ~A~]"
+    (format stream "~A (ID: ~D) (~D rooms, ~D connections)~@[ — entrance: ~A~]"
             (object-name area)
+            (object-id area)
             (area-room-count area)
             (area-connection-count area)
             (and (area-entrance area) (object-name (area-entrance area))))))
