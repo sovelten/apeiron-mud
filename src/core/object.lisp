@@ -31,13 +31,28 @@
                :documentation "Extensible property storage"))
   (:documentation "Base class for all MUD objects"))
 
-(defgeneric object-describe (obj)
+(defgeneric object-short-description (obj)
   (:documentation
-   "Get a description of an object with type-based ANSI coloring.
+   "Get a short description of an object — just enough to identify it in a
+listing (room contents, inventory, worn items).  Short descriptions never
+include the object's description text, worn items, or other verbose detail.
 Specialized methods on subclasses provide appropriate coloring.")
   (:method ((obj mud-object))
     "Default: no color."
     (format nil "~A (ID: ~D)" (object-name obj) (object-id obj))))
+
+(defgeneric object-long-description (obj)
+  (:documentation
+   "Get a long description of an object for detailed examination: its name,
+description slot (when non-empty), and any type-specific detail such as
+worn items or hit points.  Room listings use OBJECT-SHORT-DESCRIPTION
+instead.")
+  (:method ((obj mud-object))
+    "Default: name/ID plus the description slot when non-empty."
+    (let ((desc (object-description obj)))
+      (if (plusp (length desc))
+          (format nil "~A~%~A" (object-short-description obj) desc)
+          (object-short-description obj)))))
 
 (defgeneric object-set-property (obj property-name value)
   (:documentation

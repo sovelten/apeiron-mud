@@ -29,7 +29,7 @@
   ()
   (:documentation "A room object that can rename and re-describe the room it occupies."))
 
-(defmethod object-describe ((obj mud-decorator))
+(defmethod object-short-description ((obj mud-decorator))
   "Magenta for decorators, so they stand out from plain objects."
   (magenta (format nil "~A (ID: ~D)" (object-name obj) (object-id obj))))
 

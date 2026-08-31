@@ -5,7 +5,7 @@
 (test object-creation
   "Test that we can create basic objects"
   (let ((obj (apeiron.core:new-object :name "Test Object")))
-    (is (stringp (apeiron.core:object-describe obj)))
+    (is (stringp (apeiron.core:object-short-description obj)))
     (is (equal (apeiron.core:object-name obj) "Test Object"))))
 
 (test object-properties

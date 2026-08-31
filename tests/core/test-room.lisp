@@ -172,7 +172,7 @@
         "From room-b, synonyms should be 's'")))
 
 (test mixed-exits-description
-  "Test that object-describe for a room with mixed exits shows proper formatting."
+  "Test that object-long-description for a room with mixed exits shows proper formatting."
   (let* ((world (new-world))
          (hub (new-room :name "Central Hub"))
          (forest (new-room :name "Puzzling Forest"))
@@ -191,7 +191,7 @@
     (connect-rooms! world hub cave
                     :to "tunnel" :from "entrance"
                     :blocked t)
-    (let ((desc (object-describe hub)))
+    (let ((desc (object-long-description hub)))
       (is (search "puzzling forest (pf)" desc)
           "Custom direction should show with synonym in parens (downcased)")
       (is (search "(e)ast" desc)

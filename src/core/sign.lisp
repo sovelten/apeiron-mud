@@ -12,7 +12,7 @@
 Built on READABLE-MIXIN, so the HANDLE-READ method defined there displays
 the message to any character that reads the sign."))
 
-(defmethod object-describe ((obj mud-sign))
+(defmethod object-short-description ((obj mud-sign))
   "Yellow for signs."
   (yellow (format nil "~A (ID: ~D)" (object-name obj) (object-id obj))))
 

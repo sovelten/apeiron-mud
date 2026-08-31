@@ -204,20 +204,20 @@ limb is reported."
                                 (car (find sword worn :key #'cdr))))))))
 
 (test describe-shows-worn-items
-  "OBJECT-DESCRIBE of a character lists worn/held items."
+  "OBJECT-LONG-DESCRIPTION of a character lists worn/held items."
   (let ((char (make-test-character))
         (hat (make-hat)))
     (give char hat)
     (apeiron.core:wear char hat)
-    (let ((text (apeiron.core:object-describe char)))
+    (let ((text (apeiron.core:object-long-description char)))
       (is (search "Wearing/holding:" text))
       (is (search "wizard hat" (string-downcase text)))
       (is (search "head" (string-downcase text))))))
 
 (test describe-plain-when-nothing-worn
-  "OBJECT-DESCRIBE of a bare character has no equipment section."
+  "OBJECT-LONG-DESCRIPTION of a bare character has no equipment section."
   (let ((char (make-test-character)))
-    (let ((text (apeiron.core:object-describe char)))
+    (let ((text (apeiron.core:object-long-description char)))
       (is (not (search "Wearing/holding:" text))))))
 
 ;; ─── Command-level tests ───────────────────────────────────────────────────

@@ -24,8 +24,9 @@ room is not part of any area."))
 one area (see ROOM-AREA); its exits are the union of the area's connections
 incident to it and its own CONNECTIONS list (see ROOM-EXIT-CONNECTIONS)."))
 
-(defmethod object-describe ((obj mud-room))
-  "Get a full description of a room including contents and exits."
+(defmethod object-long-description ((obj mud-room))
+  "Get a full description of a room including contents and exits.
+Contents are listed with their short descriptions."
   (let ((contents (container-all-objects obj))
         (exits (room-exit-list obj)))
     (format nil "~%~A~%~A~%~A~%~{~A~%~}~%~A~{~A~^, ~}~%"
@@ -35,9 +36,9 @@ incident to it and its own CONNECTIONS list (see ROOM-EXIT-CONNECTIONS)."))
             (object-description obj)
             ;; "You see:" header
             (bold-white "You see:")
-            ;; Contents — color-coded by type
+            ;; Contents — short descriptions, color-coded by type
             (mapcar (lambda (obj)
-                      (format nil "  - ~A" (object-describe obj)))
+                      (format nil "  - ~A" (object-short-description obj)))
                     contents)
             ;; "Exits:" header
             (bold-white "Exits: ")
