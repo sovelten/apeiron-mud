@@ -390,6 +390,7 @@
    #:world
    #:eval-allowed-p
    #:create-object!
+   #:copy-object!
 
    ;; Event system
    #:mud-event

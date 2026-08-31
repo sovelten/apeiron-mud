@@ -58,8 +58,9 @@ connection."))
   (print-unreadable-object (conn stream :type t)
     (let ((ra (connection-room-a conn))
           (rb (connection-room-b conn)))
-      (format stream "~A~@[ — ~A:~A <-> ~A:~A~]~@[ [BLOCKED]~]~@[ [ONE-WAY]~]"
+      (format stream "~A (ID: ~D)~@[ — ~A:~A <-> ~A:~A~]~@[ [BLOCKED]~]~@[ [ONE-WAY]~]"
               (object-name conn)
+              (object-id conn)
               (and ra rb (object-name ra))
               (and ra (direction-primary (connection-direction-a conn)))
               (and rb (object-name rb))
