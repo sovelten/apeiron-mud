@@ -12,7 +12,7 @@
   player-facing command layer. The full API of this package is
   generated automatically in the manual's API reference."""
   (new-world function)
-  (world-parser function)
+  (world-parser generic-function)
   (world-add-object! function)
   (connect-rooms! generic-function)
   (place-character! function)

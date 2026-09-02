@@ -17,7 +17,7 @@
   (handle-command generic-function)
   (split-command function)
   (process-command function)
-  (world-parser function)
+  (world-parser generic-function)
   (me function)
   (here function)
   (world function)
