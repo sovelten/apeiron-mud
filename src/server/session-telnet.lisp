@@ -312,34 +312,53 @@ Returns NIL if the connection is rejected as non-telnet traffic
     ;; server to proactively offer MSSP, not wait for DO MSSP.
     (when mssp-info-fn
       (%setup-telnet-mssp protocol mssp-info-fn))
-    (let* ((conn (telnet:make-telnet-connection usocket :protocol protocol)))
-      ;; Validate that the client is actually speaking telnet, not HTTP/TLS/etc.
-      (unless (telnet-validate-connection conn :timeout 1.5)
-        (log-message "Rejected non-telnet connection on plain-text port")
-        (usocket:socket-close usocket)
-        (return-from new-telnet-session nil))
-      ;; Install START_TLS upgrade callback if requested
-      (when start-tls
-        (setf (telnet:telnet-conn-tls-upgrade-fn conn)
-              (let ((cert certificate)
-                    (key key)
-                    (pwd password))
-                (lambda ()
-                  (handler-case
-                      (progn
-                        (telnet:telnet-start-tls conn
-                                                 :certificate cert
-                                                 :key key
-                                                 :password pwd)
-                        (log-message
-                         "Connection upgraded to TLS via START_TLS"))
-                    (telnet:telnet-tls-error (e)
-                      (log-error
-                       "START_TLS upgrade failed: ~A"
-                       (telnet:telnet-error-message e))))))))
-      (%make-telnet-session conn
-                            :remote-address remote-addr
-                            :mssp-info-fn mssp-info-fn))))
+    (let ((conn (telnet:make-telnet-connection usocket :protocol protocol))
+          (keep-open nil))
+      ;; UNWIND-PROTECT guarantees that on ANY non-local exit before we
+      ;; hand CONN to a live session (validation rejection, unexpected
+      ;; error mid-validation, etc.) the whole telnet-connection is
+      ;; closed — the usocket AND the dup'd binary-stream FDs.  Without
+      ;; this, a probe that half-connects and then errors (instead of
+      ;; cleanly returning NIL) would leak 2 FDs for the process life.
+      (unwind-protect
+           (progn
+             ;; Validate that the client is actually speaking telnet,
+             ;; not HTTP/TLS/etc.
+             (unless (telnet-validate-connection conn :timeout 1.5)
+               (log-message "Rejected non-telnet connection on plain-text port")
+               ;; TELNET-CONNECTION-CLOSE closes the WHOLE connection —
+               ;; MAKE-TELNET-CONNECTION dup'd the socket FD for the
+               ;; binary streams and only TELNET-CONNECTION-CLOSE
+               ;; releases those dup'd FDs.  (Idempotent; also safe when
+               ;; TELNET-VALIDATE-CONNECTION already closed CONN after
+               ;; detecting HTTP/TLS/RDP probes.)
+               (return-from new-telnet-session nil))
+             ;; Install START_TLS upgrade callback if requested
+             (when start-tls
+               (setf (telnet:telnet-conn-tls-upgrade-fn conn)
+                     (let ((cert certificate)
+                           (key key)
+                           (pwd password))
+                       (lambda ()
+                         (handler-case
+                             (progn
+                               (telnet:telnet-start-tls conn
+                                                        :certificate cert
+                                                        :key key
+                                                        :password pwd)
+                               (log-message
+                                "Connection upgraded to TLS via START_TLS"))
+                           (telnet:telnet-tls-error (e)
+                             (log-error
+                              "START_TLS upgrade failed: ~A"
+                              (telnet:telnet-error-message e))))))))
+             (let ((session (%make-telnet-session conn
+                                                  :remote-address remote-addr
+                                                  :mssp-info-fn mssp-info-fn)))
+               (setf keep-open t)
+               session))
+        (unless keep-open
+          (telnet:telnet-connection-close conn))))))
 
 (defun new-telnet-tls-session (usocket &key certificate key password mssp-info-fn)
   "Create a new telnet-session with immediate TLS encryption from an
@@ -356,20 +375,31 @@ the server state (e.g. NAME, PLAYERS, UPTIME).
 
 Returns NIL if the connection is rejected as non-telnet traffic
 (e.g., HTTP-over-TLS on the secure port)."
-  (let* ((remote-addr (usocket-address-string usocket))
-         (conn (telnet:make-telnet-tls-connection usocket
-                                                  :certificate certificate
-                                                  :key key
-                                                  :password password)))
-    ;; Validate that the TLS client is actually speaking telnet, not HTTP/etc.
-    (unless (telnet-validate-connection conn :timeout 1.5)
-      (log-message "Rejected non-telnet TLS connection on secure port")
-      (usocket:socket-close usocket)
-      (return-from new-telnet-tls-session nil))
-    (let ((session (%make-telnet-session conn
-                                         :remote-address remote-addr
-                                         :mssp-info-fn mssp-info-fn)))
-      session)))
+  (let* ((remote-addr (usocket-address-string usocket)))
+    (let ((conn (telnet:make-telnet-tls-connection usocket
+                                                   :certificate certificate
+                                                   :key key
+                                                   :password password))
+          (keep-open nil))
+      ;; Same UNWIND-PROTECT guarantee as NEW-TELNET-SESSION: an
+      ;; unexpected error between conn creation and session handoff
+      ;; must not leak the dup'd SSL/binary-stream FDs.
+      (unwind-protect
+           (progn
+             ;; Validate that the TLS client is actually speaking
+             ;; telnet, not HTTP/etc.
+             (unless (telnet-validate-connection conn :timeout 1.5)
+               (log-message "Rejected non-telnet TLS connection on secure port")
+               ;; Close the WHOLE telnet-connection — the dup'd
+               ;; SSL/binary stream FDs are only released here.
+               (return-from new-telnet-tls-session nil))
+             (let ((session (%make-telnet-session conn
+                                                  :remote-address remote-addr
+                                                  :mssp-info-fn mssp-info-fn)))
+               (setf keep-open t)
+               session))
+        (unless keep-open
+          (telnet:telnet-connection-close conn))))))
 
 (defun new-telnet-session-with-start-tls (usocket &key certificate key password
                                                         mssp-info-fn)

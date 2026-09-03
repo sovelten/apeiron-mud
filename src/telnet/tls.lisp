@@ -83,6 +83,19 @@ WAIT: fd-stream buffers are not used here — SSL has its own buffering."
   #-(or sbcl ccl ecl)
   (error "telnet tls: unsupported Lisp implementation for TLS."))
 
+(defun %dup-socket-bidi-stream (fd)
+  "Dup FD and create a bidirectional binary stream over the dup'd fd.
+
+If the dup succeeds but stream creation fails, the dup'd FD is closed
+explicitly before re-signalling — otherwise the raw fd integer has no
+stream object to close it and leaks for the lifetime of the process."
+  (let ((dup-fd (sb-posix:dup fd)))
+    (handler-case
+        (%make-binary-bidi-stream dup-fd)
+      (error (e)
+        (ignore-errors (sb-posix:close dup-fd))
+        (error e)))))
+
 ;;; ----------------------------------------------------------------
 ;;; Direct TLS — dedicated TLS port
 ;;; ----------------------------------------------------------------
@@ -105,7 +118,7 @@ On handshake failure, a telnet-tls-error is signalled."
          ;; socket-close at teardown; the dup'd fd is used by the SSL
          ;; layer.  A single bidirectional stream is required because the
          ;; SSL BIO layer needs a single transport for TLS records.
-         (plain-stream (%make-binary-bidi-stream (sb-posix:dup fd)))
+         (plain-stream (%dup-socket-bidi-stream fd))
          (ssl-stream
            (handler-case
                (cl+ssl:make-ssl-server-stream
@@ -158,7 +171,7 @@ only the underlying byte streams are replaced with SSL-wrapped streams."
     (unless fd
       (error 'telnet-tls-error
              :message "Cannot upgrade to TLS: no socket FD available."))
-    (let* ((plain-stream (%make-binary-bidi-stream (sb-posix:dup fd)))
+    (let* ((plain-stream (%dup-socket-bidi-stream fd))
            (ssl-stream
              (handler-case
                  (cl+ssl:make-ssl-server-stream

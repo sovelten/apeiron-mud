@@ -109,6 +109,14 @@ endpoints are different streams.")
     :initform t
     :accessor telnet-connection-alive-p
     :documentation "NIL when the connection has been closed or lost.")
+   (closed-p
+    :initform nil
+    :accessor telnet-connection-closed-p
+    :documentation "T once TELNET-CONNECTION-CLOSE has run.  Idempotency
+guard: ALIVE-P may be cleared earlier by an EOF/error path (so I/O stops)
+without the OS resources having been released yet; CLOSED-P records that
+the streams/usocket were actually closed, so a second close call is a
+no-op while a first close after EOF still releases the FDs.")
    (tls-upgrade-fn
     :initform nil
     :accessor telnet-conn-tls-upgrade-fn
@@ -179,35 +187,58 @@ or usocket:socket-connect.
 When PROTOCOL is provided, it is used instead of creating a fresh
 telnet-protocol instance.  This is useful for pre-configuring option
 handlers (e.g. registering the START_TLS option)."
-  (let* ((fd (%socket-fd usocket))
-         (in-fd  (sb-posix:dup fd))
-         (out-fd (sb-posix:dup fd))
-         (in-stream  (%make-binary-fd-stream in-fd  :input t :output nil))
-         (out-stream
-           (handler-case
-               (%make-binary-fd-stream out-fd :input nil :output t)
-             (error (e)
-               ;; If the second stream creation fails, close the first
-               ;; dup'd fd so it doesn't leak.
-               (ignore-errors (close in-stream))
-               (error e))))
-         (conn (make-instance 'telnet-connection
-                              :usocket usocket
-                              :raw-stream in-stream
-                              :out-stream out-stream
-                              :protocol protocol)))
-    ;; Perform initial option negotiation
-    (let ((out-stream (telnet-conn-out-stream conn))
-          (init-cmds (telnet-init-negotiation protocol)))
-      (dolist (cmd init-cmds)
+  ;; NOTE ON LEAKS: each accepted socket costs 3 FDs here — the original
+  ;; socket FD held by the usocket, plus two sb-posix:dup'd FDs wrapped
+  ;; in binary streams.  %MAKE-BINARY-FD-STREAM takes ownership of the
+  ;; fd it is handed, so on success the streams own in-fd/out-fd and the
+  ;; telnet-connection owns everything.  If any allocation step fails,
+  ;; however, a raw dup'd fd (a plain integer at that point) has no
+  ;; stream object to close it, so we must close it explicitly below.
+  (let* ((fd (%socket-fd usocket)))
+    (let (in-fd out-fd in-stream out-stream conn)
+      (flet ((cleanup-and-reraise (e)
+               ;; Close whatever raw dup'd FDs were allocated but not yet
+               ;; wrapped in a stream (or whose stream creation failed).
+               (when (and in-fd (not (streamp in-fd)))
+                 (ignore-errors (sb-posix:close in-fd)))
+               (when (and out-fd (not (streamp out-fd)))
+                 (ignore-errors (sb-posix:close out-fd)))
+               ;; Close any streams that were created before the failure.
+               (when in-stream (ignore-errors (close in-stream)))
+               (when out-stream (ignore-errors (close out-stream)))
+               (error e)))
         (handler-case
-            (write-sequence cmd out-stream)
-          (stream-error (e)
-            (declare (ignore e))
-            (setf (telnet-connection-alive-p conn) nil)
-            (return-from make-telnet-connection conn))))
-      (force-output out-stream))
-    conn))
+            (progn
+              (setf in-fd (sb-posix:dup fd))
+              (setf out-fd (sb-posix:dup fd))
+              (setf in-stream (%make-binary-fd-stream in-fd :input t :output nil)
+                    in-fd nil)         ; ownership passed to in-stream
+              (setf out-stream (%make-binary-fd-stream out-fd
+                                                       :input nil :output t)
+                    out-fd nil)        ; ownership passed to out-stream
+              (setf conn (make-instance 'telnet-connection
+                                        :usocket usocket
+                                        :raw-stream in-stream
+                                        :out-stream out-stream
+                                        :protocol protocol))
+              ;; Perform initial option negotiation
+              (let ((out-stream (telnet-conn-out-stream conn))
+                    (init-cmds (telnet-init-negotiation protocol)))
+                (dolist (cmd init-cmds)
+                  (handler-case
+                      (write-sequence cmd out-stream)
+                    (stream-error (e)
+                      (declare (ignore e))
+                      (setf (telnet-connection-alive-p conn) nil)
+                      (return-from make-telnet-connection conn))))
+                (force-output out-stream))
+              conn)
+          (error (e)
+            ;; A failure anywhere between the dups and the completed conn
+            ;; leaves raw dup'd FDs (plain integers) or partially-created
+            ;; streams; CLEANUP-AND-RERAISE closes whatever is still
+            ;; owned here.
+            (cleanup-and-reraise e)))))))
 
 (defun telnet-validate-connection (conn &key (timeout 1.5))
   "Validate that a newly created telnet connection is not receiving
@@ -827,8 +858,27 @@ Returns T on success, NIL if the connection was lost."
 ;;; ----------------------------------------------------------------
 
 (defun telnet-connection-close (conn)
-  "Close the telnet connection gracefully."
-  (when (telnet-connection-alive-p conn)
+  "Close the telnet connection gracefully and release its OS resources.
+
+Releases the accepted socket (via the usocket) and the dup'd binary
+streams created by MAKE-TELNET-CONNECTION / MAKE-TELNET-TLS-CONNECTION.
+This is the ONLY place those resources are closed, so it must run even
+when the connection was already marked dead (ALIVE-P NIL — e.g. after a
+read observed EOF or a write hit a stream error).  Those paths clear
+ALIVE-P as a way of saying \"no more I/O\", but the underlying file
+descriptors still have to be released here; SBCL does not close
+fd-streams at GC time, so skipping this step leaks 3 FDs (the accepted
+socket + the two dup'd stream FDs) for the life of the process.
+
+Idempotent (guarded by CLOSED-P), and deliberately leaves the (closed)
+stream objects in their slots: after a quit/disconnect mid-game-loop the
+game loop keeps polling, and reads against a closed stream object raise
+a stream error that terminates the session thread.  If we nulled the
+slots instead, %INPUT-READY-P would call LISTEN on NIL, which returns
+NIL forever, so the session thread would spin on :TIMEOUT and
+STOP-MUD-SERVER would hang joining it."
+  (unless (telnet-connection-closed-p conn)
+    (setf (telnet-connection-closed-p conn) t)
     (setf (telnet-connection-alive-p conn) nil)
     (handler-case
         (progn
