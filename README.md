@@ -55,6 +55,12 @@ telnet localhost 8888
 
 ### Example Session
 
+> **Note:** the in-game `eval` command is restricted. Only characters
+> owned by an **admin** account, or characters wearing an object with
+> both the `hat` and `wizard` keywords (a "wizard hat"), may use it.
+> 
+> 
+
 Using eval to create a room and connect it:
 
 ```

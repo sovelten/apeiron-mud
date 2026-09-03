@@ -1,12 +1,18 @@
 # Regenerate the Apeiron HTML documentation and publish it to GitHub Pages,
 # using the maintained 40ants actions (same ones 40ants libraries use).
 #
+# The main branch is protected (changes must go through a pull request), so
+# the README regeneration happens on the PR branch instead of the action
+# pushing it back to main after the merge:
+#
 #  1. 40ants/setup-lisp installs Roswell + SBCL + Qlot, installs the qlfile
 #     dependencies, and loads the apeiron-docs system.
 #  2. 40ants/build-docs runs the docs-builder: it renders the HTML manual
-#     into docs/build/, regenerates README.md from the @readme section,
-#     uploads the site to the gh-pages branch, and pushes README changes
-#     back to the current branch.
+#     into output.dir, regenerates README.md from the @readme section, and
+#     on pushes to main/master uploads the site to the gh-pages branch.
+#  3. On pull requests the action builds the docs but deliberately skips its
+#     upload step; a follow-up step commits the regenerated README.md back to
+#     the PR branch, so it merges to main together with the change.
 #
 # One-time setup: Settings -> Pages -> Source -> "Deploy from a branch"
 # -> gh-pages.
@@ -15,6 +21,8 @@ name: Docs
 
 on:
   push:
+    branches: [main, master]
+  pull_request:
     branches: [main, master]
   workflow_dispatch:
 
@@ -27,7 +35,11 @@ jobs:
     env:
       LISP: sbcl-bin
     steps:
+      # On pull requests we build the actual PR head (not the merge commit)
+      # so the regenerated README can be pushed back onto the PR branch.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
       - name: Setup Common Lisp Environment
         uses: 40ants/setup-lisp@v4
@@ -39,3 +51,35 @@ jobs:
         with:
           asdf-system: apeiron-docs
           error-on-warnings: false
+
+      # On pull requests the 40ants action builds the docs (which regenerates
+      # README.md in the checkout) but deliberately skips its own upload step,
+      # so we commit the regenerated files back onto the PR branch here. When
+      # the PR is merged, the README update lands on main together with the
+      # change that caused it. Only possible for PRs whose head branch lives
+      # in this repository; fork PRs are validated only, no auto-commit.
+      - name: Push regenerated README to the PR branch
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "actions@github.com"
+
+          # Stage whatever docs-builder changed, but never commit qlfile or
+          # workflow updates made by the tooling itself.
+          git add -u
+          git reset -- qlfile*
+          git reset -- .github/workflows
+
+          if git diff --cached --quiet; then
+            echo "No generated changes; README.md already up to date."
+            exit 0
+          fi
+
+          git commit -m "Update docs"
+          git push "https://${{ github.actor }}:$GITHUB_TOKEN@github.com/${{ github.repository }}" "HEAD:${{ github.head_ref }}"
