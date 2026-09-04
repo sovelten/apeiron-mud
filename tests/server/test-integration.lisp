@@ -256,3 +256,134 @@ eval command (or wearing a wizard hat)."
       (when client-conn (telnet:telnet-connection-close client-conn))
       (when client-socket (usocket:socket-close client-socket))
       (apeiron.server:stop-mud-server))))
+
+(defun %make-tls-cert (temp-dir)
+  "Generate a throwaway self-signed cert+key pair with openssl.
+Returns (values cert-path key-path), or signals an error if openssl
+is not available.  Tests that need TLS must call this."
+  (let* ((cert-path (merge-pathnames "cert.pem" temp-dir))
+         (key-path (merge-pathnames "key.pem" temp-dir)))
+    (ensure-directories-exist temp-dir)
+    (multiple-value-bind (stdout stderr exit)
+        (uiop:run-program
+         (list "openssl" "req" "-x509"
+               "-newkey" "rsa:2048"
+               "-keyout" (namestring key-path)
+               "-out" (namestring cert-path)
+               "-days" "1"
+               "-nodes"
+               "-subj" "/CN=localhost/O=MUD-Test")
+         :output nil
+         :ignore-error-status t)
+      (declare (ignore stdout stderr))
+      (unless (= exit 0)
+        (error "openssl cert generation failed with exit ~A" exit))
+      (values (namestring cert-path) (namestring key-path)))))
+
+(defun %make-tls-client-connection (tls-port)
+  "Connect a TLS client to TLS-PORT and wrap it in a telnet-connection.
+The returned connection speaks RFC 854 telnet over an encrypted
+cl+ssl client stream — the same setup a real MUD client (tintin++,
+Mudlet) uses for direct-TLS connections.  Returns (values conn
+client-socket ssl-stream)."
+  (let* ((client-socket (usocket:socket-connect "127.0.0.1" tls-port))
+         (ssl-stream (cl+ssl:make-ssl-client-stream
+                      (usocket:socket-stream client-socket)
+                      :verify nil))
+         (conn (make-instance 'telnet:telnet-connection
+                              :usocket client-socket
+                              :raw-stream ssl-stream
+                              :protocol (make-instance 'telnet:telnet-protocol))))
+    (values conn client-socket ssl-stream)))
+
+(test network-tls-guest-login-integration
+  "Full integration over the dedicated TLS port: a real TLS client
+connects to the secure listener and can complete the guest login flow.
+This exercises accept-tls-connections, the SSL_accept handshake, and
+the telnet login prompt — all over an encrypted stream."
+  (let ((temp-dir (uiop:subpathname (uiop:default-temporary-directory)
+                                    "mud-test-tls-integration/")))
+    (unwind-protect
+         (progn
+           (apeiron.server:stop-mud-server)
+           (multiple-value-bind (cert-path key-path)
+               (%make-tls-cert temp-dir)
+             ;; Exercise the documented keyword-arg API: start-mud-server
+             ;; should use the :tls-certificate/:tls-key it was given for
+             ;; every accepted connection.  (run-mud.lisp happens to set
+             ;; the package globals as well, but the keyword API must not
+             ;; silently depend on that.)
+             (is (apeiron.server:start-mud-server
+                  :host "127.0.0.1" :port 0
+                  :tls-port 0
+                  :tls-certificate cert-path
+                  :tls-key key-path))
+             (let* ((tls-port (usocket:get-local-port
+                               apeiron.server::*server-tls-socket*))
+                    (client-socket nil)
+                    (ssl-stream nil)
+                    (client-conn nil))
+               (unwind-protect
+                    (progn
+                      ;; Connect a real TLS client
+                      (setf (values client-conn client-socket ssl-stream)
+                            (%make-tls-client-connection tls-port))
+                      (is (not (null client-conn))
+                          "TLS client telnet connection created")
+
+                      ;; Wait for handshake + negotiation to settle
+                      (sleep 0.5)
+
+                      ;; Server should present the login prompt over TLS
+                      (multiple-value-bind (line status)
+                          (telnet:telnet-read-line client-conn :timeout 10)
+                        (declare (ignore status))
+                        (is (not (null line))
+                            "Server should send the login prompt over TLS")
+                        (when line
+                          (is (search "Choose:" line)
+                              (format nil "Prompt should say Choose:, got: ~A" line))))
+
+                      ;; Choose guest
+                      (telnet:telnet-write-string client-conn "g")
+
+                      ;; Server should ask for a name
+                      (multiple-value-bind (line status)
+                          (telnet:telnet-read-line client-conn :timeout 10)
+                        (declare (ignore status))
+                        (is (not (null line)))
+                        (when line
+                          (is (equal line "What is your name?"))))
+
+                      ;; Send the guest name and expect the greeting
+                      (telnet:telnet-write-string client-conn "TlsGuestPlayer")
+                      (sleep 0.2)
+                      (let ((greeting-found nil))
+                        (loop
+                          (multiple-value-bind (line status)
+                              (telnet:telnet-read-line client-conn :timeout 2)
+                            (declare (ignore status))
+                            (unless line (return))
+                            (when (search "Welcome" line)
+                              (setf greeting-found t)
+                              (return))))
+                        (is (not (null greeting-found))
+                            "Guest should be welcomed into the world over TLS")))
+
+                 ;; Cleanup
+                 (when client-conn
+                   (ignore-errors (telnet:telnet-connection-close client-conn)))
+                 (when ssl-stream
+                   (ignore-errors (close ssl-stream)))
+                 (when client-socket
+                   (ignore-errors (usocket:socket-close client-socket)))
+                 (apeiron.server:stop-mud-server)
+                 ;; Restore the TLS configuration globals so later tests
+                 ;; that start the server without TLS args don't inherit
+                 ;; this test's cert/key.
+                 (setf apeiron.server:*server-ssl-certificate* nil
+                       apeiron.server:*server-ssl-key* nil)))))
+      (ignore-errors
+        (uiop:delete-directory-tree temp-dir
+                                    :validate (constantly t)
+                                    :if-does-not-exist :ignore)))))

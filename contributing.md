@@ -54,6 +54,8 @@ This connects everything together (telnet, core, persistency, worlds) to build l
 We value functional programming design, therefore:
 * Avoid sharing global mutable state.
 * Prefer passing down values as arguments rather than referring to a global variable
+* Often the best solution is the one that adds no code.
+* Deleting code (while keeping functionality) is better than adding code.
 
 ### Separation of Concerns
 
