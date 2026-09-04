@@ -56,47 +56,6 @@ is an SSL stream returned by cl+ssl."
       (and class (typep (telnet-conn-raw-stream conn) class)))))
 
 ;;; ----------------------------------------------------------------
-;;; Internal: create a bidirectional binary stream on a socket FD
-;;; ----------------------------------------------------------------
-
-(defun %make-binary-bidi-stream (fd)
-  "Create a bidirectional binary (unsigned-byte 8) stream on FD.
-Unlike the dup-based approach in connection.lisp (which creates
-separate input and output streams for full-duplex line discipline),
-this creates a single stream for both directions — required by the
-SSL BIO layer in cl+ssl, which needs a single transport for the
-bidirectional TLS record layer.
-
-WAIT: fd-stream buffers are not used here — SSL has its own buffering."
-  #+sbcl
-  (sb-sys:make-fd-stream fd
-                          :input t :output t
-                          :element-type '(unsigned-byte 8)
-                          :buffering :full
-                          :name "telnet-tls-bidi-stream")
-  #+ccl
-  (ccl:make-fd-stream fd :direction :io
-                       :element-type '(unsigned-byte 8))
-  #+ecl
-  (ext:make-stream-from-fd fd :direction :io
-                           :element-type '(unsigned-byte 8))
-  #-(or sbcl ccl ecl)
-  (error "telnet tls: unsupported Lisp implementation for TLS."))
-
-(defun %dup-socket-bidi-stream (fd)
-  "Dup FD and create a bidirectional binary stream over the dup'd fd.
-
-If the dup succeeds but stream creation fails, the dup'd FD is closed
-explicitly before re-signalling — otherwise the raw fd integer has no
-stream object to close it and leaks for the lifetime of the process."
-  (let ((dup-fd (sb-posix:dup fd)))
-    (handler-case
-        (%make-binary-bidi-stream dup-fd)
-      (error (e)
-        (ignore-errors (sb-posix:close dup-fd))
-        (error e)))))
-
-;;; ----------------------------------------------------------------
 ;;; Direct TLS — dedicated TLS port
 ;;; ----------------------------------------------------------------
 
@@ -112,25 +71,23 @@ this call.  On success, the returned telnet-connection is ready for use
 with all standard telnet I/O functions; all traffic is encrypted.
 
 On handshake failure, a telnet-tls-error is signalled."
-  (let* ((fd (%socket-fd usocket))
-         ;; Dup the fd so the SSL stream owns its own fd, independent of
-         ;; the usocket's internal stream.  The usocket is kept only for
-         ;; socket-close at teardown; the dup'd fd is used by the SSL
-         ;; layer.  A single bidirectional stream is required because the
-         ;; SSL BIO layer needs a single transport for TLS records.
-         (plain-stream (%dup-socket-bidi-stream fd))
+  (let* ((socket-stream (usocket:socket-stream usocket))
+         ;; Pass the usocket's stream directly to cl+ssl.  With the
+         ;; default unwrap-stream-p=T, cl+ssl extracts the native FD
+         ;; from the stream via stream-fd and calls ssl-set-fd — the
+         ;; Lisp stream itself is never read from; OpenSSL uses the raw
+         ;; FD through its own socket BIO.  Duplicating the FD was
+         ;; unnecessary and caused the handshake to hang because the
+         ;; dup'd fd-stream was disconnected from the socket that
+         ;; usocket's accept had set up.
          (ssl-stream
            (handler-case
                (cl+ssl:make-ssl-server-stream
-                plain-stream
+                socket-stream
                 :certificate certificate
                 :key key
-                :password password
-                :close-callback (lambda (s)
-                                  (declare (ignore s))
-                                  (ignore-errors (close plain-stream))))
+                :password password)
              (error (e)
-               (ignore-errors (close plain-stream))
                (error 'telnet-tls-error
                       :message (format nil "TLS handshake failed: ~A" e))))))
     (let* ((protocol (make-instance 'telnet-protocol))
@@ -167,27 +124,22 @@ encrypted.  Signals telnet-tls-error on failure.
 This is an in-place upgrade: the same telnet-connection object is used;
 only the underlying byte streams are replaced with SSL-wrapped streams."
   (let* ((usocket (telnet-conn-usocket conn))
-         (fd (when usocket (%socket-fd usocket))))
-    (unless fd
+         (socket-stream (when usocket (usocket:socket-stream usocket))))
+    (unless socket-stream
       (error 'telnet-tls-error
-             :message "Cannot upgrade to TLS: no socket FD available."))
-    (let* ((plain-stream (%dup-socket-bidi-stream fd))
-           (ssl-stream
-             (handler-case
-                 (cl+ssl:make-ssl-server-stream
-                  plain-stream
-                  :certificate certificate
-                  :key key
-                  :password password
-                  :close-callback (lambda (s)
-                                    (declare (ignore s))
-                                    (ignore-errors (close plain-stream))))
-               (error (e)
-                 (ignore-errors (close plain-stream))
-                 (error 'telnet-tls-error
-                        :message
-                        (format nil "TLS handshake during START_TLS failed: ~A"
-                                e))))))
+             :message "Cannot upgrade to TLS: no socket stream available."))
+    (let ((ssl-stream
+            (handler-case
+                (cl+ssl:make-ssl-server-stream
+                 socket-stream
+                 :certificate certificate
+                 :key key
+                 :password password)
+              (error (e)
+                (error 'telnet-tls-error
+                       :message
+                       (format nil "TLS handshake during START_TLS failed: ~A"
+                               e))))))
       ;; Close the old binary streams (the dup'd FDs)
       (handler-case
           (close (telnet-conn-raw-stream conn))

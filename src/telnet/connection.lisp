@@ -177,7 +177,7 @@ full-duplex socket case where the same stream is read and written)."
 (defun make-telnet-connection (usocket &key (protocol (make-instance 'telnet-protocol)))
   "Create a new telnet-connection from a usocket.
 
-Duplicates the socket FD to create a dedicated binary stream, keeping
+Duplicates the socket FD to create dedicated binary streams, keeping
 the usocket's character stream open only for compatibility (it is
 never read from).  Performs initial RFC 854 option negotiation.
 
@@ -187,13 +187,11 @@ or usocket:socket-connect.
 When PROTOCOL is provided, it is used instead of creating a fresh
 telnet-protocol instance.  This is useful for pre-configuring option
 handlers (e.g. registering the START_TLS option)."
-  ;; NOTE ON LEAKS: each accepted socket costs 3 FDs here — the original
-  ;; socket FD held by the usocket, plus two sb-posix:dup'd FDs wrapped
-  ;; in binary streams.  %MAKE-BINARY-FD-STREAM takes ownership of the
-  ;; fd it is handed, so on success the streams own in-fd/out-fd and the
-  ;; telnet-connection owns everything.  If any allocation step fails,
-  ;; however, a raw dup'd fd (a plain integer at that point) has no
-  ;; stream object to close it, so we must close it explicitly below.
+  ;; Each accepted socket costs 3 FDs: the original held by the usocket
+  ;; (used only for wait-for-input / socket-close) and two dup'd FDs
+  ;; wrapped in separate binary streams for input and output.  Separate
+  ;; in/out streams avoid buffering interactions on SBCL when reads and
+  ;; writes share a single bidirectional fd-stream.
   (let* ((fd (%socket-fd usocket)))
     (let (in-fd out-fd in-stream out-stream conn)
       (flet ((cleanup-and-reraise (e)
