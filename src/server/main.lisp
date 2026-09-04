@@ -406,8 +406,18 @@ connection to TLS in-band."
                 *server-start-time* (get-universal-time))
           (log-message "MUD Server started on ~A:~D" host port)
 
-          ;; Start TLS listener (if certificate configured)
+          ;; Start TLS listener (if certificate configured).
+          ;; Bind the effective TLS material into the package globals the
+          ;; accept loops read per connection, so the keyword-argument API
+          ;; works exactly like setting *server-ssl-certificate* etc. before
+          ;; starting (run-mud.lisp does the latter).  Without this, a server
+          ;; started via
+          ;;   (start-mud-server :tls-certificate "c.pem" :tls-key "k.pem")
+          ;; would accept TLS connections but run SSL_accept with NO
+          ;; certificate, failing every handshake.
           (when (and tls-certificate tls-key)
+            (setf *server-ssl-certificate* tls-certificate
+                  *server-ssl-key* tls-key)
             (handler-case
                 (progn
                   (setf *server-tls-socket*
