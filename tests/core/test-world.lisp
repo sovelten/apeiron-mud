@@ -73,38 +73,31 @@ and it is added to the room's contents."
       ;; Also registered in the world's object index
       (is (eq obj (apeiron.core:world-object-by-id world (apeiron.core:object-id obj)))))))
 
-(test copy-object!-copies-attributes-and-registers
-  "COPY-OBJECT! creates an independent registered copy of an object:
-same name/description/aliases/keywords and a deep copy of properties,
-but a brand-new world-level ID."
+(test copy-object!-registers-copy-with-fresh-id
+  "COPY-OBJECT! registers an independent copy in the world under a
+brand-new world-level ID and returns it.  Attribute/property copy
+semantics are covered by OBJECT-COPY tests."
   (let ((world (apeiron.core:new-world))
         (template (make-instance 'apeiron.core:mud-object
                                  :name "Gold Coin"
                                  :description "A shiny gold coin."
                                  :aliases '("coin" "gold")
                                  :keywords '("coin"))))
-    (apeiron.core:object-set-property template "value" 10)
     (let ((original-id (apeiron.core:object-id
                         (apeiron.core:world-add-object! world template))))
       (let ((copy (apeiron.core:copy-object! world template)))
         (is (typep copy 'apeiron.core:mud-object))
-        (is (equal "Gold Coin" (apeiron.core:object-name copy)))
-        (is (equal "A shiny gold coin." (apeiron.core:object-description copy)))
-        (is (equal '("coin" "gold") (apeiron.core:object-aliases copy)))
-        (is (equal '("coin") (apeiron.core:object-keywords copy)))
+        (is (not (eq template copy)))
         ;; Fresh ID, not the template's
         (is (not (= original-id (apeiron.core:object-id copy))))
         ;; Registered in the world under its own ID
-        (is (eq copy (apeiron.core:world-object-by-id world (apeiron.core:object-id copy))))
-        ;; Properties copied but not shared
-        (is (equal 10 (apeiron.core:object-get-property copy "value")))
-        (apeiron.core:object-set-property copy "value" 99)
-        (is (equal 10 (apeiron.core:object-get-property template "value")))
-        (is (not (eq template copy)))))))
+        (is (eq copy (apeiron.core:world-object-by-id world (apeiron.core:object-id copy))))))))
 
-(test copy-object!-copies-room-and-contents
-  "COPY-OBJECT! on a room copies the room and everything inside it:
-items and NPCs are re-created as fresh objects in the new room."
+(test copy-object!-registers-room-copy-with-contents
+  "COPY-OBJECT! on a room registers a standalone room copy in the world
+(the copy is in WORLD-ROOMS under a fresh ID) and the copy holds fresh
+copies of the original contents.  Deep room-copy semantics are covered
+by OBJECT-COPY tests."
   (let ((world (apeiron.core:new-world))
         (room (apeiron.core:new-room :name "Guard Post"
                                      :description "A cramped guard post."))
@@ -118,8 +111,9 @@ items and NPCs are re-created as fresh objects in the new room."
     (apeiron.core:container-add-object room guard)
     (let ((copy (apeiron.core:copy-object! world room)))
       (is (typep copy 'apeiron.core:mud-room))
-      (is (equal "Guard Post" (apeiron.core:object-name copy)))
       (is (not (eq room copy)))
+      ;; The room copy is registered in the world under its own ID
+      (is (eq copy (apeiron.core:world-room-by-id world (apeiron.core:object-id copy))))
       ;; The copy holds fresh copies of the contents
       (let ((contents (apeiron.core:container-all-objects copy)))
         (is (= 2 (length contents)))
@@ -131,41 +125,8 @@ items and NPCs are re-created as fresh objects in the new room."
           (is (not (null guard-copy)))
           (is (not (eq sword sword-copy)))
           (is (not (eq guard guard-copy)))
-          (is (= 12 (apeiron.core:npc-hp guard-copy)))
           (is (eq copy (apeiron.core:object-location sword-copy)))
           (is (eq copy (apeiron.core:object-location guard-copy))))))))
-
-(test copy-object!-npc-copies-stat-block
-  "COPY-OBJECT! on an NPC copies the stat block (HP, attack range,
-defeat message, victory flag)."
-  (let ((world (apeiron.core:new-world))
-        (guard (apeiron.core:new-npc
-                :name "a cavern guard"
-                :description "A burly guard."
-                :hp 20 :max-hp 20
-                :attack-min 4 :attack-max 8
-                :defeat-message "The guard falls."
-                :victory-flag "beat-guard-1")))
-    (let ((copy (apeiron.core:copy-object! world guard)))
-      (is (typep copy 'apeiron.core:mud-npc))
-      (is (= 20 (apeiron.core:npc-hp copy)))
-      (is (= 20 (apeiron.core:npc-max-hp copy)))
-      (is (= 4 (apeiron.core:npc-attack-min copy)))
-      (is (= 8 (apeiron.core:npc-attack-max copy)))
-      (is (equal "The guard falls." (apeiron.core:npc-defeat-message copy)))
-      (is (equal "beat-guard-1" (apeiron.core:npc-victory-flag copy)))
-      (is (not (eq guard copy))))))
-
-(test copy-object!-sign-copies-message
-  "COPY-OBJECT! on a sign copies its readable message."
-  (let ((world (apeiron.core:new-world))
-        (sign (apeiron.core:new-sign :name "a warning sign"
-                                     :description "A weathered sign."
-                                     :message "Danger: bridge out.")))
-    (let ((copy (apeiron.core:copy-object! world sign)))
-      (is (typep copy 'apeiron.core:mud-sign))
-      (is (equal "Danger: bridge out." (apeiron.core:readable-message copy)))
-      (is (not (eq sign copy))))))
 
 (test world-set-starting-room!
   "Test setting the starting room in world config"

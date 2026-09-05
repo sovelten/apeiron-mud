@@ -15,6 +15,54 @@
     (apeiron.core:container-add-object room obj)
     (is (= 1 (length (apeiron.core:container-contents room))))))
 
+(test object-copy-copies-room-standalone-with-fresh-contents
+  "OBJECT-COPY on a room returns a standalone copy: its own room with
+no connections or area, holding fresh copies of the original contents.
+Player characters are not copied out of the room; the original room is
+left untouched."
+  (let* ((world (new-world))
+         (room (new-room :name "Guard Post"
+                         :description "A cramped guard post."))
+         (other (new-room :name "Barracks"))
+         (sword (make-instance 'mud-object
+                               :name "Rusty Sword" :description "A rusty blade."))
+         (guard (new-npc :name "a guard" :description "A sleepy guard."
+                         :hp 12 :max-hp 12 :attack-min 2 :attack-max 5))
+         (player (make-instance 'mud-character :name "Bob" :session nil)))
+    (world-add-object! world room)
+    (world-add-object! world other)
+    (connect-rooms! world room other :to "north" :from "south")
+    (container-add-object room sword)
+    (container-add-object room guard)
+    (container-add-object room player)
+    (let ((copy (object-copy room)))
+      (is (typep copy 'mud-room))
+      (is (not (eq room copy)))
+      (is (equal "Guard Post" (object-name copy)))
+      ;; Standalone: no exits, no area, unregistered identity.
+      (is (null (room-connections copy)))
+      (is (null (room-area copy)))
+      (is (= -1 (object-id copy)))
+      (is (null (object-location copy)))
+      ;; The copy holds fresh copies of the non-character contents.
+      (let ((contents (container-all-objects copy)))
+        (is (= 2 (length contents)))
+        (let ((sword-copy (find "Rusty Sword" contents
+                                :key #'object-name :test #'string=))
+              (guard-copy (find "a guard" contents
+                                :key #'object-name :test #'string=)))
+          (is (not (null sword-copy)))
+          (is (not (null guard-copy)))
+          (is (not (eq sword sword-copy)))
+          (is (not (eq guard guard-copy)))
+          (is (= 12 (npc-hp guard-copy)))
+          (is (eq copy (object-location sword-copy)))
+          (is (eq copy (object-location guard-copy)))))
+      ;; Original room and its contents are untouched.
+      (is (= 3 (length (container-all-objects room))))
+      (is (member player (container-all-objects room) :test #'eq))
+      (is (not (null (room-connections room)))))))
+
 (test find-character-in-room
   "Test finding a character in a room by name (case-insensitive)"
   (let ((room (apeiron.core:new-room :name "Tavern"))

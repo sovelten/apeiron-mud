@@ -392,7 +392,7 @@ set to ROOM and it is added to ROOM's contents.")
   (:documentation
    "Create a copy of OBJECT, register it in WORLD, and return the copy.")
   (:method ((world mud-world) (object mud-object) &optional room)
-  (let ((copy (object-copy object)))
-    (create-object! world copy room)
-    copy)))
+    (let ((copy (object-copy object)))
+      (create-object! world copy room)
+      copy)))
 

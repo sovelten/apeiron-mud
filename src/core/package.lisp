@@ -126,6 +126,7 @@
    #:object-get-property
    #:object-set-property
    #:object-move
+   #:object-copy
 
    ;; Readable objects
    #:readable-mixin
