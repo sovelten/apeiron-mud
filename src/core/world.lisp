@@ -388,72 +388,11 @@ set to ROOM and it is added to ROOM's contents.")
       (container-add-object room object))
     object))
 
-(defun %copy-object-properties (from to)
-  "Give TO a fresh properties hash table holding a copy of every entry
-of FROM's, so a copy never shares mutable state with the original."
-  (let ((fresh (make-hash-table :test #'equal)))
-    (loop for k being the hash-keys of (object-properties from)
-            using (hash-value v)
-          do (setf (gethash k fresh) v))
-    (setf (object-properties to) fresh)))
-
-(defun %shallow-copy-object (object)
-  "Return a new instance of OBJECT's class whose slots hold the same
-values as OBJECT's — a shallow copy: every bound slot is copied by
-reference, unbound slots stay unbound.  Works for any class, no
-per-class code needed."
-  (let ((copy (allocate-instance (class-of object))))
-    (dolist (slotd (sb-mop:class-slots (class-of object)))
-      (let ((slot-name (sb-mop:slot-definition-name slotd)))
-        (when (slot-boundp object slot-name)
-          (setf (slot-value copy slot-name) (slot-value object slot-name)))))
-    copy))
-
-(defgeneric copy-object! (world object)
+(defgeneric copy-object! (world object &optional room)
   (:documentation
-   "Create a copy of OBJECT, register it in WORLD, and return the copy.
+   "Create a copy of OBJECT, register it in WORLD, and return the copy.")
+  (:method ((world mud-world) (object mud-object) &optional room)
+    (let ((copy (object-copy object)))
+      (create-object! world copy room)
+      copy)))
 
-The copy is a SHALLOW COPY of OBJECT: a new instance of the same class
-whose slots hold the same values, with two identity fixes — the ID is
-reset (so WORLD assigns a brand-new one on registration) and the
-location is cleared (the copy starts unplaced).  The PROPERTIES hash
-table is the one exception to the shallow rule: it is deep-copied so
-copies never share mutable property state.  Registration goes through
-CREATE-OBJECT! so persistent worlds materialize the copy in the
-datastore.
-
-Because the mechanism is a shallow copy plus an ID reset, it works for
-any object class with no per-class code.  When OBJECT is a room, the
-copy is a standalone room (no shared exits or area) holding fresh
-copies of everything that was in it (items, NPCs, signs, ...), copied
-recursively and placed in the new room.  Player characters
-(MUD-CHARACTER) are not copied out of a room, matching WORLD-ADD-AREA!."))
-
-(defmethod copy-object! ((world mud-world) (object mud-object))
-  "Shallow-copy OBJECT, reset its identity, and register it in WORLD.
-Works for every MUD-OBJECT subclass without per-class methods."
-  (let ((copy (%shallow-copy-object object)))
-    ;; Identity fixes: the world assigns a fresh ID, the copy starts
-    ;; unplaced, and properties are deep-copied (the one exception to
-    ;; the shallow rule — see %COPY-OBJECT-PROPERTIES).
-    (setf (object-id copy) -1)
-    (setf (object-location copy) nil)
-    (%copy-object-properties object copy)
-    (create-object! world copy)
-    copy))
-
-(defmethod copy-object! ((world mud-world) (object mud-room))
-  "Copy a room: shallow-copy it like any object, then copy everything
-inside it into the new room.  The copy is standalone — it shares no
-exits or area with the original.  Player characters (MUD-CHARACTER)
-inside are skipped, matching WORLD-ADD-AREA!."
-  (let ((copy (call-next-method)))
-    ;; The shallow copy shares the original's exits, area, and contents
-    ;; list; the new room gets its own empty ones.
-    (setf (room-connections copy) nil)
-    (setf (room-area copy) nil)
-    (setf (container-contents copy) nil)
-    (dolist (contained (copy-list (container-all-objects object)))
-      (unless (typep contained 'mud-character)
-        (container-add-object copy (copy-object! world contained))))
-    copy))

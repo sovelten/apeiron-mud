@@ -72,6 +72,28 @@ instead.")
     (setf (object-keywords obj)
           (remove k (object-keywords obj) :test #'string-equal))))
 
+(defun %copy-object-properties (from to)
+  "Give TO a fresh properties hash table holding a copy of every entry
+of FROM's, so a copy never shares mutable state with the original."
+  (let ((fresh (make-hash-table :test #'equal)))
+    (loop for k being the hash-keys of (object-properties from)
+            using (hash-value v)
+          do (setf (gethash k fresh) v))
+    (setf (object-properties to) fresh)))
+
+(defgeneric object-copy (object)
+  (:documentation "Returns a copy of object with id set to -1 and location to nil")
+  (:method (object)
+    (let ((copy (allocate-instance (class-of object))))
+      (dolist (slotd (sb-mop:class-slots (class-of object)))
+        (let ((slot-name (sb-mop:slot-definition-name slotd)))
+          (when (slot-boundp object slot-name)
+            (setf (slot-value copy slot-name) (slot-value object slot-name)))))
+      (setf (object-id copy) -1)
+      (setf (object-location copy) nil)
+      (%copy-object-properties object copy)
+      copy)))
+
 (defun new-object (&key (name "object") (location nil)
                      (description "") (aliases nil) (keywords nil))
   "Create a new MUD object.  KEYWORDS control which body slots the object

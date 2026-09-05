@@ -205,3 +205,19 @@ character has FLAG.  MESSAGE is shown when they try to pass."
     (object-set-property room
                          (format nil "gate-~A-message" (string-downcase exit-direction))
                          message)))
+
+(defmethod object-copy ((object mud-room))
+  "Copy a room: shallow-copy it like any object, then copy everything
+inside it into the new room.  The copy is standalone — it shares no
+exits or area with the original.  Player characters (MUD-CHARACTER)
+inside are skipped, matching WORLD-ADD-AREA!."
+  (let ((copy (call-next-method)))
+    ;; The shallow copy shares the original's exits, area, and contents
+    ;; list; the new room gets its own empty ones.
+    (setf (room-connections copy) nil)
+    (setf (room-area copy) nil)
+    (setf (container-contents copy) nil)
+    (dolist (contained (container-all-objects object))
+      (unless (typep contained 'mud-character)
+        (container-add-object copy (object-copy contained))))
+    copy))
