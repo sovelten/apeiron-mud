@@ -330,7 +330,7 @@ limb is reported."
                      (make-instance 'apeiron.core:stream-session
                                     :stream (make-string-output-stream)
                                     :use-colors nil)
-                     :owner "persist-wearer-owner"))
+                     :account "persist-wearer-owner"))
          (hat (make-hat)))
     (apeiron.core:create-object! world character)
     (apeiron.core:create-object! world hat)
@@ -343,7 +343,7 @@ limb is reported."
     (bknr.datastore:close-store)
     ;; Restart
     (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
-           (restored (apeiron.core:find-character-by-owner
+           (restored (apeiron.core:find-character-by-account
                       new-world "persist-wearer-owner")))
       (is (not (null restored))
           "Owned character should survive the restart")

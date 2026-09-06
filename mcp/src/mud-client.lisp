@@ -415,11 +415,18 @@ Returns a string suitable for display to the user."
 
 ;; ─── Public: listen for unsolicited MUD output ──────────────────
 
-(defun listen-for-activity (&key (timeout 60) (idle-timeout 1.0) (callback nil))
+(defun listen-for-activity (&key (timeout 60) (idle-timeout 1.0) (callback nil)
+                                  (stop-condition nil))
   "Read from the MUD connection without sending a command.
 
 Blocks until the MUD sends output (another player speaks, enters the
 room, etc.) or TIMEOUT seconds elapse with no activity.
+
+STOP-CONDITION, when non-NIL, is a zero-argument function called on
+each iteration of the listen loop.  When it returns T, the function
+exits immediately with :STOPPED — even when the deadline has not been
+reached.  This allows external code (e.g. an HTTP server shutdown) to
+interrupt a long-running listen without waiting for the full timeout.
 
 When CALLBACK is a function, it is called with each non-empty chunk of
 output text as it arrives (\"streaming mode\").  The function returns
@@ -445,6 +452,10 @@ to wait for and react to in-game events."
         (deadline (+ (get-internal-real-time)
                      (* timeout internal-time-units-per-second))))
     (loop
+      ;; Check the external stop condition before anything else.
+      (when (and stop-condition (funcall stop-condition))
+        (return-from listen-for-activity :stopped))
+
       (let ((remaining (/ (- deadline (get-internal-real-time))
                           internal-time-units-per-second)))
         (when (<= remaining 0)

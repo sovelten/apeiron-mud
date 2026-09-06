@@ -243,14 +243,29 @@ systems, which re-runs DEFINE-PERSISTENT-CLASSES and redefines the
 persistent classes from *PERSISTENT-CLASS-REGISTRY* whenever that file
 changed.
 
+After the reload, pending *data migrations* (see RUN-DATA-MIGRATIONS)
+are applied.  The runner is data-driven — it iterates the migration
+registry — so adding a new migration in the future never requires
+changing this function.  (Note that a migration whose code ships in this
+very reload cannot be run by an OLD safe-update that is already loaded;
+that is why RUN-DATA-MIGRATIONS also runs from
+WORLD-RESTORE-OR-INITIALIZE whenever a datastore is opened by current
+code.)
+
 A second snapshot is taken only when the persistent class schemas
 actually changed — the situation BKNR warns about ('class ~A has been
-changed ... please snapshot your datastore') — so the new schema is
-persisted.  When no class changed, the first snapshot is still current
-and the redundant second snapshot is skipped."
+changed ... please snapshot your datastore') — or when data migrations
+ran — so the new schema and migrated data are persisted.  When neither
+happened, the first snapshot is still current and the redundant second
+snapshot is skipped."
   (sync-world)
   (let ((before (persistent-class-schemas)))
     (reload-apeiron)
+    ;; Newly loaded code may register new data migrations — run whatever is
+    ;; now pending.  Data-driven: no per-migration edits needed here ever.
+    (let ((world (get-persistent-world)))
+      (when world
+        (run-data-migrations world)))
     (when (classes-changed-since-p before)
       (log-message "Persistent class definitions changed — snapshotting datastore for schema evolution.")
       (sync-world))))
@@ -374,7 +389,14 @@ that returns a transient MUD-WORLD) is called to produce the transient
 world, which is then materialized into persistence.  Defaults to
 `DEFAULT-TRANSIENT-WORLD`.
 
-When FORCE-NEW is true any existing store data is wiped first."
+When FORCE-NEW is true any existing store data is wiped first.
+
+An existing datastore is upgraded to the current data format by
+RUN-DATA-MIGRATIONS before guest cleanup or index population, so
+migrated slot values are authoritative for everything downstream (e.g.
+account-owned characters whose data was written under an older slot
+name are not mistaken for guests and dropped).  A fresh world is stamped
+with the latest migration version at creation."
   (when force-new
     (log-message "Forcing new world, clearing existing datastore…")
     (when (and (boundp 'bknr.datastore:*store*) bknr.datastore:*store*)
@@ -387,7 +409,10 @@ When FORCE-NEW is true any existing store data is wiped first."
   (let ((world (get-persistent-world)))
     (if world
         (progn
-          ;; Guest characters (no owner) don't survive crashes or
+          ;; Upgrade an existing datastore to the current data format
+          ;; BEFORE anything reads the data (guest cleanup, indexing).
+          (run-data-migrations world)
+          ;; Guest characters (no account) don't survive crashes or
           ;; restarts — remove them via world-remove-object! which
           ;; handles its own transaction and destroyed-object guards.
           (let ((guests (remove-if-not
@@ -426,6 +451,10 @@ When FORCE-NEW is true any existing store data is wiped first."
           world)
         (let* ((transient (funcall initializer))
                (world (materialize-world transient)))
+          ;; A fresh world is created by current code: stamp it as already
+          ;; at the latest data format so no migrations run against it.
+          (bknr.datastore:with-transaction ("init-data-version")
+            (setf (current-data-version world) (latest-data-version)))
           (sync-world)
           (when *debug-mode*
             (log-message "New world created from transient and persisted."))

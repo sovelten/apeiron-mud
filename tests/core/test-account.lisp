@@ -15,7 +15,7 @@
     (is (equal "test@example.com" (account-email account)))
     (is (null (account-admin account))
         "Admin should default to NIL")))
-    ;; No account-character slot — only character has owner reference
+    ;; No account-character slot — only character has account reference
 
 ;; ─── Password hashing ───────────────────────────────────────────────────────
 
@@ -219,24 +219,24 @@ existed still works (admin defaults to NIL)."
 
 ;; ─── Character-account association ──────────────────────────────────────────
 
-(test character-owner-association
+(test character-account-association
   "Test that a character is properly linked to its owning account"
   (let* ((session (make-instance 'stream-session
                                  :stream (make-string-output-stream)))
          (account (register-account "CharOwner" "password"))
-         (character (new-character "Hero" session :owner (account-name account))))
-    (is (equal "CharOwner" (character-owner character))
-        "Character owner should be the account name")
+         (character (new-character "Hero" session :account (account-name account))))
+    (is (equal "CharOwner" (character-account character))
+        "Character account should be the account name")
     (is (eq session (character-session character))
         "Character session should still be set")))
 
-(test guest-character-no-owner
-  "Test that guest characters have no owner"
+(test guest-character-no-account
+  "Test that guest characters have no account"
   (let* ((session (make-instance 'stream-session
                                  :stream (make-string-output-stream)))
          (character (new-character "Guest42" session)))
-    (is (null (character-owner character))
-        "Guest character should have no owner")))
+    (is (null (character-account character))
+        "Guest character should have no account")))
 
 ;; ─── Password masking ───────────────────────────────────────────────────────
 

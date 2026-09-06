@@ -89,7 +89,8 @@
                 ((:file "package")
                  (:file "store")
                  (:file "registry" :depends-on ("store"))
-                 (:file "persistent-world" :depends-on ("registry"))))))
+                 (:file "migrations" :depends-on ("registry"))
+                 (:file "persistent-world" :depends-on ("registry" "migrations"))))))
 
 (defsystem "apeiron/worlds"
   :version "0.0.1"

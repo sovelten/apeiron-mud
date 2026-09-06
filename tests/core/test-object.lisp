@@ -120,3 +120,33 @@ defeat message, victory flag) into a fresh NPC."
       (is (equal "beat-guard-1" (apeiron.core:npc-victory-flag copy)))
       (is (= -1 (apeiron.core:object-id copy)))
       (is (null (apeiron.core:object-location copy))))))
+
+(test object-creation-metadata-defaults
+  "Every new object gets a CREATED-AT universal-time stamp; OWNER and
+CREATOR default to NIL."
+  (let ((obj (apeiron.core:new-object :name "Stamped")))
+    (is (integerp (apeiron.core:object-created-at obj)))
+    (is (<= (apeiron.core:object-created-at obj) (get-universal-time)))
+    (is (null (apeiron.core:object-owner obj)))
+    (is (null (apeiron.core:object-creator obj)))))
+
+(test object-copy-resets-creation-metadata
+  "OBJECT-COPY produces a brand-new object: CREATED-AT is re-stamped at
+copy time, and OWNER / CREATOR are cleared (a copy does not inherit the
+original's creation provenance)."
+  (let* ((old-time (- (get-universal-time) 1000))
+         (original (make-instance 'apeiron.core:mud-object
+                                  :name "Template"
+                                  :created-at old-time
+                                  :owner "someone"
+                                  :creator "someone")))
+    (let ((copy (object-copy original)))
+      (is (>= (apeiron.core:object-created-at copy) old-time))
+      (is (not (= old-time (apeiron.core:object-created-at copy)))
+          "Copy should get a fresh created-at, not the original's")
+      (is (null (apeiron.core:object-owner copy)))
+      (is (null (apeiron.core:object-creator copy)))
+      ;; Original metadata untouched.
+      (is (= old-time (apeiron.core:object-created-at original)))
+      (is (equal "someone" (apeiron.core:object-owner original)))
+      (is (equal "someone" (apeiron.core:object-creator original))))))

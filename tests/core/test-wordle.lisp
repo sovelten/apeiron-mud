@@ -727,11 +727,11 @@
 ;; ─── Leaderboard stats recording during gameplay
 
 (test wordle-handle-tell-solved-records-stat
-  "Solving a puzzle records a stat for a registered (owner) character"
+  "Solving a puzzle records a stat for a registered (account) character"
   (let* ((session (make-instance 'stream-session
                                  :stream (make-string-output-stream)
                                  :use-colors nil))
-         (character (new-character "TestCharacter" session :owner "TestAccount"))
+         (character (new-character "TestCharacter" session :account "TestAccount"))
          (puzzle (make-test-puzzle :target-word "crane"))
          (room (new-room :name "test"))
          captured-messages)
@@ -753,11 +753,11 @@
           (setf (fdefinition 'character-send-message) old)))))
 
 (test wordle-handle-tell-failed-records-stat
-  "Failing a puzzle records a stat for a registered (owner) character"
+  "Failing a puzzle records a stat for a registered (account) character"
   (let* ((session (make-instance 'stream-session
                                  :stream (make-string-output-stream)
                                  :use-colors nil))
-         (character (new-character "TestCharacter" session :owner "TestAccount"))
+         (character (new-character "TestCharacter" session :account "TestAccount"))
          (puzzle (make-test-puzzle :target-word "crane" :max-guesses 1))
          (room (new-room :name "test"))
          captured-messages)
@@ -779,11 +779,11 @@
           (setf (fdefinition 'character-send-message) old)))))
 
 (test wordle-handle-tell-guest-not-recorded
-  "Guest characters (no owner) do NOT get recorded on the leaderboard"
+  "Guest characters (no account) do NOT get recorded on the leaderboard"
   (let* ((session (make-instance 'stream-session
                                  :stream (make-string-output-stream)
                                  :use-colors nil))
-         (character (new-character "Guest" session :owner nil))
+         (character (new-character "Guest" session :account nil))
          (puzzle (make-test-puzzle :target-word "crane"))
          (room (new-room :name "test"))
          captured-messages)
@@ -804,7 +804,7 @@
   (let* ((session (make-instance 'stream-session
                                  :stream (make-string-output-stream)
                                  :use-colors nil))
-         (character (new-character "TestCharacter" session :owner "TestAccount"))
+         (character (new-character "TestCharacter" session :account "TestAccount"))
          (puzzle (make-test-puzzle :target-word "crane"))
          (room (new-room :name "test"))
          captured-messages)

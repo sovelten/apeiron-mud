@@ -68,6 +68,15 @@
 indices, and return the object."
   (when (eq -1 (object-id object)) ;; Only set if unset
     (setf (object-id object) (world-gen-id! world)))
+  ;; If a player command is responsible for registering this object (e.g.
+  ;; an in-game `eval` calling CREATE-OBJECT!), record the acting player
+  ;; as its creator.  *CURRENT-PLAYER* is bound to the character during
+  ;; command handling (see HANDLE-COMMAND); it is NIL at world boot,
+  ;; during login, and in tests that register objects directly, so those
+  ;; objects keep CREATOR NIL.  Only fill when no creator is set yet, so
+  ;; re-registering an existing object never overwrites its creator.
+  (when (and *current-player* (null (object-creator object)))
+    (setf (object-creator object) *current-player*))
   ;; Register in world's objects hash table
   (setf (gethash (object-id object) (world-objects world)) object)
   ;; Also register in rooms hash table if it's a room
@@ -162,11 +171,11 @@ it does not assign IDs or index into world tables."
       (container-add-object room character))
     character))
 
-(defun find-character-by-owner (world account-name)
+(defun find-character-by-account (world account-name)
   "Find a character in the world owned by ACCOUNT-NAME (a string), or NIL."
   (loop for char being the hash-values of (world-characters world)
-        when (and (character-owner char)
-                  (string-equal (character-owner char) account-name))
+        when (and (character-account char)
+                  (string-equal (character-account char) account-name))
         return char))
 
 (defun world-total-characters (world)
@@ -219,14 +228,14 @@ removal.  Used when removing guest characters."
 
 (defun world-remove-character! (world character)
   "Remove a character from the world.
-Owned characters (with a non-nil OWNER) are displaced from their room
-but kept in world indices. Guest characters (no owner) are completely
-removed: their worn and carried items are first dropped into the room
-(see DROP-CHARACTER-ITEMS!), then the character is removed from the
-indices and destroyed."
+Account-owned characters (with a non-nil ACCOUNT) are displaced from their
+room but kept in world indices. Guest characters (no account) are
+completely removed: their worn and carried items are first dropped into
+the room (see DROP-CHARACTER-ITEMS!), then the character is removed from
+the indices and destroyed."
   (let ((name (object-name character)))
-    (if (character-owner character)
-        ;; Owned: stay in world indices
+    (if (character-account character)
+        ;; Account-owned: stay in world indices
         (progn
           (displace-character! character)
           (log-message "~A displaced from world" name))

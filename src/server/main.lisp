@@ -107,7 +107,7 @@ disconnected during the flow."
                     (%login-ask session "Choose a character name:" :default account-name)
                   (when (eq char-status :abort)
                     (return (values nil nil)))
-                  (let ((character (new-character char-name session :owner (account-name account))))
+                  (let ((character (new-character char-name session :account (account-name account))))
                     (return (values character account)))))
             (error (e)
               (mud-write session (format nil "~A" e)))))))))
@@ -139,7 +139,7 @@ disconnected during the flow."
         (let ((account (authenticate-account account-name account-password)))
           (if account
               (let* ((world (apeiron.persistence:get-persistent-world))
-                     (existing-char (find-character-by-owner world (account-name account))))
+                     (existing-char (find-character-by-account world (account-name account))))
                 (mud-write session (format nil "Welcome back, ~A!" (bright-green (account-name account))))
                 (if existing-char
                     (progn
@@ -162,7 +162,7 @@ disconnected during the flow."
                         (%login-ask session "Choose a character name:" :default (account-name account))
                       (when (eq char-status :abort)
                         (return (values nil nil)))
-                      (let ((character (new-character char-name session :owner (account-name account))))
+                      (let ((character (new-character char-name session :account (account-name account))))
                         (return (values character account))))))
               (mud-write session "Invalid account name or password.")))))))
 
@@ -200,8 +200,8 @@ disconnected during the flow."
                    (log:with-ndc (ndc)
                      (log-message "New connection: ~A~:[ (guest)~; (account: ~A)~]"
                                   char-name
-                                  (character-owner character)
-                                  (character-owner character))
+                                  (character-account character)
+                                  (character-account character))
 
                      ;; ─── Game loop ────────────────────────────────────────
                      (handler-case

@@ -10,6 +10,17 @@
   (:use #:cl
         #:apeiron.core
         #:apeiron.core.utils)
+  ;; Documentation (40ANTS-DOC): same lightweight core used by
+  ;; apeiron.core so DEFSECTION forms in migrations.lisp compile.
+  (:import-from #:40ants-doc
+                #:defsection
+                #:section)
+  (:import-from #:40ants-doc/locatives
+                #:variable
+                #:macro
+                #:generic-function)
+  (:import-from #:pythonic-string-reader
+                #:pythonic-string-syntax)
   ;; LIMB is referenced unqualified by persistent-world.lisp (the limb
   ;; migration).  Declaring it a shadowing import of APEIRON.CORE:LIMB
   ;; keeps the package's LIMB symbol identical to the core one even when
@@ -49,6 +60,13 @@
    #:open-mud-store
    #:safe-update
    #:sync-world
+
+   ;; Versioned data migrations
+   #:define-data-migration
+   #:register-data-migration
+   #:run-data-migrations
+   #:current-data-version
+   #:latest-data-version
 
    ;; World persistence
    #:initial-world

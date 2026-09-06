@@ -348,3 +348,25 @@ by OBJECT-COPY tests."
       ;; No match returns empty list
       (is (null (apeiron.core:world-objects-matching world "Axe")))
       (is (null (apeiron.core:world-objects-matching world ""))))))
+
+(test create-object!-stamps-creator-from-current-player
+  "CREATE-OBJECT! records the acting player as the object's creator when
+*CURRENT-PLAYER* is bound (the in-game eval command binds it during a
+player's command), and leaves CREATOR NIL outside a player context."
+  (let* ((world (apeiron.core:new-world))
+         (session (make-instance 'apeiron.core:stream-session
+                                 :stream (make-string-output-stream)))
+         (player (apeiron.core:new-character "Builder" session)))
+    ;; Register the player character first, so world lookup works.
+    (apeiron.core:create-object! world player)
+    (let ((obj (apeiron.core:new-object :name "Vase")))
+      ;; Outside a player context: creator stays NIL.
+      (apeiron.core:create-object! world obj)
+      (is (null (apeiron.core:object-creator obj)))
+      (is (integerp (apeiron.core:object-created-at obj)))
+      ;; Inside a *CURRENT-PLAYER* binding: the player is the creator.
+      (let ((obj2 (apeiron.core:new-object :name "Built Vase")))
+        (let ((apeiron.core:*current-player* player))
+          (apeiron.core:create-object! world obj2))
+        (is (eq player (apeiron.core:object-creator obj2)))
+        (is (integerp (apeiron.core:object-created-at obj2)))))))

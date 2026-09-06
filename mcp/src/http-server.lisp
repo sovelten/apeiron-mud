@@ -239,9 +239,14 @@ Routes based on HTTP method:
                       (when (mud-connected-p)
                         ;; Got the connection — enter the listen loop.
                         ;; send-command coordinates via *mud-connection-lock*.
+                        ;; stop-condition checks *http-acceptor* so the
+                        ;; listen exits promptly when stop-http-server is
+                        ;; called, instead of blocking for the full timeout.
                         (listen-for-activity
-                         :timeout (* 24 3600)
+                         :timeout 1800
                          :idle-timeout 1.0
+                         :stop-condition
+                         (lambda () (null *http-acceptor*))
                          :callback
                          (lambda (text status)
                            (handler-case
