@@ -28,7 +28,22 @@
    (properties :initarg :properties
                :accessor object-properties
                :initform (make-hash-table :test #'equal)
-               :documentation "Extensible property storage"))
+               :documentation "Extensible property storage")
+   (created-at :initarg :created-at
+               :accessor object-created-at
+               :initform (get-universal-time)
+               :documentation "Universal time when this object was created.")
+   (owner :initarg :owner
+          :accessor object-owner
+          :initform nil
+          :documentation "Owner of this object (e.g. a player or account name),
+or NIL when the object is unowned.  Reserved for future use.")
+   (creator :initarg :creator
+            :accessor object-creator
+            :initform nil
+            :documentation "The player (character) that created this object,
+or NIL when it was created by the world/author.  Filled in automatically by
+CREATE-OBJECT! when a player command (e.g. eval) creates the object."))
   (:documentation "Base class for all MUD objects"))
 
 (defgeneric object-short-description (obj)
@@ -91,6 +106,12 @@ of FROM's, so a copy never shares mutable state with the original."
             (setf (slot-value copy slot-name) (slot-value object slot-name)))))
       (setf (object-id copy) -1)
       (setf (object-location copy) nil)
+      ;; A copy is a new object: it gets its own creation timestamp and no
+      ;; inherited owner/creator.  If the copy is later registered via
+      ;; COPY-OBJECT! / CREATE-OBJECT!, the creator is stamped then.
+      (setf (object-created-at copy) (get-universal-time))
+      (setf (object-owner copy) nil)
+      (setf (object-creator copy) nil)
       (%copy-object-properties object copy)
       copy)))
 

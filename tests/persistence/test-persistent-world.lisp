@@ -420,7 +420,7 @@ accounts.dat, with no character-slot link needed."
                   (account (register-account "SurvivorPlayer" "s3cr3t!"
                                              :email "survivor@test.com"))
                   (character (new-character "SurvivorHero" session
-                                            :owner (account-name account))))
+                                            :account (account-name account))))
              ;; Use create-object! + place-character! (what handle-client does)
              (create-object! world character)
              (place-character! world character)
@@ -432,7 +432,7 @@ accounts.dat, with no character-slot link needed."
                  "Character name should be set")
              (is (= 1 (world-total-characters world))
                  "World should have one character before restart")
-             (is-true (character-owner character)
+             (is-true (character-account character)
                       "Character should have an owner before restart"))
 
            ;; ---- Phase 2: Simulate service restart ----------------------
@@ -464,7 +464,7 @@ accounts.dat, with no character-slot link needed."
              (is (equal "SurvivorHero" (object-name (first restored-chars)))
                  "Character name should be preserved after restart")
              (is (equal "SurvivorPlayer"
-                        (character-owner (first restored-chars)))
+                        (character-account (first restored-chars)))
                  "Character owner should be preserved after restart")
 
              ;; Character is in BKNR as a persistent-character
@@ -495,11 +495,11 @@ character with its name, owner, location, and index membership intact."
                   (account (register-account "CrashHero" "p4ssw0rd!"
                                              :email "crash@test.com"))
                   (character (new-character "CrashTestDummy" session
-                                            :owner (account-name account))))
+                                            :account (account-name account))))
              (create-object! world character)
              (place-character! world character)
              (is (equal "CrashTestDummy" (object-name character)))
-             (is-true (character-owner character))
+             (is-true (character-account character))
              (is (= 1 (world-total-characters world))))
 
            ;; ---- Phase 2: Simulate crash (close without sync) ----------
@@ -521,7 +521,7 @@ character with its name, owner, location, and index membership intact."
              (let ((c (first restored-chars)))
                (is (equal "CrashTestDummy" (object-name c))
                    "Character name should survive a crash")
-               (is (equal "CrashHero" (character-owner c))
+               (is (equal "CrashHero" (character-account c))
                    "Character owner should survive a crash")
                (is (not (null (object-location c)))
                    "Character location should survive a crash"))))
@@ -544,11 +544,11 @@ deleted during world restore — only owned characters survive a crash."
          (progn
            (let* ((world (apeiron.persistence:world-restore-or-initialize :force-new t))
                   (character (new-character "GuestCrashTest" session
-                                            :owner nil)))
+                                            :account nil)))
              (create-object! world character)
              (place-character! world character)
              (is (= 1 (world-total-characters world)))
-             (is (null (character-owner character))))
+             (is (null (character-account character))))
 
            ;; Simulate crash — no sync
            (bknr.datastore:close-store)
@@ -687,6 +687,42 @@ deleted during world restore — only owned characters survive a crash."
                (is (eq restored-pracinha
                        (apeiron.core:room-exit-target restored-entrada "south"))
                    "Connection must survive the restart")))))
+    ;; ---- Cleanup ----------------------------------------------------
+    (ignore-errors
+     (when (boundp 'bknr.datastore:*store*)
+       (ignore-errors (bknr.datastore:close-store))
+       (makunbound 'bknr.datastore:*store*)))))
+
+(test creation-metadata-persists-across-restart
+  "CREATED-AT / OWNER / CREATOR recorded on an object survive a BKNR
+snapshot + close-store + reopen cycle."
+  (unwind-protect
+       (let* ((session (make-instance 'stream-session
+                                      :stream (make-string-output-stream)))
+              (player (new-character "Builder" session :account "builder-acct"))
+              (obj (new-object :name "persist-creation-meta")))
+         (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
+           ;; Register the player first, then create the object inside a
+           ;; player context so CREATE-OBJECT! stamps CREATOR.
+           (create-object! world player)
+           (let ((apeiron.core:*current-player* player))
+             (create-object! world obj))
+           (is (typep obj 'persistent-object))
+           (is-true (object-created-at obj))
+           (is (eq player (object-creator obj)))
+           ;; Snapshot + restart.
+           (apeiron.persistence:sync-world)
+           (bknr.datastore:close-store)
+           (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
+                  (restored (world-object-by-id new-world (object-id obj))))
+             (is-true restored "Object should be found after restart")
+             (is (= (object-created-at obj) (object-created-at restored))
+                 "CREATED-AT should survive the restart")
+             (is (eq (character-by-id new-world (object-id player))
+                     (object-creator restored))
+                 "CREATOR (a persistent character) should survive the restart")
+             (is (null (object-owner restored))
+                 "OWNER stays NIL unless set"))))
     ;; ---- Cleanup ----------------------------------------------------
     (ignore-errors
      (when (boundp 'bknr.datastore:*store*)

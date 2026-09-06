@@ -23,10 +23,10 @@ so HAND-LIMB-P can distinguish holding from wearing."
 of LIMB objects (see EQUIPMENT).  Each limb's CONTAINER-CONTENTS holds what
 is currently worn/held there.  On persistent characters the limbs are
 materialized into the datastore so their contents persist.")
-   (owner :initarg :owner
-          :accessor character-owner
-          :initform nil
-          :documentation "The name (string) of the mud-account that owns this character.
+   (account :initarg :account
+            :accessor character-account
+            :initform nil
+            :documentation "The name (string) of the mud-account that owns this character.
 NIL for guest characters.  Stored as a plain string so it survives
 BKNR restarts without needing an object reference."))
   (:documentation "A character in the MUD"))
@@ -50,11 +50,11 @@ to CHARACTER's inventory.
 Returns (values item limb), where limb is the limb it was removed from, or
 (values nil nil) if OBJECT was not equipped."))
 
-(defun new-character (name session &key owner)
+(defun new-character (name session &key account)
   (let ((character (make-instance 'mud-character
                                   :name name
                                   :session session
-                                  :owner owner)))
+                                  :account account)))
     ;; Link character to session (one-way: session knows its character)
     (setf (session-character session) character)
     character))
@@ -102,10 +102,10 @@ in limb order."
 
 (defun character-admin-p (character)
   "Return T if CHARACTER's owning account is an administrator.
-Guest characters (no owner) are never administrators."
-  (let ((owner (character-owner character)))
-    (and owner
-         (let ((account (find-account owner)))
+Guest characters (no account) are never administrators."
+  (let ((account-name (character-account character)))
+    (and account-name
+         (let ((account (find-account account-name)))
            (and account (account-admin account))))))
 
 (defun character-wearing-keywords-p (character keywords)
@@ -188,4 +188,4 @@ and any worn/held items."
                         worn))))))
 
 (defun guest? (character)
-  (null (character-owner character)))
+  (null (character-account character)))

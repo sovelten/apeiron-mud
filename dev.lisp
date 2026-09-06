@@ -1,5 +1,5 @@
-(ql:quickload :cl-mcp)
-(cl-mcp:start-http-server :port 3000)
+;; (ql:quickload :cl-mcp)
+;; (cl-mcp:start-http-server :port 3000)
 
 ;; Register this directory with ASDF so it finds our .asd files regardless
 ;; of Quicklisp's local-projects cache or symlinks.

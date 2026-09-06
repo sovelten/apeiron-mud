@@ -220,6 +220,15 @@ sound made by CHARACTER's worn items (so the mover can hear it too)."
 (defvar *eval-character* nil
   "Bound to the current player character during eval command execution.")
 
+(defvar *current-player* nil
+  "Bound to the player character whose command is currently being handled.
+Dynamic: when a command handler runs (see HANDLE-COMMAND) it is set to the
+acting character, so code that runs during a player's command — including
+the in-game `eval` command — can tell which player caused an object to be
+created.  CREATE-OBJECT! uses this to record the object's CREATOR.  NIL
+outside any command context (world boot, login flow, tests that call
+CREATE-OBJECT! directly).")
+
 (defvar *eval-location* nil
   "Bound to the current character's location during eval command execution.")
 
@@ -683,7 +692,9 @@ directly to reuse the plain first-token split."
 (defmethod handle-command ((parser mud-parser) input player world)
   "Default command processing: split INPUT into a command name and raw
 args, look up the handler in *COMMANDS*, and run it.  Honors the
-character's session color preference by binding *COLORIZE*.
+character's session color preference by binding *COLORIZE*, and binds
+*CURRENT-PLAYER* to the acting character so object creation during a
+command (e.g. eval) records the player as creator.
 
 Returns whatever the command handler returns (usually NIL)."
   (declare (ignore parser))
@@ -703,7 +714,8 @@ Returns whatever the command handler returns (usually NIL)."
 
     (let ((handler (gethash command *commands*)))
       (if handler
-          (let ((*colorize* (session-use-colors (character-session player))))
+          (let ((*current-player* player)
+                (*colorize* (session-use-colors (character-session player))))
             (handler-case
                 (funcall handler world player args)
               (error (e)

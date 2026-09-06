@@ -117,6 +117,9 @@
    #:object-short-description
    #:object-long-description
    #:object-location
+   #:object-created-at
+   #:object-owner
+   #:object-creator
    #:object-aliases
    #:object-keywords
    #:add-keyword
@@ -300,7 +303,7 @@
    #:mud-character
    #:new-character
    #:character-session
-   #:character-owner
+   #:character-account
    #:character-limbs
    #:wear
    #:unequip
@@ -364,7 +367,7 @@
    #:characters
    #:find-character-in-room
    #:characters-in-room
-   #:find-character-by-owner
+   #:find-character-by-account
    #:world-broadcast
    #:world-object-by-id
    #:world-object-with-name
@@ -384,6 +387,7 @@
    #:process-command
    #:announce-movement
    #:*eval-character*
+   #:*current-player*
    #:me
    #:*eval-location*
    #:here

@@ -689,9 +689,9 @@ Only accounts with at least one play are shown."
          (character-send-message speaker display)
          (when (or (eq result-code :solved) (eq result-code :failed))
            ;; Record leaderboard stats for registered (non-guest) accounts
-           (let ((owner (character-owner speaker)))
-             (when owner
-               (wordle-leaderboard-record! puzzle owner result-code)))
+           (let ((account-name (character-account speaker)))
+             (when account-name
+               (wordle-leaderboard-record! puzzle account-name result-code)))
            ;; Broadcast result to the room
            (let* ((room (object-location speaker))
                   (guesses (wordle-character-guesses-list puzzle (object-name speaker)))

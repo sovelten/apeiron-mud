@@ -228,7 +228,7 @@ parser) dispatch on that parser object."
                         "Admin"
                         (make-instance 'stream-session
                                        :stream (make-string-output-stream))
-                        :owner (account-name admin-account))))
+                        :account (account-name admin-account))))
       (is (character-admin-p admin-char))
       (is (eval-allowed-p admin-char)))))
 
@@ -241,7 +241,7 @@ parser) dispatch on that parser object."
                      "AdminChar"
                      (make-instance 'apeiron.core:stream-session
                                     :stream (make-string-output-stream))
-                     :owner (apeiron.core:account-name account)))
+                     :account (apeiron.core:account-name account)))
          (captured-messages '()))
     (apeiron.core:world-add-object! world room)
     (apeiron.core:world-set-starting-room! world room)
@@ -259,6 +259,38 @@ parser) dispatch on that parser object."
              (apeiron.core:process-command world character "eval (+ 3 4)")
              (is (equal '("7") captured-messages)))
         (setf (fdefinition 'apeiron.core:character-send-message) original-send-message)))))
+
+(test command-processing-eval-creates-object-with-creator
+  "Eval that registers a new object through CREATE-OBJECT! stamps the
+acting player as the object's creator (via the *CURRENT-PLAYER* binding
+set up by HANDLE-COMMAND), while objects created by world boot (no
+player context) keep creator NIL."
+  (let* ((world (apeiron.core:new-world))
+         (account (apeiron.core:register-account "CreatorAdmin" "pw" :admin t))
+         (character (apeiron.core:new-character
+                     "CreatorChar"
+                     (make-instance 'apeiron.core:stream-session
+                                    :stream (make-string-output-stream))
+                     :account (apeiron.core:account-name account)))
+         (captured-messages '()))
+    (apeiron.core:create-object! world character)
+    (let ((original-send-message (fdefinition 'apeiron.core:character-send-message)))
+      (unwind-protect
+           (progn
+             (setf (fdefinition 'apeiron.core:character-send-message)
+                   (lambda (p msg &key newline)
+                     (declare (ignore p newline))
+                     (push msg captured-messages)))
+             (setf captured-messages '())
+             (apeiron.core:process-command
+              world character
+              "eval (create-object! (world) (new-object :name \"Eval-Made Thing\"))")
+             (let ((made (apeiron.core:world-object-with-name world "Eval-Made Thing")))
+               (is-true made "eval should have created the object")
+               (is (eq character (apeiron.core:object-creator made))
+                   "CREATE-OBJECT! inside eval should stamp the player as creator")
+               (is (integerp (apeiron.core:object-created-at made))))))
+        (setf (fdefinition 'apeiron.core:character-send-message) original-send-message))))
 
 (test command-processing-shout
   "Test the shout command — broadcasts to all characters."
@@ -608,7 +640,7 @@ parser) dispatch on that parser object."
            (character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)
-                                                  :owner (apeiron.core:account-name account)))
+                                                  :account (apeiron.core:account-name account)))
           (captured '()))
       (apeiron.core:create-object! world character)
       (apeiron.core:place-character! world character)
@@ -633,7 +665,7 @@ parser) dispatch on that parser object."
            (character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)
-                                                  :owner (apeiron.core:account-name account)))
+                                                  :account (apeiron.core:account-name account)))
           (captured '()))
       (apeiron.core:create-object! world character)
       (apeiron.core:place-character! world character)
@@ -657,7 +689,7 @@ parser) dispatch on that parser object."
            (character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)
-                                                  :owner (apeiron.core:account-name account)))
+                                                  :account (apeiron.core:account-name account)))
           (captured '()))
       (apeiron.core:create-object! world character)
       (apeiron.core:place-character! world character)
@@ -686,7 +718,7 @@ parser) dispatch on that parser object."
            (character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)
-                                                  :owner (apeiron.core:account-name account)))
+                                                  :account (apeiron.core:account-name account)))
           (captured '()))
       (apeiron.core:create-object! world character)
       (apeiron.core:place-character! world character)
@@ -716,7 +748,7 @@ parser) dispatch on that parser object."
            (character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)
-                                                  :owner (apeiron.core:account-name account)))
+                                                  :account (apeiron.core:account-name account)))
           (captured '()))
       (apeiron.core:create-object! world character)
       (apeiron.core:place-character! world character)
@@ -741,7 +773,7 @@ parser) dispatch on that parser object."
            (character (apeiron.core:new-character "TestCharacter" (make-instance 'apeiron.core:stream-session
                                                                            :stream (make-string-output-stream)
                                                                            :use-colors nil)
-                                                  :owner (apeiron.core:account-name account)))
+                                                  :account (apeiron.core:account-name account)))
           (captured '()))
       (apeiron.core:create-object! world character)
       (apeiron.core:place-character! world character)
@@ -838,7 +870,7 @@ sessionless characters instead of crashing."
          (bob (make-instance 'apeiron.core:mud-character
                              :name "Bob"
                              :id 9999
-                             :owner "bob-account"
+                             :account "bob-account"
                              :session nil)))
     ;; Set up the world
     (apeiron.core:world-add-object! world room)
