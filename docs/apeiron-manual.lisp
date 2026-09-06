@@ -324,7 +324,8 @@
   snapshot only when the persistent class schemas actually changed —
   the situation BKNR warns about, where the new schema must be
   persisted.  If no class changed, the redundant second snapshot is
-  skipped.  See @DEPLOYMENT.""")
+  skipped.  See @DEPLOYMENT."""
+  (apeiron.persistence::@data-migrations section))
 
 (defsection @deployment (:title "Deployment")
   """### Configuration
@@ -364,6 +365,20 @@
   second snapshot only when persistent class definitions changed — so a
   new class schema is persisted.  If nothing changed, the second snapshot
   is skipped.
+
+  After a reload, `SAFE-UPDATE` also runs any pending *data migrations*
+  registered in the persistence module (see
+  `run-data-migrations`).  Migrations upgrade datastores written by older
+  code — e.g. when a persistent slot was renamed — and are data-driven:
+  adding a new migration never requires editing `safe-update` itself.
+
+  Because a migration ships in the same code load that an already-running
+  old `safe-update` cannot know about, migrations are also run
+  automatically from `world-restore-or-initialize` whenever a datastore
+  is opened by the current code.  Restarting the server with the new code
+  is therefore always sufficient to migrate an old datastore — no manual
+  step is needed, and you never depend on an old `safe-update` knowing
+  about a brand-new migration.
 
   For quick development reloads from inside the game, use the eval
   command:

@@ -728,3 +728,88 @@ snapshot + close-store + reopen cycle."
      (when (boundp 'bknr.datastore:*store*)
        (ignore-errors (bknr.datastore:close-store))
        (makunbound 'bknr.datastore:*store*)))))
+
+(test data-migration-version-stamped-on-fresh-world
+  "A freshly created persistent world is stamped with the latest data
+migration version, so migrations never run against a datastore that was
+created by the current code."
+  (unwind-protect
+       (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
+         (is (>= (apeiron.persistence:current-data-version world) 1)
+             "Fresh world should be stamped at the latest migration version")
+         (is (null (apeiron.persistence:run-data-migrations world))
+             "No pending migrations should run on a fresh world"))
+    ;; ---- Cleanup ----------------------------------------------------
+    (ignore-errors
+     (when (boundp 'bknr.datastore:*store*)
+       (ignore-errors (bknr.datastore:close-store))
+       (makunbound 'bknr.datastore:*store*)))))
+
+(test legacy-character-owner-migrated-to-account
+  "A datastore written before the mud-character OWNER slot was renamed
+ACCOUNT restores with the old account string sitting in the generic
+OBJECT-OWNER slot (the classes still share the OWNER symbol name) and
+CHARACTER-ACCOUNT NIL.  Opening it with current code must run data
+migration 1, move OWNER -> ACCOUNT, clear OWNER, and stamp the new
+version — and must NOT drop the character as a guest or re-run the
+migration on subsequent opens."
+  (let* ((*data-directory* *data-directory*)
+         (*store-directory* *store-directory*))
+    (unwind-protect
+         (progn
+           ;; ---- Phase 1: create a world with one account-owner character,
+           ;; then rewrite it into the legacy post-restore shape ----------
+           (let ((session (make-instance 'stream-session
+                                         :stream (make-string-output-stream)))
+                 (world (apeiron.persistence:world-restore-or-initialize :force-new t)))
+             (let ((char (apeiron.core:create-object!
+                          world
+                          (new-character "LegacyHero" session :account nil))))
+               ;; Simulate what BKNR decode produces for a snapshot written
+               ;; before the rename: account NIL, account string in OWNER.
+               (bknr.datastore:with-transaction ("simulate-legacy-format")
+                 (setf (character-account char) nil)
+                 (setf (object-owner char) "LegacyOwner")
+                 (setf (apeiron.persistence:current-data-version world) 0))
+               (is (null (character-account char)))
+               (is (equal "LegacyOwner" (object-owner char)))))
+           (apeiron.persistence:sync-world)
+           (bknr.datastore:close-store)
+
+           ;; ---- Phase 2: reopen with current code; migration must run ---
+           (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
+                  (chars (loop for c being the hash-values
+                                 of (world-characters new-world)
+                               when (string= "LegacyHero" (object-name c))
+                                 collect c)))
+             (is (= 1 (length chars))
+                 "The account-owner character must survive the reopen (not be dropped as a guest)")
+             (let ((char (first chars)))
+               (is (equal "LegacyOwner" (character-account char))
+                   "OWNER data must migrate into CHARACTER-ACCOUNT")
+               (is (null (object-owner char))
+                   "Generic OBJECT-OWNER must be cleared after migration"))
+             (is (>= (apeiron.persistence:current-data-version new-world) 1)
+                 "Data version must be bumped after migration"))
+
+           ;; ---- Phase 3: a further reopen must NOT re-run the migration ---
+           (bknr.datastore:close-store)
+           (let* ((world3 (apeiron.persistence:world-restore-or-initialize))
+                  (char (find "LegacyHero"
+                              (loop for c being the hash-values
+                                      of (world-characters world3)
+                                    collect c)
+                              :key #'object-name :test #'string=)))
+             (is-true char "Character must still exist after a second reopen")
+             (is (equal "LegacyOwner" (character-account char))
+                 "ACCOUNT must be preserved on the second reopen")
+             (is (null (object-owner char))
+                 "OWNER must stay cleared on the second reopen")
+             (is (null (apeiron.persistence:run-data-migrations world3))
+                 "No pending migrations after the migration already ran")))
+      ;; ---- Cleanup ----------------------------------------------------
+      (ignore-errors
+       (when (boundp 'bknr.datastore:*store*)
+         (ignore-errors (bknr.datastore:close-store))
+         (makunbound 'bknr.datastore:*store*))
+       (clrhash *accounts*)))))
