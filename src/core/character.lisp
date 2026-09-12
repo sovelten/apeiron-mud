@@ -199,17 +199,17 @@ and any worn/held items."
 ;; count are stored — as object properties, lazily, so characters saved
 ;; before this system existed need no data migration.
 
-(defconstant +character-base-stamina+ 10
+(defparameter +character-base-stamina+ 10
   "Stamina every character starts with — the first stamina level.")
 
-(defconstant +character-max-stamina+ 60
+(defparameter +character-max-stamina+ 60
   "Highest stamina level a character can reach.")
 
-(defconstant +character-hp-per-stamina+ 10
+(defparameter +character-hp-per-stamina+ 10
   "A character's maximum HP is this many times their stamina level.")
 
-(defconstant +character-default-attack-min+ 4)
-(defconstant +character-default-attack-max+ 9)
+(defparameter +character-default-attack-min+ 4)
+(defparameter +character-default-attack-max+ 9)
 
 (defun character-stamina (character)
   "Return CHARACTER's stamina level, lazily storing the base value the
