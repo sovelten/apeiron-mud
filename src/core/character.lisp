@@ -189,3 +189,124 @@ and any worn/held items."
 
 (defun guest? (character)
   (null (character-account character)))
+
+;; ─── Stamina, derived hit points, and combat stats ──────────────────────────
+;;
+;; Stamina is a character's core stat.  It begins at 10 and grows as the
+;; character walks (see CHARACTER-TAKE-STEP), following a Fibonacci
+;; progression of step requirements.  Maximum HP is derived from stamina
+;; (ten times its value), so only the stamina level and the banked step
+;; count are stored — as object properties, lazily, so characters saved
+;; before this system existed need no data migration.
+
+(defconstant +character-base-stamina+ 10
+  "Stamina every character starts with — the first stamina level.")
+
+(defconstant +character-max-stamina+ 60
+  "Highest stamina level a character can reach.")
+
+(defconstant +character-hp-per-stamina+ 10
+  "A character's maximum HP is this many times their stamina level.")
+
+(defconstant +character-default-attack-min+ 4)
+(defconstant +character-default-attack-max+ 9)
+
+(defun character-stamina (character)
+  "Return CHARACTER's stamina level, lazily storing the base value the
+first time it is read.  Characters saved before the stamina system
+existed therefore need no data migration."
+  (or (object-get-property character "stamina")
+      (setf (character-stamina character) +character-base-stamina+)))
+
+(defun (setf character-stamina) (value character)
+  "Set CHARACTER's stamina level, clamped to the legal range."
+  (object-set-property character "stamina"
+                       (max +character-base-stamina+
+                            (min +character-max-stamina+ value))))
+
+(defun character-stamina-steps (character)
+  "Return how many walking steps CHARACTER has banked toward the next
+stamina level.  Lazily defaults to 0."
+  (or (object-get-property character "stamina-steps") 0))
+
+(defun (setf character-stamina-steps) (value character)
+  (object-set-property character "stamina-steps" (max 0 value)))
+
+(defun stamina-steps-to-advance (level)
+  "Return the number of walking steps a character at stamina LEVEL must
+take to reach LEVEL+1.
+
+The requirements follow a Fibonacci progression: 10, 10, 20, 30, 50, 80,
+130, ... for levels 10, 11, 12, 13, 14, 15, 16, ... respectively."
+  (let ((previous 10)
+        (current 10))
+    (loop for l from +character-base-stamina+ below level
+          do (let ((next (+ previous current)))
+               (setf previous current
+                     current next)))
+    previous))
+
+(defun character-max-hp (character)
+  "Return CHARACTER's maximum hit points, derived from stamina."
+  (* +character-hp-per-stamina+ (character-stamina character)))
+
+(defun character-hp (character)
+  "Return CHARACTER's current hit points, defaulting lazily to maximum."
+  (or (object-get-property character "hp") (character-max-hp character)))
+
+(defun (setf character-hp) (value character)
+  (object-set-property character "hp" (max 0 value)))
+
+(defun character-ensure-combat-stats (character)
+  "Give CHARACTER a current-HP value if it does not have one yet.
+Maximum HP is derived from stamina (see CHARACTER-MAX-HP), so nothing
+needs to be stored for it — the stat stays lazily initialized and saved
+characters need no migration."
+  (unless (object-get-property character "hp")
+    (object-set-property character "hp" (character-max-hp character))))
+
+(defun character-roll-attack (character)
+  "Roll CHARACTER's damage for one attack."
+  (declare (ignore character))
+  (+ +character-default-attack-min+
+     (random (1+ (- +character-default-attack-max+ +character-default-attack-min+)))))
+
+(defun character-defeated-p (character)
+  (<= (character-hp character) 0))
+
+(defun character-heal-full (character)
+  (setf (character-hp character) (character-max-hp character)))
+
+(defun character-stamina-level-up-message ()
+  "Return the (yellow) message shown when a character's stamina grows.
+Deliberately free of numbers — it conveys the *feeling* of progress."
+  (yellow "Something deep within you settles and strengthens. Your breath comes easier, your stride sure and tireless; the road ahead no longer daunts you."))
+
+(defun character-take-step (character)
+  "Record one walking step for CHARACTER and raise the stamina level when
+enough steps have been banked.
+
+Walking is the action tracked for stamina growth: each successful `go`
+command is one step.  Returns the new stamina level when it increased,
+or NIL when it did not.  A character already at +CHARACTER-MAX-STAMINA+
+no longer gains levels."
+  (let ((level (character-stamina character)))
+    (when (>= level +character-max-stamina+)
+      (return-from character-take-step nil))
+    (let* ((required (stamina-steps-to-advance level))
+           (steps (1+ (character-stamina-steps character))))
+      (if (>= steps required)
+          (progn
+            (setf (character-stamina-steps character) (- steps required))
+            (setf (character-stamina character) (1+ level))
+            ;; Maximum HP just grew with the new level: grant the character
+            ;; the gained hit points, unless HP has not been initialized
+            ;; yet (then it is filled lazily at the new maximum).
+            (let ((hp (object-get-property character "hp")))
+              (when hp
+                (object-set-property character "hp"
+                                     (+ hp +character-hp-per-stamina+))))
+            (1+ level))
+          (progn
+            (setf (character-stamina-steps character) steps)
+            nil)))))

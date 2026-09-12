@@ -154,6 +154,14 @@
    #:character-hp
    #:character-max-hp
    #:character-ensure-combat-stats
+   #:+character-base-stamina+
+   #:+character-max-stamina+
+   #:+character-hp-per-stamina+
+   #:character-stamina
+   #:character-stamina-steps
+   #:stamina-steps-to-advance
+   #:character-take-step
+   #:character-stamina-level-up-message
 
    ;; Room system
    #:mud-room

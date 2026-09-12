@@ -297,7 +297,7 @@ The 15 commands available in the Apeiron MUD (usable via `mud-send`):
 | `exits`           | `exits`                   | List available exits               |
 | `examine`         | `examine <name>`          | Examine an NPC or object           |
 | `attack`          | `attack <name>`           | Attack an NPC in the room          |
-| `status`          | `status`                  | Show your HP (colour-coded)        |
+| `status`          | `status`                  | Show your stamina and HP (colour-coded) |
 | `answer`          | `answer <text>`           | Answer a challenge/riddle          |
 | `say`             | `say <message>`           | Speak to players in the same room  |
 | `shout`           | `shout <message>`         | Broadcast to all players           |

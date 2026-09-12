@@ -1,36 +1,10 @@
-;;;; src/core/combat.lisp — Character combat system
+;;;; src/core/combat.lisp — Combat resolution
+;;;;
+;;;; Character stats (HP, stamina, attack rolls, defeat/heal) live in
+;;;; CHARACTER; NPC stats live in NPC.  This file only resolves a fight
+;;;; between the two.
 
 (in-package #:apeiron.core)
-
-(defconstant +character-default-hp+ 30)
-(defconstant +character-default-attack-min+ 4)
-(defconstant +character-default-attack-max+ 9)
-
-(defun character-hp (character)
-  (or (object-get-property character "hp") +character-default-hp+))
-
-(defun character-max-hp (character)
-  (or (object-get-property character "max-hp") +character-default-hp+))
-
-(defun (setf character-hp) (value character)
-  (object-set-property character "hp" (max 0 value)))
-
-(defun character-ensure-combat-stats (character)
-  (unless (object-get-property character "max-hp")
-    (object-set-property character "max-hp" +character-default-hp+))
-  (unless (object-get-property character "hp")
-    (object-set-property character "hp" (character-max-hp character))))
-
-(defun character-roll-attack (character)
-  (declare (ignore character))
-  (+ +character-default-attack-min+
-     (random (1+ (- +character-default-attack-max+ +character-default-attack-min+)))))
-
-(defun character-defeated-p (character)
-  (<= (character-hp character) 0))
-
-(defun character-heal-full (character)
-  (setf (character-hp character) (character-max-hp character)))
 
 (defun combat-attack-npc (world character npc)
   "Character attacks an NPC. Returns messages to send to the character."
