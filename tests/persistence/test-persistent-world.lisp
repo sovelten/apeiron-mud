@@ -290,9 +290,9 @@ into the Fibonacci step loop and `go` signalled a type error."
     ;; Lazy stamina initialization stores and returns the base value.
     (is (= 10 (character-stamina character)))
     (is (= 10 (object-get-property character "stamina")))
-    ;; A walk step must work on a persistent character (this used to error).
-    (is (null (character-take-step character)))
-    (is (= 1 (character-stamina-steps character)))
+    ;; A stat gain must work on a persistent character (this used to error).
+    (is (= 0 (character-gain-stat-points character :stamina 1)))
+    (is (= 1 (character-stamina-points character)))
     (is (= 100 (character-max-hp character)))))
 
 (test properties-survive-snapshot-restart
