@@ -688,6 +688,10 @@ Only accounts with at least one play are shown."
            (wordle-guess puzzle (object-name speaker) lower)
          (character-send-message speaker display)
          (when (or (eq result-code :solved) (eq result-code :failed))
+           ;; A correct solve sharpens the mind: award reasoning points
+           ;; (sends the yellow level-up message if a new level is reached).
+           (when (eq result-code :solved)
+             (character-award-stat-points speaker :intelligence 10))
            ;; Record leaderboard stats for registered (non-guest) accounts
            (let ((account-name (character-account speaker)))
              (when account-name

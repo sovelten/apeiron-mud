@@ -136,13 +136,10 @@ sound made by CHARACTER's worn items (so the mover can hear it too)."
                                      (bright-cyan "You went"))
                                  (yellow went-direction)))
                         (character-send-message character (object-long-description target-room)))
-                      ;; Walking is the action that grows stamina: each
-                      ;; successful move is one step.  On a new level, tell
-                      ;; the character (in yellow) without naming a number.
-                      (when (character-take-step character)
-                        (character-send-message
-                         character
-                         (character-stamina-level-up-message))))
+                      ;; Walking grows stamina: each successful move is one
+                      ;; stamina point.  Awarding it sends the yellow
+                      ;; level-up message if a new level is reached.
+                      (character-award-stat-points character :stamina 1))
                     (character-send-message character "You can't go that way."))))))))
 
 (define-command "n" (world character args)
@@ -210,17 +207,18 @@ sound made by CHARACTER's worn items (so the mover can hear it too)."
              (character-send-message character "Wrong answer. Try again.")))))))
 
 (define-command "status" (world character args)
-  "Show your current status, including stamina and hit points (HP)."
+  "Show your current status, including stamina, intelligence and hit points (HP)."
   (declare (ignore world args))
   (character-ensure-combat-stats character)
-  (let* ((stamina (character-stamina character))
-         (hp (character-hp character))
+  (let* ((hp (character-hp character))
          (max-hp (character-max-hp character))
          (hp-text (format nil "~D/~D" hp max-hp)))
     (character-send-message character
-                         (format nil "~A ~A~%~A ~A"
+                         (format nil "~A ~A~%~A ~A~%~A ~A"
                                  (bold-white "Stamina:")
-                                 (bright-cyan (format nil "~D" stamina))
+                                 (bright-cyan (format nil "~D" (character-stamina character)))
+                                 (bold-white "Intelligence:")
+                                 (bright-cyan (format nil "~D" (character-intelligence character)))
                                  (bold-white "HP:")
                                  (if (<= hp (/ max-hp 4))
                                      (bold-red hp-text)
@@ -297,12 +295,33 @@ makes fresh exports visible without manual intervention."
 ;; These are available in the eval context (apeiron.eval package) and are
 ;; designed to help debug/inspect objects from within the game.
 
+(defun hashmap (table)
+  "Return the contents of a hash-table as a string, one KEY => VALUE per
+line.  Handy in eval because CL:DESCRIBE does not print a hash-table's
+entries.
+Example: (hashmap (object-properties (me)))"
+  (cond
+    ((not (hash-table-p table))
+     (format nil "~A is not a hash-table." table))
+    ((zerop (hash-table-count table))
+     "The hash-table is empty.")
+    (t
+     (with-output-to-string (*standard-output*)
+       (format t "Hash-table with ~D entr~:@P:~%" (hash-table-count table))
+       (loop for key being the hash-keys of table
+               using (hash-value val)
+             do (format t "  ~S => ~S~%" key val))))))
+
 (defun d (object)
   "Describe OBJECT, capturing output to a string.
 Like CL:DESCRIBE but returns a string instead of printing to *standard-output*.
+Hash-tables are shown entry by entry (see HASHMAP), since DESCRIBE does
+not print their contents.
 Example: (d (me))"
-  (with-output-to-string (*standard-output*)
-    (describe object)))
+  (if (hash-table-p object)
+      (hashmap object)
+      (with-output-to-string (*standard-output*)
+        (describe object))))
 
 (defun slots-of (object)
   "Describe all slots of OBJECT, returning a string.
@@ -318,11 +337,7 @@ Example: (props (me))"
   (let ((ht (object-properties object)))
     (if (zerop (hash-table-count ht))
         (format nil "No properties on ~A." (object-name object))
-        (with-output-to-string (*standard-output*)
-          (format t "Properties of ~A:~%" (object-name object))
-          (loop for key being the hash-keys of ht
-                  using (hash-value val)
-                do (format t "  ~S => ~S~%" key val))))))
+        (format nil "Properties of ~A:~%~A" (object-name object) (hashmap ht)))))
 
 (defun inv (container)
   "Return the contents of CONTAINER as a string.
@@ -378,7 +393,7 @@ object with both the \"hat\" and \"wizard\" keywords."
 (define-command "eval" (world character args)
   "Evaluate Lisp code and send output to the character.
 Use (me) for the current character, (here) for current room, (world) for the world.
-Debug helpers: (d obj), (slots-of obj), (props obj), (inv obj), (loc obj), (obj-type obj), (obj-find name-or-id)
+Debug helpers: (d obj), (hashmap table), (slots-of obj), (props obj), (inv obj), (loc obj), (obj-type obj), (obj-find name-or-id)
 Only administrators (admin accounts) or characters wearing a wizard hat
 (an object with both the \"hat\" and \"wizard\" keywords) may use this command."
   (if (not (eval-allowed-p character))

@@ -291,7 +291,8 @@
         (unwind-protect
              (progn
                (is-true (handle-tell puzzle character "crane"))
-               (is (search "I solved it" (car captured-messages))))
+               (is (some (lambda (m) (search "I solved it" m))
+                         captured-messages)))
           (setf (fdefinition 'character-send-message) old))))))
 
 (test wordle-handle-tell-non-word-ignored

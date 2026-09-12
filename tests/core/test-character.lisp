@@ -35,87 +35,107 @@
 
 ;; ─── Stamina and levelling ─────────────────────────────────────────────────
 
-(defun make-stamina-test-character (&optional (name "Stamina Tester"))
-  "A transient character used by the stamina tests."
+(defun make-stat-test-character (&optional (name "Stat Tester"))
+  "A transient character used by the stat tests."
   (apeiron.core:new-character
    name
    (make-instance 'apeiron.core:stream-session
                   :stream (make-string-output-stream))))
 
-(test character-default-stamina
-  "A character starts at the base stamina, with max HP derived from it.
-The default is stored lazily rather than merely reported."
-  (let ((character (make-stamina-test-character "Newbie")))
+(test character-default-stats
+  "Every character starts at the base level of each stat, with max HP
+derived from stamina.  The defaults are stored lazily, not merely
+reported."
+  (let ((character (make-stat-test-character "Newbie")))
     (is (= 10 (apeiron.core:character-stamina character)))
+    (is (= 10 (apeiron.core:character-intelligence character)))
     (is (= 100 (apeiron.core:character-max-hp character)))
-    (is (= 10 (apeiron.core:object-get-property character "stamina")))))
+    (is (= 10 (apeiron.core:object-get-property character "stamina")))
+    (is (= 10 (apeiron.core:object-get-property character "intelligence")))))
 
-(test stamina-steps-follow-fibonacci
-  "The steps needed to gain each stamina level follow the Fibonacci
+(test stat-points-follow-fibonacci
+  "The points needed to gain each stat level follow the Fibonacci
 progression 10, 10, 20, 30, 50, 80, 130, ... for levels 10, 11, 12, ..."
-  (is (= 10  (apeiron.core:stamina-steps-to-advance 10)))
-  (is (= 10  (apeiron.core:stamina-steps-to-advance 11)))
-  (is (= 20  (apeiron.core:stamina-steps-to-advance 12)))
-  (is (= 30  (apeiron.core:stamina-steps-to-advance 13)))
-  (is (= 50  (apeiron.core:stamina-steps-to-advance 14)))
-  (is (= 80  (apeiron.core:stamina-steps-to-advance 15)))
-  (is (= 130 (apeiron.core:stamina-steps-to-advance 16))))
+  (is (= 10  (apeiron.core:stat-points-to-advance 10)))
+  (is (= 10  (apeiron.core:stat-points-to-advance 11)))
+  (is (= 20  (apeiron.core:stat-points-to-advance 12)))
+  (is (= 30  (apeiron.core:stat-points-to-advance 13)))
+  (is (= 50  (apeiron.core:stat-points-to-advance 14)))
+  (is (= 80  (apeiron.core:stat-points-to-advance 15)))
+  (is (= 130 (apeiron.core:stat-points-to-advance 16))))
 
 (test walking-raises-stamina
-  "Walking enough steps raises stamina one level at a time."
-  (let ((character (make-stamina-test-character "Walker")))
-    ;; Nine steps are not yet enough for the first level.
-    (loop repeat 9 do (apeiron.core:character-take-step character))
+  "Stamina points raise stamina one level at a time."
+  (let ((character (make-stat-test-character "Walker")))
+    ;; Nine points are not yet enough for the first level.
+    (loop repeat 9 do (apeiron.core:character-gain-stat-points character :stamina 1))
     (is (= 10 (apeiron.core:character-stamina character)))
-    (is (= 9 (apeiron.core:character-stamina-steps character)))
-    ;; The tenth step levels up and clears the banked steps.
-    (is (= 11 (apeiron.core:character-take-step character)))
+    (is (= 9 (apeiron.core:character-stamina-points character)))
+    ;; The tenth point levels up and clears the banked points.
+    (is (= 1 (apeiron.core:character-gain-stat-points character :stamina 1)))
     (is (= 11 (apeiron.core:character-stamina character)))
-    (is (= 0 (apeiron.core:character-stamina-steps character)))
-    ;; The next level again takes ten steps.
-    (loop repeat 9 do (apeiron.core:character-take-step character))
+    (is (= 0 (apeiron.core:character-stamina-points character)))
+    ;; The next level again takes ten points.
+    (loop repeat 9 do (apeiron.core:character-gain-stat-points character :stamina 1))
     (is (= 11 (apeiron.core:character-stamina character)))
-    (is (= 12 (apeiron.core:character-take-step character)))
+    (is (= 1 (apeiron.core:character-gain-stat-points character :stamina 1)))
     (is (= 12 (apeiron.core:character-stamina character)))))
 
 (test stamina-level-up-grows-max-hp
   "Maximum HP is derived from stamina and grows when stamina levels up."
-  (let ((character (make-stamina-test-character "Tough")))
+  (let ((character (make-stat-test-character "Tough")))
     (apeiron.core:character-ensure-combat-stats character)
     (is (= 100 (apeiron.core:character-max-hp character)))
     (is (= 100 (apeiron.core:character-hp character)))
-    (loop repeat 10 do (apeiron.core:character-take-step character))
+    (apeiron.core:character-gain-stat-points character :stamina 10)
     (is (= 11 (apeiron.core:character-stamina character)))
     (is (= 110 (apeiron.core:character-max-hp character)))
     ;; The character is granted the gained hit points.
     (is (= 110 (apeiron.core:character-hp character)))))
 
-(test stamina-caps-at-max-level
-  "Stamina stops growing at the maximum level."
-  (let ((character (make-stamina-test-character "Maxed")))
+(test stat-caps-at-max-level
+  "Stats stop growing at the maximum level."
+  (let ((character (make-stat-test-character "Maxed")))
     (setf (apeiron.core:character-stamina character)
-          apeiron.core:+character-max-stamina+)
-    (is (loop repeat 100 always
-              (null (apeiron.core:character-take-step character))))
-    (is (= apeiron.core:+character-max-stamina+
+          apeiron.core:+character-max-stat+)
+    (is (= 0 (apeiron.core:character-gain-stat-points character :stamina 1000)))
+    (is (= apeiron.core:+character-max-stat+
            (apeiron.core:character-stamina character)))))
 
-(test stamina-level-up-message-is-yellow
-  "The level-up message is yellow and mentions no numbers."
-  ;; Plain text (colors off) contains no digits.
-  (let ((*colorize* nil))
-    (is (null (find-if #'digit-char-p
-                       (apeiron.core:character-stamina-level-up-message)))))
-  ;; With colors on it is wrapped in ANSI yellow (SGR 33) and reset.
-  (let* ((*colorize* t)
-         (message (apeiron.core:character-stamina-level-up-message)))
-    (is (stringp message))
-    (is (search (format nil "~C[33m" (code-char 27)) message))
-    (is (search (format nil "~C[0m" (code-char 27)) message))))
+(test stat-level-up-message-is-yellow
+  "Every stat's level-up message is yellow and mentions no numbers."
+  (dolist (stat '(:stamina :intelligence))
+    ;; Plain text (colors off) contains no digits.
+    (let ((*colorize* nil))
+      (is (null (find-if #'digit-char-p
+                         (apeiron.core:character-stat-level-up-message stat)))))
+    ;; With colors on it is wrapped in ANSI yellow (SGR 33) and reset.
+    (let* ((*colorize* t)
+           (message (apeiron.core:character-stat-level-up-message stat)))
+      (is (stringp message))
+      (is (search (format nil "~C[33m" (code-char 27)) message))
+      (is (search (format nil "~C[0m" (code-char 27)) message)))))
+
+(test solving-wordle-awards-intelligence
+  "Solving a Wordle puzzle awards ten reasoning points, levelling
+intelligence on the same Fibonacci scale."
+  (let* ((room (apeiron.core:new-room :name "Puzzle Room"))
+         (character (make-stat-test-character "Solver")))
+    ;; handle-tell broadcasts the result to the room, so give it one.
+    (apeiron.core:container-add-object room character)
+    (is (= 10 (apeiron.core:character-intelligence character)))
+    (let ((puzzle (apeiron.core:new-wordle-puzzle :target-word "apple")))
+      (apeiron.core:handle-tell puzzle character "apple"))
+    (is (= 11 (apeiron.core:character-intelligence character)))
+    (is (= 0 (apeiron.core:character-intelligence-points character)))
+    ;; A second correct solve on another puzzle levels it again.
+    (let ((puzzle (apeiron.core:new-wordle-puzzle :target-word "brave")))
+      (apeiron.core:handle-tell puzzle character "brave"))
+    (is (= 12 (apeiron.core:character-intelligence character)))))
 
 (test walking-via-go-command-raises-stamina
-  "Each successful `go` is a walking step; ten of them raise stamina to
-the next level and announce the progress in yellow."
+  "Each successful `go` awards a stamina point; ten of them raise stamina
+to the next level and announce the progress in yellow."
   (let* ((world (apeiron.core:new-world))
          (north (apeiron.core:new-room :name "North"))
          (south (apeiron.core:new-room :name "South")))
@@ -132,7 +152,7 @@ the next level and announce the progress in yellow."
       (apeiron.core:place-character! world character)
       (let ((output (apeiron.core:session-stream
                      (apeiron.core:character-session character))))
-        ;; Walk back and forth ten times → ten steps.
+        ;; Walk back and forth ten times → ten stamina points.
         (dotimes (i 10)
           (apeiron.core:process-command
            world character

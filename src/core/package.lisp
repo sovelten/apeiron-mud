@@ -154,14 +154,20 @@
    #:character-hp
    #:character-max-hp
    #:character-ensure-combat-stats
-   #:+character-base-stamina+
-   #:+character-max-stamina+
+   #:+character-base-stat+
+   #:+character-max-stat+
    #:+character-hp-per-stamina+
+   #:stat-points-to-advance
+   #:character-stat
+   #:character-stat-points
+   #:character-gain-stat-points
+   #:character-award-stat-points
+   #:character-stat-level-up!
+   #:character-stat-level-up-message
    #:character-stamina
-   #:character-stamina-steps
-   #:stamina-steps-to-advance
-   #:character-take-step
-   #:character-stamina-level-up-message
+   #:character-stamina-points
+   #:character-intelligence
+   #:character-intelligence-points
 
    ;; Room system
    #:mud-room
@@ -442,6 +448,7 @@
 
    ;; Eval debug helpers
    #:d
+   #:hashmap
    #:slots-of
    #:props
    #:inv
