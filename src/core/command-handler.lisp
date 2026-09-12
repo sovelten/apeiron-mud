@@ -135,7 +135,14 @@ sound made by CHARACTER's worn items (so the mover can hear it too)."
                                      (bright-cyan (format nil "You hear a ~A sound as you went" sound))
                                      (bright-cyan "You went"))
                                  (yellow went-direction)))
-                        (character-send-message character (object-long-description target-room))))
+                        (character-send-message character (object-long-description target-room)))
+                      ;; Walking is the action that grows stamina: each
+                      ;; successful move is one step.  On a new level, tell
+                      ;; the character (in yellow) without naming a number.
+                      (when (character-take-step character)
+                        (character-send-message
+                         character
+                         (character-stamina-level-up-message))))
                     (character-send-message character "You can't go that way."))))))))
 
 (define-command "n" (world character args)
@@ -203,14 +210,18 @@ sound made by CHARACTER's worn items (so the mover can hear it too)."
              (character-send-message character "Wrong answer. Try again.")))))))
 
 (define-command "status" (world character args)
-  "Show your current status, including hit points (HP)."
+  "Show your current status, including stamina and hit points (HP)."
   (declare (ignore world args))
   (character-ensure-combat-stats character)
-  (let* ((hp (character-hp character))
+  (let* ((stamina (character-stamina character))
+         (hp (character-hp character))
          (max-hp (character-max-hp character))
          (hp-text (format nil "~D/~D" hp max-hp)))
     (character-send-message character
-                         (format nil "HP: ~A"
+                         (format nil "~A ~A~%~A ~A"
+                                 (bold-white "Stamina:")
+                                 (bright-cyan (format nil "~D" stamina))
+                                 (bold-white "HP:")
                                  (if (<= hp (/ max-hp 4))
                                      (bold-red hp-text)
                                      (if (<= hp (/ max-hp 2))

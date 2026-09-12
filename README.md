@@ -175,7 +175,7 @@ The server layer wires everything together.
 | `read` | `read <name>` | Read a readable object (guestbook, sign, etc.) |
 | `write` | `write <name>` | Write a message on a writable object |
 | `answer` | `answer <text>` | Answer a challenge/puzzle |
-| `status` | `status` | Show your HP and stats |
+| `status` | `status` | Show your stamina and HP |
 | `help` | `help` | List all commands |
 | `toggle-colors` | `toggle-colors` | Toggle ANSI color output |
 | `eval` | `eval <sexpr>` | Run arbitrary lisp code (admin only!) |
