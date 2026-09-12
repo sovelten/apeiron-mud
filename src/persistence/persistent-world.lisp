@@ -73,7 +73,11 @@ materialize-object), the auto-wrap passes through and BKNR records the
 change in the outer transaction's buffer."
   (setf (gethash property-name (object-properties obj)) value)
   ;; Write the slot so BKNR records the change — see docstring above.
-  (setf (object-properties obj) (object-properties obj)))
+  (setf (object-properties obj) (object-properties obj))
+  ;; Return the stored value, not the hash-table the slot write returns:
+  ;; callers (and the lazy accessors built on OBJECT-SET-PROPERTY) expect
+  ;; the value they set, exactly like the default method.
+  value)
 
 (defmethod create-object! ((world persistent-world) object &optional room)
   "Register OBJECT in WORLD by converting it to a persistent object in-place.

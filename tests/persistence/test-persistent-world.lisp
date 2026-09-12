@@ -272,6 +272,29 @@ so BKNR records the change in the transaction log."
     ;; Verify the property is in the hash-table
     (is (equal "blue" (gethash "color" (object-properties obj))))))
 
+(test persistent-object-set-property-returns-value
+  "OBJECT-SET-PROPERTY on a persistent object returns the value set, not
+the properties hash-table.  Regression: the lazy stamina accessor read
+that return value, so on a persistent character it leaked a hash-table
+into the Fibonacci step loop and `go` signalled a type error."
+  (let* ((world (world-restore-or-initialize :force-new t))
+         (character (create-object!
+                     world
+                     (new-character
+                      "StaminaPersist"
+                      (make-instance 'stream-session
+                                     :stream (make-string-output-stream))))))
+    (is (typep character 'persistent-object))
+    (is (equal "blue" (object-set-property character "color" "blue"))
+        "The persistent method must return the value, not the hash-table")
+    ;; Lazy stamina initialization stores and returns the base value.
+    (is (= 10 (character-stamina character)))
+    (is (= 10 (object-get-property character "stamina")))
+    ;; A walk step must work on a persistent character (this used to error).
+    (is (null (character-take-step character)))
+    (is (= 1 (character-stamina-steps character)))
+    (is (= 100 (character-max-hp character)))))
+
 (test properties-survive-snapshot-restart
   "Object properties set via object-set-property on a persistent object
 must survive a snapshot + close-store + reopen cycle."

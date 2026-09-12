@@ -216,13 +216,16 @@ and any worn/held items."
 first time it is read.  Characters saved before the stamina system
 existed therefore need no data migration."
   (or (object-get-property character "stamina")
-      (setf (character-stamina character) +character-base-stamina+)))
+      (let ((base +character-base-stamina+))
+        (object-set-property character "stamina" base)
+        base)))
 
 (defun (setf character-stamina) (value character)
   "Set CHARACTER's stamina level, clamped to the legal range."
-  (object-set-property character "stamina"
-                       (max +character-base-stamina+
-                            (min +character-max-stamina+ value))))
+  (let ((level (max +character-base-stamina+
+                    (min +character-max-stamina+ value))))
+    (object-set-property character "stamina" level)
+    level))
 
 (defun character-stamina-steps (character)
   "Return how many walking steps CHARACTER has banked toward the next
@@ -230,7 +233,9 @@ stamina level.  Lazily defaults to 0."
   (or (object-get-property character "stamina-steps") 0))
 
 (defun (setf character-stamina-steps) (value character)
-  (object-set-property character "stamina-steps" (max 0 value)))
+  (let ((steps (max 0 value)))
+    (object-set-property character "stamina-steps" steps)
+    steps))
 
 (defun stamina-steps-to-advance (level)
   "Return the number of walking steps a character at stamina LEVEL must
@@ -255,7 +260,9 @@ The requirements follow a Fibonacci progression: 10, 10, 20, 30, 50, 80,
   (or (object-get-property character "hp") (character-max-hp character)))
 
 (defun (setf character-hp) (value character)
-  (object-set-property character "hp" (max 0 value)))
+  (let ((hp (max 0 value)))
+    (object-set-property character "hp" hp)
+    hp))
 
 (defun character-ensure-combat-stats (character)
   "Give CHARACTER a current-HP value if it does not have one yet.
