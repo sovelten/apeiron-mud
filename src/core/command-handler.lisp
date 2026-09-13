@@ -71,6 +71,11 @@ CHARACTER is the character, ARGS is a raw string that the handler can parse as n
         (character-send-message character (object-long-description room))
         (character-send-message character "You are in a void!"))))
 
+(define-command "l" (world character args)
+  "Shorthand for 'go north'."
+  (declare (ignore args))
+  (process-command world character "look"))
+
 (defun announce-movement (character direction from-room to-room)
   "Announce CHARACTER moving from FROM-ROOM to TO-ROOM in DIRECTION
 to the other characters present.
