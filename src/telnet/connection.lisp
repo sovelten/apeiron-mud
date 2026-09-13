@@ -593,6 +593,19 @@ Returns (values nil :connection-lost) on fatal error."))
         (replace line line :start2 1 :end2 (fill-pointer line))
         (decf (fill-pointer line))
         (return-from telnet-read-char (values c nil))))
+    ;; Never probe a dead transport.  Once the connection has been closed
+    ;; (TELNET-CONNECTION-CLOSE) or has already observed EOF / an I/O error
+    ;; (which clear ALIVE-P), LISTEN on the underlying stream does not merely
+    ;; return NIL — it *signals*.  For a native SBCL fd-stream the signal is
+    ;; a CLOSED-STREAM-ERROR whose message happens to contain "closed"; but
+    ;; for a cl+ssl SSL stream (direct TLS port, or START_TLS upgrade) LISTEN
+    ;; dereferences the freed SSL handle and signals a bare
+    ;;   TYPE-ERROR: "NIL is not of type SB-SYS:SYSTEM-AREA-POINTER"
+    ;; which no caller can recognise as a disconnect.  Report the disconnect
+    ;; uniformly here so the game loop terminates the same way on every
+    ;; transport (see HANDLE-CLIENT).
+    (unless (telnet-connection-alive-p conn)
+      (return-from telnet-read-char (values nil :connection-lost)))
     (unless (or (> (fill-pointer (slot-value conn 'peek-buffer)) 0)
                 (%input-ready-p (telnet-conn-raw-stream conn) timeout))
       (return-from telnet-read-char (values nil :timeout)))
@@ -870,11 +883,16 @@ socket + the two dup'd stream FDs) for the life of the process.
 
 Idempotent (guarded by CLOSED-P), and deliberately leaves the (closed)
 stream objects in their slots: after a quit/disconnect mid-game-loop the
-game loop keeps polling, and reads against a closed stream object raise
-a stream error that terminates the session thread.  If we nulled the
-slots instead, %INPUT-READY-P would call LISTEN on NIL, which returns
-NIL forever, so the session thread would spin on :TIMEOUT and
-STOP-MUD-SERVER would hang joining it."
+game loop keeps polling.  Reads against the closed connection are now
+short-circuited by TELNET-READ-CHAR, which returns (values NIL
+:CONNECTION-LOST) as soon as ALIVE-P is NIL — so the session thread
+terminates without ever touching the dead stream.  (Probing it anyway is
+unsafe: LISTEN on a closed native fd-stream signals a CLOSED-STREAM-ERROR,
+while on a cl+ssl SSL stream it signals a bare TYPE-ERROR while
+dereferencing the freed SSL handle.)  The slots are left populated rather
+than nulled so that code inspecting the connection still finds the streams
+it owned, and a stray LISTEN on NIL can never make the session thread spin
+on :TIMEOUT and hang STOP-MUD-SERVER's join."
   (unless (telnet-connection-closed-p conn)
     (setf (telnet-connection-closed-p conn) t)
     (setf (telnet-connection-alive-p conn) nil)

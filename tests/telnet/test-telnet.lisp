@@ -684,6 +684,42 @@ followed by 'REQUEST'."
       (let ((raw (telnet::telnet-conn-raw-stream conn)))
         (when raw (ignore-errors (close raw :abort t)))))))
 
+;; ---------------------------------------------------------------
+;; Test: reads on a closed connection report :connection-lost
+;; ---------------------------------------------------------------
+;;
+;; Regression for the TLS disconnect bug.  After TELNET-CONNECTION-CLOSE
+;; the session's game loop used to perform one more read, which reached
+;; %INPUT-READY-P and called LISTEN on the dead stream.  On a native
+;; fd-stream that signals a CLOSED-STREAM-ERROR (whose message happens to
+;; contain "closed"), but on a cl+ssl SSL stream (direct TLS port, or a
+;; START_TLS upgrade) LISTEN dereferences the freed SSL handle and signals
+;; the opaque
+;;   TYPE-ERROR: "NIL is not of type SB-SYS:SYSTEM-AREA-POINTER"
+;; which the session's error handler could not recognise as a disconnect,
+;; producing "Error in client handler" on quit.  TELNET-READ-CHAR must now
+;; short-circuit a dead connection instead of probing it.
+
+(test telnet-read-char-closed-returns-connection-lost
+  "After the connection is closed, telnet-read-char (and telnet-read-line)
+must return (nil :connection-lost) rather than signalling."
+  (multiple-value-bind (conn write-stream) (make-test-telnet-connection)
+    (unwind-protect
+         (progn
+           (telnet:telnet-connection-close conn)
+           (is (null (telnet:telnet-connection-alive-p conn))
+               "A closed connection must report itself dead")
+           (multiple-value-bind (c status)
+               (telnet:telnet-read-char conn :timeout 1)
+             (is (null c))
+             (is (eq status :connection-lost)
+                 "A closed connection read must not signal; it returns :connection-lost"))
+           (multiple-value-bind (line status)
+               (telnet:telnet-read-line conn :timeout 1)
+             (is (null line))
+             (is (eq status :connection-lost))))
+      (when write-stream (ignore-errors (close write-stream :abort t))))))
+
 ;; ===============================================================
 ;; TLS Support Tests
 ;; ===============================================================

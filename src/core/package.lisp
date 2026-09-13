@@ -282,6 +282,7 @@
    #:session-stream
    #:session-keepalive
    #:session-disconnect
+   #:session-alive-p
 
    ;; Session classes
    #:mud-session

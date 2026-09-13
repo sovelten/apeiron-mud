@@ -23,6 +23,16 @@ The default method is a no-op."))
 (defgeneric session-disconnect (session)
   (:documentation "Clean up and disconnect this session."))
 
+(defgeneric session-alive-p (session)
+  (:documentation "Return T while SESSION's transport is still connected.
+
+The default method returns T: a session with no observable network
+transport is always considered alive.  Network subclasses (e.g.
+TELNET-SESSION) override this to report a dropped or deliberately closed
+connection, so the game loop can stop polling a dead session instead of
+performing one more doomed — and possibly error-signalling — I/O
+operation on it."))
+
 ;;
 ;; MUD Session basic implementation of protocols
 ;;
@@ -53,6 +63,11 @@ Subclasses with I/O should be used instead (e.g. STREAM-SESSION)."
 should override this to send protocol-specific heartbeats."
   (declare (ignore session))
   nil)
+
+(defmethod session-alive-p ((session mud-session))
+  "Base sessions have no transport to lose, so they are always alive."
+  (declare (ignore session))
+  t)
 
 (defmethod session-disconnect ((session mud-session))
   "Disconnect the session — only clears the character link.

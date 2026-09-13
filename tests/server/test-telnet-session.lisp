@@ -188,3 +188,21 @@
         (mud-read-secret session)
       (is (null line))
       (is (eq status :eof)))))
+
+(test session-alive-p-reports-disconnected-session-dead
+  "Regression: SESSION-ALIVE-P must report a telnet session as dead once
+SESSION-DISCONNECT has closed its connection, so HANDLE-CLIENT's game loop
+stops polling it (and never touches the freed transport)."
+  (let* ((session (make-mock-telnet-session))
+         (conn (session-telnet-connection session)))
+    (is-true (session-alive-p session)
+             "A freshly connected session should be alive")
+    (session-disconnect session)
+    (is-false (telnet:telnet-connection-alive-p conn)
+              "session-disconnect should close the telnet connection")
+    (is-false (session-alive-p session)
+              "A disconnected session must report itself dead")))
+
+(test session-alive-p-default-true-for-base-session
+  "The base MUD-SESSION (no transport) is always considered alive."
+  (is-true (session-alive-p (new-session))))
