@@ -205,7 +205,16 @@ disconnected during the flow."
 
                      ;; ─── Game loop ────────────────────────────────────────
                      (handler-case
-                         (loop while *server-running*
+                         ;; Stop as soon as the transport is gone (e.g. the
+                         ;; player issued QUIT, or the socket dropped).  A
+                         ;; closed connection must not be polled again: on a
+                         ;; plain fd-stream LISTEN signals a CLOSED-STREAM-ERROR,
+                         ;; but on a TLS (cl+ssl) stream it signals a bare
+                         ;; TYPE-ERROR while dereferencing the freed SSL
+                         ;; handle — which the error clauses below cannot
+                         ;; recognise as a disconnect.
+                         (loop while (and *server-running*
+                                          (session-alive-p session))
                                do
                                   (handler-case
                                       (progn
@@ -218,7 +227,9 @@ disconnected during the flow."
                                              (mud-write session "Timed out due to inactivity.")
                                              (log-message "Client ~A timed out due to inactivity" char-name)
                                              (return))
-                                            ((or (eq status :eof) (typep status 'error))
+                                            ((or (eq status :eof)
+                                                 (eq status :connection-lost)
+                                                 (typep status 'error))
                                              (log-message "Client ~A disconnected ~A" char-name status)
                                              (return))
                                             (line

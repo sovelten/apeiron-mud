@@ -44,6 +44,14 @@ Use telnet:telnet-read-line / telnet:telnet-write-string instead."
   "Send a Telnet NOP (RFC 854) to keep the connection alive."
   (telnet:telnet-send-nop (session-telnet-connection session)))
 
+(defmethod session-alive-p ((session telnet-session))
+  "A telnet session is alive while its telnet connection has not been
+closed or lost.  TELNET-CONNECTION-CLOSE (called from SESSION-DISCONNECT)
+and the read/write EOF/error paths all clear the connection's ALIVE-P flag,
+so this reports NIL as soon as the transport is gone."
+  (let ((conn (session-telnet-connection session)))
+    (and conn (telnet:telnet-connection-alive-p conn))))
+
 (defmethod mud-read-line ((session telnet-session) &key (timeout 300))
   "Read a line from the telnet session using RFC 854-compliant I/O."
   (let ((conn (session-telnet-connection session)))
