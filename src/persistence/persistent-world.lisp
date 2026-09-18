@@ -10,9 +10,16 @@
 ;; specialize on them.
 
 (defmethod bknr.datastore:initialize-transient-instance ((gb persistent-guestbook))
-  "Re-read guestbook entries from the CSV file after restore."
+  "Re-read guestbook entries from the CSV file after restore.
+
+FILEPATH may still be unbound here: a transaction-log replay creates the
+object (calling this method) and only applies its slot values afterwards,
+and FILEPATH has no initform.  Guard against that so restoring such a
+guestbook does not signal SLOT-UNBOUND; the entries can be reloaded with
+REFRESH-GUESTBOOKS once the slot is populated."
   (call-next-method)
-  (let ((fp (guestbook-filepath gb)))
+  (let ((fp (and (slot-boundp gb 'apeiron.core::filepath)
+                 (guestbook-filepath gb))))
     (when fp
       (setf (guestbook-entries gb)
             (guestbook-load-from-csv (pathname fp))))))
@@ -79,6 +86,36 @@ change in the outer transaction's buffer."
   ;; the value they set, exactly like the default method.
   value)
 
+(defun touch-persistent-slots (object)
+  "Force every bound, non-transient slot value of OBJECT into the current
+BKNR transaction.
+
+MATERIALIZE-OBJECT converts OBJECT in place with CHANGE-CLASS, which
+preserves slot values in memory without going through (SETF SLOT-VALUE);
+BKNR therefore never records them in the transaction log.  After a
+restart recovered from the transaction log alone (a crash, i.e. without
+SYNC-WORLD) such an object comes back with UNBOUND slots: those with an
+initform are silently reset to it (a room's NAME becomes \"unnamed
+object\"), and those without one stay unbound and signal SLOT-UNBOUND on
+access.  Re-writing each slot value triggers the transaction log so the
+data survives a crash without a snapshot.
+
+OBJECT must already be a persistent store-object, and every object it
+references must already be persistent too — encoding a still-transient
+reference fails — so call this only once the whole object closure has
+been materialized.  INITIALIZE-TRANSIENT-INSTANCE fills unbound slots
+with initforms, so slots already unbound at materialization time are
+skipped here and re-derived on restore.  Transient slots are skipped.
+Returns OBJECT."
+  (let ((transient-slots (class-transient-slots (class-of object))))
+    (dolist (slotd (sb-mop:class-slots (class-of object)))
+      (let ((sname (sb-mop:slot-definition-name slotd)))
+        (when (and (not (member sname transient-slots))
+                   (slot-boundp object sname))
+          (setf (slot-value object sname)
+                (slot-value object sname))))))
+  object)
+
 (defmethod create-object! ((world persistent-world) object &optional room)
   "Register OBJECT in WORLD by converting it to a persistent object in-place.
 The transient OBJECT is converted in-place via MATERIALIZE-OBJECT, which
@@ -90,17 +127,9 @@ added to ROOM's contents) inside the same transaction."
   (bknr.datastore:with-transaction ("create-object")
     (unless (typep object 'bknr.datastore:store-object)
       (materialize-object object)
-      ;; CHANGE-CLASS preserves slot values without going through
-      ;; (SETF SLOT-VALUE), so BKNR never records them in the
-      ;; transaction log.  Touch every persistent slot so its value
-      ;; is persisted and survives a crash without sync-world.
-      (let ((transient-slots (class-transient-slots (class-of object))))
-        (dolist (slotd (sb-mop:class-slots (class-of object)))
-          (let ((sname (sb-mop:slot-definition-name slotd)))
-            (when (and (not (member sname transient-slots))
-                       (slot-boundp object sname))
-              (setf (slot-value object sname)
-                    (slot-value object sname)))))))
+      ;; Record the slot values so they survive a crash without sync-world
+      ;; (see TOUCH-PERSISTENT-SLOTS).
+      (touch-persistent-slots object))
     (world-add-object! world object)
     (when room
       (container-add-object room object)))
@@ -128,15 +157,16 @@ destroyed too (a character owns its limbs), preventing leaked limbs."
 
 Materializes the whole area closure (rooms, contained objects,
 connections, and the area itself) into the BKNR datastore in ONE
-transaction before indexing it in the world.
+transaction, records every object's slot values, then indexes everything
+in the world.  Recording the slots (see TOUCH-PERSISTENT-SLOTS) is what
+lets a runtime-added area survive a restart even without SYNC-WORLD.
 
-CREATE-OBJECT! per object would be the wrong tool here: it materializes
-each object and then touches every persistent slot to force it into the
-transaction log.  Rooms carry a ROOM-AREA back-reference to the area, so
-if rooms are materialized before the area, that touch tries to
-ENCODE-OBJECT a still-transient MUD-AREA — which has no encoder and
-fails.  Materializing everything together (as MATERIALIZE-WORLD does)
-defers slot encoding until every object is persistent.
+CREATE-OBJECT! cannot be used per object here: it records an object's
+slots immediately after materializing it.  Rooms carry a ROOM-AREA
+back-reference to the area, so that touch would try to ENCODE-OBJECT a
+still-transient MUD-AREA — which has no encoder and fails.  Materializing
+the whole closure first, and only then recording slots, defers every
+reference until all objects are persistent.
 
 Enforces the one-area-per-room invariant first.  Returns AREA."
   ;; Enforce the one-area-per-room invariant before mutating anything.
@@ -159,7 +189,25 @@ Enforces the one-area-per-room invariant first.  Returns AREA."
           (materialize-object obj))))
     (dolist (conn (area-connections area))
       (materialize-object conn))
-    (materialize-object area))
+    (materialize-object area)
+    ;; Materialization alone does not record slot values (CHANGE-CLASS
+    ;; bypasses SETF SLOT-VALUE), so without this a runtime-added area is
+    ;; lost on a restart recovered from the transaction log alone.  Now
+    ;; that the WHOLE closure is persistent — rooms, their contents,
+    ;; connections, and the area — write every object's slots into the
+    ;; transaction log (see TOUCH-PERSISTENT-SLOTS).  This must run AFTER
+    ;; the area is materialized: a room's ROOM-AREA slot and the area's
+    ;; ROOMS/CONNECTIONS slots reference the area and its connections,
+    ;; which would otherwise still be transient to encode.
+    (dolist (room (area-room-list area))
+      (touch-persistent-slots room))
+    (dolist (room (area-room-list area))
+      (dolist (obj (container-all-objects room))
+        (unless (typep obj 'mud-character)
+          (touch-persistent-slots obj))))
+    (dolist (conn (area-connections area))
+      (touch-persistent-slots conn))
+    (touch-persistent-slots area))
   ;; Now index everything in the world (IDs are already assigned by BKNR;
   ;; WORLD-ADD-OBJECT! registers into the world's hash tables).
   (dolist (room (area-room-list area))
@@ -444,7 +492,17 @@ with the latest migration version at creation."
                 ;; after a restart.  Also covers areas whose snapshot
                 ;; predates the WORLD slot (which restores as NIL).
                 (when (typep obj 'persistent-area)
-                  (setf (area-world obj) world))))
+                  (setf (area-world obj) world)
+                  ;; Rebuild the area's cl-graph index now that every slot
+                  ;; value is restored.  On a transaction-log replay (a
+                  ;; restart without a snapshot) the area's
+                  ;; INITIALIZE-TRANSIENT-INSTANCE runs at MAKE-INSTANCE
+                  ;; time — before BKNR applies the ROOMS/CONNECTIONS slot
+                  ;; values from the log — so the graph built there is
+                  ;; empty.  Rebuilding here, after the whole restore,
+                  ;; makes the graph reflect the restored rooms and
+                  ;; connections (a no-op when it is already correct).
+                  (area-rebuild-graph! obj))))
             (dolist (obj (bknr.datastore:store-objects-with-class
                           'persistent-object))
               (unless (bknr.indices:object-destroyed-p obj)
