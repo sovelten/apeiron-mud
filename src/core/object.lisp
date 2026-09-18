@@ -116,15 +116,21 @@ of FROM's, so a copy never shares mutable state with the original."
       copy)))
 
 (defun new-object (&key (name "object") (location nil)
-                     (description "") (aliases nil) (keywords nil))
+                     (description "") (aliases nil) (keywords nil)
+                     (properties nil))
   "Create a new MUD object.  KEYWORDS control which body slots the object
-can be worn/held in (see WEAR and ITEM-FITS-SLOT-P)."
-  (make-instance 'mud-object
-                 :name name
-                 :location location
-                 :description description
-                 :aliases aliases
-                 :keywords keywords))
+can be worn/held in (see WEAR and ITEM-FITS-SLOT-P).  PROPERTIES is an
+optional plist of initial object properties (applied with
+OBJECT-SET-PROPERTY), e.g. a weapon's \"damage-min\"/\"damage-max\"."
+  (let ((object (make-instance 'mud-object
+                               :name name
+                               :location location
+                               :description description
+                               :aliases aliases
+                               :keywords keywords)))
+    (loop for (key value) on properties by #'cddr
+          do (object-set-property object key value))
+    object))
 
 (defun object-name-matches (obj name)
   "Return non-NIL if NAME matches the object's primary name (exact or whole-word,

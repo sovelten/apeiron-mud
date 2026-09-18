@@ -216,8 +216,17 @@ and any worn/held items."
 (defparameter +character-hp-per-stamina+ 10
   "A character's maximum HP is this many times their stamina level.")
 
-(defparameter +character-default-attack-min+ 4)
-(defparameter +character-default-attack-max+ 9)
+(defparameter +character-strength-per-damage+ 5
+  "Character levels of strength that add one point of melee damage.")
+
+(defparameter +character-strength-per-attack+ 5
+  "Strength points gained for every attack a character makes.")
+
+(defparameter +character-unarmed-damage-min+ 1
+  "Minimum damage of a bare-handed attack, before the strength bonus.")
+
+(defparameter +character-unarmed-damage-max+ 3
+  "Maximum damage of a bare-handed attack, before the strength bonus.")
 
 ;; ─── Stat designators and storage ───────────────────────────────────────────
 
@@ -299,7 +308,9 @@ Deliberately free of numbers — it conveys the *feeling* of progress.")
   (:method ((stat (eql :stamina)))
     (yellow "Something deep within you settles and strengthens. Your breath comes easier, your stride sure and tireless; the road ahead no longer daunts you. (You have gained stamina)"))
   (:method ((stat (eql :intelligence)))
-    (yellow "Your thoughts come quicker and clearer, and patterns that once hid in the noise now arrange themselves before you. (You have gained intelligence)")))
+    (yellow "Your thoughts come quicker and clearer, and patterns that once hid in the noise now arrange themselves before you. (You have gained intelligence)"))
+  (:method ((stat (eql :strength)))
+    (yellow "A deep well of power unfurls in your arms and shoulders; your grip tightens and the weight of a weapon settles into your hand like an old friend. (You have gained strength)")))
 
 (defun character-gain-stat-points (character stat points)
   "Add POINTS toward CHARACTER's STAT, raising the level as thresholds are
@@ -362,6 +373,24 @@ Wordle puzzles."
   "Points CHARACTER has banked toward the next intelligence level."
   (character-stat-points character :intelligence))
 
+(defun character-strength (character)
+  "Return CHARACTER's strength level.  Strength grows by attacking."
+  (character-stat character :strength))
+
+(defun (setf character-strength) (value character)
+  (setf (character-stat character :strength) value))
+
+(defun character-strength-points (character)
+  "Points CHARACTER has banked toward the next strength level."
+  (character-stat-points character :strength))
+
+(defun character-strength-bonus (character)
+  "Return the melee damage bonus granted by CHARACTER's strength: one point
+per +CHARACTER-STRENGTH-PER-DAMAGE+ levels above the base, so a starting
+character adds nothing and the bonus grows with the stat."
+  (floor (- (character-strength character) +character-base-stat+)
+         +character-strength-per-damage+))
+
 (defun character-max-hp (character)
   "Return CHARACTER's maximum hit points, derived from stamina."
   (* +character-hp-per-stamina+ (character-stamina character)))
@@ -383,14 +412,99 @@ characters need no migration."
   (unless (object-get-property character "hp")
     (object-set-property character "hp" (character-max-hp character))))
 
+;; ─── Melee damage: strength plus weapon ─────────────────────────────────────
+;;
+;; An attack's damage is additive: a bonus derived from the attacker's
+;; strength, plus a random roll from the damage range of the weapon being
+;; held.  A weapon is any item carrying the "weapon" keyword (see WEAPON);
+;; character-held-weapon picks the one in hand, and character-damage-range
+;; falls back to the (weaker) bare-handed range when none is held.
+
+(defun character-held-weapon (character)
+  "Return the first weapon CHARACTER is holding, or NIL if none.  A weapon
+is any item carrying the \"weapon\" keyword (see WEAPON-P)."
+  (loop for pair in (character-worn-items character)
+        for item = (cdr pair)
+        when (weapon-p item)
+          return item))
+
+(defun character-damage-range (character)
+  "Return (values MIN MAX) the melee damage range of CHARACTER: the held
+weapon's range (see WEAPON-DAMAGE-RANGE), or the bare-handed range when no
+weapon is held."
+  (let ((weapon (character-held-weapon character)))
+    (if weapon
+        (weapon-damage-range weapon)
+        (values +character-unarmed-damage-min+ +character-unarmed-damage-max+))))
+
 (defun character-roll-attack (character)
-  "Roll CHARACTER's damage for one attack."
-  (declare (ignore character))
-  (+ +character-default-attack-min+
-     (random (1+ (- +character-default-attack-max+ +character-default-attack-min+)))))
+  "Roll CHARACTER's melee damage for one attack: the strength bonus plus a
+roll from the damage range of the weapon being held — or the bare-handed
+range when no weapon is held."
+  (multiple-value-bind (min max) (character-damage-range character)
+    (+ (character-strength-bonus character)
+       (roll-damage-range min max))))
 
 (defun character-defeated-p (character)
   (<= (character-hp character) 0))
 
 (defun character-heal-full (character)
   (setf (character-hp character) (character-max-hp character)))
+
+;; ─── Resolving a fight ──────────────────────────────────────────────────────
+
+(defun character-attack-npc (world character npc)
+  "CHARACTER attacks NPC, returning the list of messages to send to the
+character.  Damage comes from CHARACTER-ROLL-ATTACK (strength plus weapon),
+and each attack also banks +CHARACTER-STRENGTH-PER-ATTACK+ strength points,
+announcing the yellow level-up message when a level is reached."
+  (character-ensure-combat-stats character)
+  (let ((messages (list)))
+    (when (npc-defeated-p npc)
+      (return-from character-attack-npc
+        (list (format nil "~A is already defeated." (bold-red (object-name npc))))))
+    (let ((damage (character-roll-attack character)))
+      (setf (npc-hp npc) (- (npc-hp npc) damage))
+      (push (format nil "~A ~A for ~A!"
+                    (bold-green "You strike")
+                    (bold-red (object-name npc))
+                    (bold-red (format nil "~D damage" damage)))
+            messages)
+      (if (<= (npc-hp npc) 0)
+          (progn
+            (npc-defeat! npc)
+            (push (bright-green (npc-defeat-message npc)) messages)
+            (when (npc-victory-flag npc)
+              (object-set-property character (npc-victory-flag npc) t)
+              (push (format nil "~A ~A." (bright-yellow "You earned a victory mark:")
+                            (bright-cyan (npc-victory-flag npc)))
+                    messages)))
+          (let ((counter (npc-roll-attack npc)))
+            (setf (character-hp character) (- (character-hp character) counter))
+            (push (format nil "~A hits you for ~A! (Your HP: ~A)"
+                          (bold-red (object-name npc))
+                          (bold-red (format nil "~D damage" counter))
+                          (let ((hp-text (format nil "~D/~D"
+                                                  (character-hp character)
+                                                  (character-max-hp character))))
+                            (if (<= (character-hp character) (/ (character-max-hp character) 4))
+                                (bold-red hp-text)
+                                (if (<= (character-hp character) (/ (character-max-hp character) 2))
+                                    (yellow hp-text)
+                                    (bright-green hp-text)))))
+                  messages)
+            (when (character-defeated-p character)
+              (push (bold-red "You black out and wake up at the cavern entrance, bruised but alive.")
+                    messages)
+              (character-heal-full character)
+              (let ((entrance (loop for r being the hash-values of (world-rooms world)
+                                   when (search "Cavern Mouth" (object-name r))
+                                   return r)))
+                (when entrance
+                  (object-move character entrance))))))
+      ;; Every attack hones strength.  Pushed last so the message follows
+      ;; the strike (and any defeat) messages.
+      (when (plusp (character-gain-stat-points character :strength
+                                               +character-strength-per-attack+))
+        (push (character-stat-level-up-message :strength) messages)))
+    (nreverse messages)))

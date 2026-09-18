@@ -371,10 +371,11 @@ without :TRANSIENT-WORLD."
                                               :description "A pointy, midnight-blue wizard hat, dusted with tiny silver stars that seem to twinkle."
                                               :keywords '("hat" "wizard")
                                               :aliases '("hat" "wizard hat")))
-      (container-add-object nexus (new-object :name "a rusty sword"
+      (container-add-object nexus (new-weapon :name "a rusty sword"
                                               :description "A battered blade, its edge nicked and its grip wrapped in frayed leather."
-                                              :keywords '("weapon" "sword")
-                                              :aliases '("sword")))
+                                              :keywords '("sword")
+                                              :aliases '("sword")
+                                              :damage-min 4 :damage-max 8))
       (world-add-object! world nexus)
       (world-set-starting-room! world nexus))
     world))

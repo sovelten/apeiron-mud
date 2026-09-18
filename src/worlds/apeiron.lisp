@@ -32,10 +32,11 @@ entrance is the nexus.  Returns the area."
                                  :description "A pointy, midnight-blue wizard hat, dusted with tiny silver stars that seem to twinkle."
                                  :keywords '("hat" "wizard")
                                  :aliases '("hat" "wizard hat")))
-         (rusty-sword (new-object :name "a rusty sword"
+         (rusty-sword (new-weapon :name "a rusty sword"
                                   :description "A battered blade, its edge nicked and its grip wrapped in frayed leather."
-                                  :keywords '("weapon" "sword")
-                                  :aliases '("sword")))
+                                  :keywords '("sword")
+                                  :aliases '("sword")
+                                  :damage-min 4 :damage-max 8))
          (guestbook (new-guestbook :name "an oak guestbook"))
          (decorator (new-decorator :name "a decorator"
                                    :description "A cheerful decorator that can refresh this room. Tell it 'set name' or 'set description'."
