@@ -260,6 +260,50 @@
        (ignore-errors (bknr.datastore:close-store))
        (makunbound 'bknr.datastore:*store*)))))
 
+(test runtime-area-survives-crash-without-snapshot
+  "A pre-built area added to a running persistent world at runtime must
+  survive a restart recovered from the transaction log alone — a crash,
+  i.e. close-store WITHOUT sync-world.  Regression: WORLD-ADD-AREA!
+  materialized its closure with CHANGE-CLASS but never wrote the slot
+  values into the transaction log, so after a crash-restore every object
+  came back with unbound slots: NAME reset to \"unnamed object\", the
+  area's CONNECTIONS/ENTRANCE cleared, object locations detached, and the
+  cl-graph index left empty."
+  (unwind-protect
+       (let* ((world (apeiron.persistence:world-restore-or-initialize
+                      :force-new t
+                      :initializer (lambda ()
+                                     (let ((w (apeiron.core:new-world)))
+                                       (let ((r (apeiron.core:new-room :name "Bare Nexus")))
+                                         (apeiron.core:world-add-object! w r)
+                                         (apeiron.core:world-set-starting-room! w r))
+                                       w))))
+              (eridu (apeiron.worlds::build-eridu)))
+         (apeiron.core:world-add-area! world eridu)
+         ;; Simulate a CRASH: close the store without snapshotting.
+         (bknr.datastore:close-store)
+         (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
+                (restored (apeiron.core:world-area-with-name
+                           new-world "Eridu, the First City")))
+           (is (not (null restored))
+               "Eridu must be found by its real name after a crash-restore")
+           (is (= 18 (apeiron.core:area-room-count restored)))
+           (is (= 17 (apeiron.core:area-connection-count restored)))
+           (is (apeiron.core:area-connected-graph-p restored)
+               "The cl-graph index must be rebuilt from the restored rooms/connections")
+           (is (equal "Marsh Causeway"
+                      (apeiron.core:object-name (apeiron.core:area-entrance restored))))
+           (let ((causeway (apeiron.core:area-find-room restored "Marsh Causeway"))
+                 (gate (apeiron.core:area-find-room restored "City Gate of Eridu")))
+             (is (not (null causeway)))
+             (is (not (null gate)))
+             (is (eq gate (apeiron.core:room-exit-target causeway "north"))
+                 "Movement through the restored area must work"))))
+    (ignore-errors
+     (when (boundp 'bknr.datastore:*store*)
+       (ignore-errors (bknr.datastore:close-store))
+       (makunbound 'bknr.datastore:*store*)))))
+
 (test decorator-set-name-and-description
   "Telling a decorator 'set name' / 'set description' prompts for input
   (like the guestbook write command) and updates the room the decorator
