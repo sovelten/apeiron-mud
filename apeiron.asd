@@ -47,7 +47,7 @@
                  (:file "room" :depends-on ("object" "container" "connection"))
                  (:file "guestbook" :depends-on ("object" "character"))
                  (:file "wordle" :depends-on ("object" "character"))
-                 (:file "area" :depends-on ("room" "connection"))
+                 (:file "area" :depends-on ("room" "connection" "npc"))
                  (:file "npc" :depends-on ("object"))
                  (:file "session" :depends-on ("utils"))
                  (:file "account" :depends-on ("utils" "constants"))

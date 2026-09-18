@@ -529,3 +529,52 @@ Returns (values area tavern forest cave peak)."
         (is (eq outside (apeiron.core:room-exit-target hub "door")))
         ;; room's own list holds only the cross-area connection
         (is (= 1 (length (apeiron.core:room-connections hub))))))))
+
+;; ─── NPC resurrection ──────────────────────────────────────────────────────
+
+(test npc-resurrect!-restores-full-hp
+  "NPC-RESURRECT! clears the defeated flag and refills hit points."
+  (let ((npc (apeiron.core:new-npc :name "a troll" :hp 12 :max-hp 12)))
+    (is (not (apeiron.core:npc-defeated-p npc)))
+    (apeiron.core:npc-defeat! npc)
+    (is (apeiron.core:npc-defeated-p npc))
+    (is (zerop (apeiron.core:npc-hp npc)))
+    (is (eq npc (apeiron.core:npc-resurrect! npc)))
+    (is (not (apeiron.core:npc-defeated-p npc)))
+    (is (= 12 (apeiron.core:npc-hp npc)))))
+
+(test area-resurrects-defeated-npcs
+  "AREA-NPCS lists the NPCs standing in an area's rooms, AREA-DEFEATED-NPCS
+those among them that are down, and AREA-RESURRECT-NPCS! revives only the
+defeated ones — returning them, and leaving plain objects and already-living
+NPCs untouched."
+  (let ((area (apeiron.core:new-area :name "Bestiary"))
+        (den (apeiron.core:new-room :name "Den"))
+        (lair (apeiron.core:new-room :name "Lair")))
+    (apeiron.core:area-connect-rooms! area den lair :to "north" :from "south")
+    (let ((wolf (apeiron.core:new-npc :name "a wolf" :hp 8 :max-hp 8))
+          (bear (apeiron.core:new-npc :name "a bear" :hp 20 :max-hp 20))
+          (rock (apeiron.core:new-object :name "a boulder")))
+      (apeiron.core:container-add-object den wolf)
+      (apeiron.core:container-add-object den rock)
+      (apeiron.core:container-add-object lair bear)
+      ;; One NPC defeated in each room; the boulder is not an NPC.
+      (apeiron.core:npc-defeat! wolf)
+      (apeiron.core:npc-defeat! bear)
+      (is (= 2 (length (apeiron.core:area-npcs area))))
+      (is (member wolf (apeiron.core:area-npcs area)))
+      (is (member bear (apeiron.core:area-npcs area)))
+      (is (not (member rock (apeiron.core:area-npcs area))))
+      (is (= 2 (length (apeiron.core:area-defeated-npcs area))))
+      ;; Revive the whole area: both are returned, at full health.
+      (let ((revived (apeiron.core:area-resurrect-npcs! area)))
+        (is (= 2 (length revived)))
+        (is (member wolf revived))
+        (is (member bear revived)))
+      (is (not (apeiron.core:npc-defeated-p wolf)))
+      (is (not (apeiron.core:npc-defeated-p bear)))
+      (is (= 8 (apeiron.core:npc-hp wolf)))
+      (is (= 20 (apeiron.core:npc-hp bear)))
+      (is (null (apeiron.core:area-defeated-npcs area)))
+      ;; Nothing left to revive.
+      (is (null (apeiron.core:area-resurrect-npcs! area))))))

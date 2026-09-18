@@ -146,6 +146,7 @@
    #:npc-attack-max
    #:npc-defeated-p
    #:npc-defeat!
+   #:npc-resurrect!
    #:npc-defeat-message
    #:npc-victory-flag
    #:npc-roll-attack
@@ -249,6 +250,9 @@
    #:area-reachable-rooms
    #:area-connected-components
    #:area-connected-graph-p
+   #:area-npcs
+   #:area-defeated-npcs
+   #:area-resurrect-npcs!
    #:area-rebuild-graph!
 
    ;; Guestbook
