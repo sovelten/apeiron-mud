@@ -49,9 +49,11 @@ reported."
   (let ((character (make-stat-test-character "Newbie")))
     (is (= 10 (apeiron.core:character-stamina character)))
     (is (= 10 (apeiron.core:character-intelligence character)))
+    (is (= 10 (apeiron.core:character-strength character)))
     (is (= 100 (apeiron.core:character-max-hp character)))
     (is (= 10 (apeiron.core:object-get-property character "stamina")))
-    (is (= 10 (apeiron.core:object-get-property character "intelligence")))))
+    (is (= 10 (apeiron.core:object-get-property character "intelligence")))
+    (is (= 10 (apeiron.core:object-get-property character "strength")))))
 
 (test stat-points-follow-fibonacci
   "The points needed to gain each stat level follow the Fibonacci
@@ -104,7 +106,7 @@ progression 10, 10, 20, 30, 50, 80, 130, ... for levels 10, 11, 12, ..."
 
 (test stat-level-up-message-is-yellow
   "Every stat's level-up message is yellow and mentions no numbers."
-  (dolist (stat '(:stamina :intelligence))
+  (dolist (stat '(:stamina :intelligence :strength))
     ;; Plain text (colors off) contains no digits.
     (let ((*colorize* nil))
       (is (null (find-if #'digit-char-p
@@ -161,3 +163,80 @@ to the next level and announce the progress in yellow."
         ;; The yellow level-up message was delivered.
         (is (search "Something deep within you"
                     (get-output-stream-string output)))))))
+
+;; ─── Strength and weapon damage ────────────────────────────────────────────
+
+(test strength-bonus-follows-levels
+  "Strength grants one point of melee damage per five levels above the
+base, so a starting character adds nothing and a maxed one adds ten."
+  (let ((character (make-stat-test-character "Brawler")))
+    (is (= 0 (apeiron.core:character-strength-bonus character)))
+    (setf (apeiron.core:character-strength character) 15)
+    (is (= 1 (apeiron.core:character-strength-bonus character)))
+    (setf (apeiron.core:character-strength character) 60)
+    (is (= 10 (apeiron.core:character-strength-bonus character)))))
+
+(test bare-handed-damage-uses-unarmed-range
+  "With no weapon held, every roll lands within the bare-handed range plus
+the strength bonus."
+  (let* ((character (make-stat-test-character "Unarmed"))
+         (bonus (apeiron.core:character-strength-bonus character))
+         (low (+ apeiron.core:+character-unarmed-damage-min+ bonus))
+         (high (+ apeiron.core:+character-unarmed-damage-max+ bonus)))
+    (is (null (apeiron.core:character-held-weapon character)))
+    (is (loop repeat 200
+              always (<= low (apeiron.core:character-roll-attack character) high)))))
+
+(test held-weapon-range-drives-damage
+  "A held weapon supplies its own damage range, with the strength bonus
+added on top.  An item in the inventory but not in a hand is not a weapon
+in use; wearing it in a hand makes it one."
+  (let* ((character (make-stat-test-character "Swordsman"))
+         (sword (apeiron.core:new-object
+                 :name "a testing sword"
+                 :keywords '("weapon" "sword")
+                 :properties '("damage-min" 5 "damage-max" 5))))
+    ;; In inventory but not held: still bare-handed.
+    (apeiron.core:container-add-object character sword)
+    (is (null (apeiron.core:character-held-weapon character)))
+    (multiple-value-bind (limb reason)
+        (apeiron.core:wear character sword "left hand")
+      (declare (ignore limb))
+      (is (eq reason :ok)))
+    (is (eq sword (apeiron.core:character-held-weapon character)))
+    ;; A fixed 5..5 range makes the roll deterministic: bonus + 5.
+    (is (= (+ 5 (apeiron.core:character-strength-bonus character))
+           (apeiron.core:character-roll-attack character)))))
+
+(test attacking-banks-strength-points
+  "Every attack banks five strength points; two swings at the base level
+raise strength to 11 and clear the banked points."
+  (let ((world (apeiron.core:new-world))
+        (character (make-stat-test-character "Slogger"))
+        (dummy (apeiron.core:new-npc :name "a training dummy"
+                                     :hp 1000 :max-hp 1000
+                                     :attack-min 0 :attack-max 0)))
+    (is (= 10 (apeiron.core:character-strength character)))
+    (apeiron.core:character-attack-npc world character dummy)
+    (is (= 5 (apeiron.core:character-strength-points character)))
+    (apeiron.core:character-attack-npc world character dummy)
+    (is (= 11 (apeiron.core:character-strength character)))
+    (is (= 0 (apeiron.core:character-strength-points character)))))
+
+(test new-weapon-adds-keyword-and-range
+  "NEW-WEAPON builds a weapon with the \"weapon\" keyword and a damage
+range, so callers need not repeat them.  Absent damage arguments fall back
+to the generic weapon range."
+  (let ((axe (apeiron.core:new-weapon :name "a war axe"
+                                      :keywords '("axe")
+                                      :aliases '("axe")
+                                      :damage-min 6 :damage-max 12))
+        (plain (apeiron.core:new-weapon)))
+    (is (apeiron.core:weapon-p axe))
+    (is (member "axe" (apeiron.core:object-keywords axe) :test #'string-equal))
+    (is (equal '(6 12)
+               (multiple-value-list (apeiron.core:weapon-damage-range axe))))
+    (is (apeiron.core:weapon-p plain))
+    (is (equal (list apeiron.core:+weapon-damage-min+
+                     apeiron.core:+weapon-damage-max+)
+               (multiple-value-list (apeiron.core:weapon-damage-range plain))))))

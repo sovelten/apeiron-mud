@@ -174,7 +174,7 @@ sound made by CHARACTER's worn items (so the mover can hear it too)."
         (character-send-message character "Attack whom? Usage: attack <name>")
         (let ((npc (find-npc-in-room room args)))
           (if npc
-              (dolist (msg (combat-attack-npc world character npc))
+              (dolist (msg (character-attack-npc world character npc))
                 (character-send-message character msg))
               (character-send-message character "No such foe here."))))))
 
@@ -212,14 +212,16 @@ sound made by CHARACTER's worn items (so the mover can hear it too)."
              (character-send-message character "Wrong answer. Try again.")))))))
 
 (define-command "status" (world character args)
-  "Show your current status, including stamina, intelligence and hit points (HP)."
+  "Show your current status, including strength, stamina, intelligence and hit points (HP)."
   (declare (ignore world args))
   (character-ensure-combat-stats character)
   (let* ((hp (character-hp character))
          (max-hp (character-max-hp character))
          (hp-text (format nil "~D/~D" hp max-hp)))
     (character-send-message character
-                         (format nil "~A ~A~%~A ~A~%~A ~A"
+                         (format nil "~A ~A~%~A ~A~%~A ~A~%~A ~A"
+                                 (bold-white "Strength:")
+                                 (bright-cyan (format nil "~D" (character-strength character)))
                                  (bold-white "Stamina:")
                                  (bright-cyan (format nil "~D" (character-stamina character)))
                                  (bold-white "Intelligence:")

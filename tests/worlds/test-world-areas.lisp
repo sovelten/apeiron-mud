@@ -61,7 +61,7 @@
     (is (not (apeiron.core:npc-defeated-p grunt)))
     (loop repeat 20
           until (apeiron.core:npc-defeated-p grunt)
-          do (apeiron.core:combat-attack-npc world character grunt))
+          do (apeiron.core:character-attack-npc world character grunt))
     (is (apeiron.core:npc-defeated-p grunt))
     (is (apeiron.core:object-get-property character "beat-grunt-1"))))
 
@@ -84,7 +84,7 @@
     (setf (apeiron.core:character-hp character) 1)
     ;; This call triggers the respawn code path (character-defeated-p → world-rooms)
     ;; It should not signal a type-error
-    (is (listp (apeiron.core:combat-attack-npc world character grunt)))
+    (is (listp (apeiron.core:character-attack-npc world character grunt)))
     ;; After defeat, character should be healed and not in the grunt room
     (is (> (apeiron.core:character-hp character) 0))
     (is (not (eq (apeiron.core:object-location character) grunt-room)))))
@@ -206,7 +206,7 @@
         (is (not (null (apeiron.core:room-exit-blocked-p e-abzu character "north"))))
         (loop repeat 20
               until (apeiron.core:npc-defeated-p goat)
-              do (apeiron.core:combat-attack-npc world character goat))
+              do (apeiron.core:character-attack-npc world character goat))
         (is (apeiron.core:npc-defeated-p goat))
         (is (apeiron.core:object-get-property character "beat-suhur-mashu"))
         (is (null (apeiron.core:room-exit-blocked-p e-abzu character "north")))))))

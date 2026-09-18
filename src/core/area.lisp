@@ -394,3 +394,27 @@ unvisited room, remove its whole reachable set, and count."
 (and the area contains at least one room)."
   (and (plusp (area-room-count area))
        (= 1 (area-connected-components area))))
+
+;; ─── NPCs ──────────────────────────────────────────────────────────────────
+
+(defun area-npcs (area)
+  "Return every NPC standing in AREA's rooms, in room order.
+
+Only NPCs held directly by a room are reported; NPCs nested inside other
+containers (a chest, another character's inventory) are not."
+  (loop for room in (area-room-list area)
+        append (remove-if-not (lambda (object) (typep object 'mud-npc))
+                              (container-all-objects room))))
+
+(defun area-defeated-npcs (area)
+  "Return every defeated NPC standing in AREA's rooms."
+  (remove-if-not #'npc-defeated-p (area-npcs area)))
+
+(defun area-resurrect-npcs! (area)
+  "Bring every defeated NPC in AREA's rooms back to life at full hit
+points (see NPC-RESURRECT!).  Returns the list of NPCs revived, or NIL
+when none were defeated."
+  (let ((revived (area-defeated-npcs area)))
+    (dolist (npc revived)
+      (npc-resurrect! npc))
+    revived))

@@ -71,6 +71,13 @@
   (setf (npc-defeated-p npc) t
         (npc-hp npc) 0))
 
+(defun npc-resurrect! (npc)
+  "Bring a defeated NPC back to life at full hit points, clearing its
+defeated flag.  Returns NPC.  The inverse of NPC-DEFEAT!."
+  (setf (npc-defeated-p npc) nil
+        (npc-hp npc) (npc-max-hp npc))
+  npc)
+
 (defun find-npc-in-room (room name)
   "Find a living NPC in a room by partial name match or alias."
   (find-if (lambda (obj)

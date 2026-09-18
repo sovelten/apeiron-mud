@@ -146,11 +146,12 @@
    #:npc-attack-max
    #:npc-defeated-p
    #:npc-defeat!
+   #:npc-resurrect!
    #:npc-defeat-message
    #:npc-victory-flag
    #:npc-roll-attack
    #:find-npc-in-room
-   #:combat-attack-npc
+   #:character-attack-npc
    #:character-hp
    #:character-max-hp
    #:character-ensure-combat-stats
@@ -168,6 +169,22 @@
    #:character-stamina-points
    #:character-intelligence
    #:character-intelligence-points
+   #:character-strength
+   #:character-strength-points
+   #:character-strength-bonus
+   #:character-held-weapon
+   #:character-damage-range
+   #:character-roll-attack
+   #:weapon-p
+   #:new-weapon
+   #:weapon-damage-range
+   #:roll-damage-range
+   #:+character-strength-per-damage+
+   #:+character-strength-per-attack+
+   #:+character-unarmed-damage-min+
+   #:+character-unarmed-damage-max+
+   #:+weapon-damage-min+
+   #:+weapon-damage-max+
 
    ;; Room system
    #:mud-room
@@ -233,6 +250,9 @@
    #:area-reachable-rooms
    #:area-connected-components
    #:area-connected-graph-p
+   #:area-npcs
+   #:area-defeated-npcs
+   #:area-resurrect-npcs!
    #:area-rebuild-graph!
 
    ;; Guestbook

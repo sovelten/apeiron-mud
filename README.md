@@ -168,14 +168,14 @@ The server layer wires everything together.
 | `exits` | `exits` | List available exits |
 | `inventory` | `inventory` | View carried items |
 | `examine` | `examine <name>` | Examine an object or NPC |
-| `attack` | `attack <name>` | Attack an NPC |
+| `attack` | `attack <name>` | Attack an NPC (builds strength) |
 | `say` | `say <message>` | Speak to other characters in room |
 | `shout` | `shout <message>` | Broadcast to all characters |
 | `tell` | `tell <name> <message>` | Private message to a character or object |
 | `read` | `read <name>` | Read a readable object (guestbook, sign, etc.) |
 | `write` | `write <name>` | Write a message on a writable object |
 | `answer` | `answer <text>` | Answer a challenge/puzzle |
-| `status` | `status` | Show your stamina, intelligence and HP |
+| `status` | `status` | Show your strength, stamina, intelligence and HP |
 | `help` | `help` | List all commands |
 | `toggle-colors` | `toggle-colors` | Toggle ANSI color output |
 | `eval` | `eval <sexpr>` | Run arbitrary lisp code (admin only!) |
