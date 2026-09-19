@@ -32,8 +32,12 @@
   (:documentation "A non-character character that can be fought in the MUD"))
 
 (defmethod object-short-description ((obj mud-npc))
-  "Bright red for NPCs, name and ID only — no HP or description."
-  (bright-red (format nil "~A (ID: ~D)" (object-name obj) (object-id obj))))
+  "Bright red for NPCs, name and ID — no HP or description — plus a
+\"(defeated)\" marker once the NPC has been defeated, so room listings
+show opponents as defeated."
+  (bright-red (format nil "~A (ID: ~D)~A"
+                      (object-name obj) (object-id obj)
+                      (if (npc-defeated-p obj) " (defeated)" ""))))
 
 (defmethod object-long-description ((obj mud-npc))
   "Describe an NPC for examine output: name, HP, and description."
