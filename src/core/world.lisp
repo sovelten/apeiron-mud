@@ -393,6 +393,13 @@ is unambiguous."
               when (area-room-p candidate room)
               return candidate))))
 
+(defun world-resurrect-npcs! (world)
+  "Bring every defeated NPC in WORLD back to life at full hit points,
+delegating to AREA-RESURRECT-NPCS! for each registered area.  Returns the
+list of NPCs revived, or NIL when none were defeated."
+  (loop for area being the hash-values of (world-areas world)
+        append (area-resurrect-npcs! area)))
+
 (defgeneric create-object! (world object &optional room)
   (:documentation "Register OBJECT in WORLD, materializing it for persistent worlds.
 For transient worlds this is equivalent to WORLD-ADD-OBJECT!.

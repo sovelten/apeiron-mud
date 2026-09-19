@@ -1,5 +1,10 @@
 (in-package #:apeiron.core)
 
+;; STARTING-ROOM is defined in world.lisp, which loads after this file
+;; (WORLD depends on CHARACTER).  Declare it up front so compiling the
+;; death/respawn path does not warn about the forward reference.
+(declaim (ftype function starting-room))
+
 ;; TODO: split character and player-character for building NPCs
 
 (defun default-character-limbs ()
@@ -219,7 +224,7 @@ and any worn/held items."
 (defparameter +character-strength-per-damage+ 5
   "Character levels of strength that add one point of melee damage.")
 
-(defparameter +character-strength-per-attack+ 5
+(defparameter +character-strength-per-attack+ 2
   "Strength points gained for every attack a character makes.")
 
 (defparameter +character-unarmed-damage-min+ 1
@@ -437,13 +442,27 @@ weapon is held."
         (weapon-damage-range weapon)
         (values +character-unarmed-damage-min+ +character-unarmed-damage-max+))))
 
+(defun character-melee-roll (character)
+  "Roll CHARACTER's melee damage for one attack.
+
+Returns (values TOTAL WEAPON ROLL BONUS MIN MAX): TOTAL is BONUS plus
+ROLL, a random draw from [MIN, MAX] — the damage range of the weapon
+being held, or the bare-handed range when none is held.  WEAPON is the
+held weapon object, or NIL when striking bare-handed; BONUS is the
+strength bonus; MIN and MAX bound ROLL.  Callers that only need the total
+can use CHARACTER-ROLL-ATTACK."
+  (let* ((weapon (character-held-weapon character))
+         (bonus (character-strength-bonus character)))
+    (multiple-value-bind (min max) (character-damage-range character)
+      (let ((roll (roll-damage-range min max)))
+        (values (+ bonus roll) weapon roll bonus min max)))))
+
 (defun character-roll-attack (character)
   "Roll CHARACTER's melee damage for one attack: the strength bonus plus a
 roll from the damage range of the weapon being held — or the bare-handed
-range when no weapon is held."
-  (multiple-value-bind (min max) (character-damage-range character)
-    (+ (character-strength-bonus character)
-       (roll-damage-range min max))))
+range when no weapon is held.  See CHARACTER-MELEE-ROLL for the full
+breakdown."
+  (character-melee-roll character))
 
 (defun character-defeated-p (character)
   (<= (character-hp character) 0))
@@ -455,21 +474,32 @@ range when no weapon is held."
 
 (defun character-attack-npc (world character npc)
   "CHARACTER attacks NPC, returning the list of messages to send to the
-character.  Damage comes from CHARACTER-ROLL-ATTACK (strength plus weapon),
-and each attack also banks +CHARACTER-STRENGTH-PER-ATTACK+ strength points,
+character.  Damage comes from CHARACTER-MELEE-ROLL (strength plus weapon);
+the strike message names the weapon in use — or says the character is
+striking bare-handed — and spells out the full damage calculation.  Each
+attack also banks +CHARACTER-STRENGTH-PER-ATTACK+ strength points,
 announcing the yellow level-up message when a level is reached."
   (character-ensure-combat-stats character)
   (let ((messages (list)))
     (when (npc-defeated-p npc)
       (return-from character-attack-npc
         (list (format nil "~A is already defeated." (bold-red (object-name npc))))))
-    (let ((damage (character-roll-attack character)))
+    (multiple-value-bind (damage weapon roll bonus min max)
+        (character-melee-roll character)
       (setf (npc-hp npc) (- (npc-hp npc) damage))
-      (push (format nil "~A ~A for ~A!"
-                    (bold-green "You strike")
-                    (bold-red (object-name npc))
-                    (bold-red (format nil "~D damage" damage)))
-            messages)
+      (let* ((how (if weapon
+                      (format nil "with ~A" (bright-cyan (object-name weapon)))
+                      "with your bare hands"))
+             (source (if weapon (object-name weapon) "bare hands"))
+             (breakdown (format nil "~A ~D-~D roll ~D + strength ~D = ~D damage"
+                                source min max roll bonus damage)))
+        (push (format nil "~A ~A ~A for ~A! (~A)"
+                      (bold-green "You strike")
+                      (bold-red (object-name npc))
+                      how
+                      (bold-red (format nil "~D damage" damage))
+                      breakdown)
+              messages))
       (if (<= (npc-hp npc) 0)
           (progn
             (npc-defeat! npc)
@@ -494,14 +524,12 @@ announcing the yellow level-up message when a level is reached."
                                     (bright-green hp-text)))))
                   messages)
             (when (character-defeated-p character)
-              (push (bold-red "You black out and wake up at the cavern entrance, bruised but alive.")
+              (push (bold-red "You black out. When you come to, you are back where your journey began, bruised but alive.")
                     messages)
               (character-heal-full character)
-              (let ((entrance (loop for r being the hash-values of (world-rooms world)
-                                   when (search "Cavern Mouth" (object-name r))
-                                   return r)))
-                (when entrance
-                  (object-move character entrance))))))
+              (let ((home (starting-room world)))
+                (when home
+                  (object-move character home))))))
       ;; Every attack hones strength.  Pushed last so the message follows
       ;; the strike (and any defeat) messages.
       (when (plusp (character-gain-stat-points character :strength

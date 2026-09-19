@@ -391,6 +391,7 @@
    #:world-total-areas
    #:world-area-with-name
    #:world-area-of-room
+   #:world-resurrect-npcs!
    #:world-set-starting-room!
    #:starting-room
    #:place-character!

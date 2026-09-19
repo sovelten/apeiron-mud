@@ -209,7 +209,7 @@ in use; wearing it in a hand makes it one."
            (apeiron.core:character-roll-attack character)))))
 
 (test attacking-banks-strength-points
-  "Every attack banks five strength points; two swings at the base level
+  "Every attack banks two strength points; five swings at the base level
 raise strength to 11 and clear the banked points."
   (let ((world (apeiron.core:new-world))
         (character (make-stat-test-character "Slogger"))
@@ -218,8 +218,9 @@ raise strength to 11 and clear the banked points."
                                      :attack-min 0 :attack-max 0)))
     (is (= 10 (apeiron.core:character-strength character)))
     (apeiron.core:character-attack-npc world character dummy)
-    (is (= 5 (apeiron.core:character-strength-points character)))
-    (apeiron.core:character-attack-npc world character dummy)
+    (is (= 2 (apeiron.core:character-strength-points character)))
+    (loop repeat 4
+          do (apeiron.core:character-attack-npc world character dummy))
     (is (= 11 (apeiron.core:character-strength character)))
     (is (= 0 (apeiron.core:character-strength-points character)))))
 

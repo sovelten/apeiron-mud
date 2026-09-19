@@ -65,9 +65,9 @@
     (is (apeiron.core:npc-defeated-p grunt))
     (is (apeiron.core:object-get-property character "beat-grunt-1"))))
 
-(test character-defeated-respawns-at-cavern-mouth
-  "When a character is knocked out by an NPC, they respawn at the cavern mouth
-   without error — regression test: world-rooms returns a hash-table, not a list."
+(test character-defeated-respawns-at-starting-room
+  "When a character is knocked out by an NPC, they respawn at the world's
+   starting room, healed — the death/respawn path must not signal an error."
   (let* ((world (apeiron.persistence:world-restore-or-initialize
                  :force-new t
                  :initializer #'apeiron.worlds:new-default-world))
@@ -82,12 +82,30 @@
     (apeiron.core:object-move character grunt-room)
     ;; Crank the character's HP down so the very first counter-attack KOs them
     (setf (apeiron.core:character-hp character) 1)
-    ;; This call triggers the respawn code path (character-defeated-p → world-rooms)
+    ;; This call triggers the respawn code path (character-defeated-p → starting-room)
     ;; It should not signal a type-error
     (is (listp (apeiron.core:character-attack-npc world character grunt)))
-    ;; After defeat, character should be healed and not in the grunt room
+    ;; After defeat, character should be healed and back at the starting room
     (is (> (apeiron.core:character-hp character) 0))
-    (is (not (eq (apeiron.core:object-location character) grunt-room)))))
+    (is (eq (apeiron.core:object-location character)
+            (apeiron.core:starting-room world)))))
+
+(test world-resurrects-defeated-npcs
+  "WORLD-RESURRECT-NPCS! revives every defeated NPC across all of the
+world's areas, returning them at full health; a second call finds nothing
+left to revive."
+  (let* ((world (apeiron.core:new-world))
+         (area (apeiron.core:new-area :name "Bestiary"))
+         (den (apeiron.core:new-room :name "Den"))
+         (wolf (apeiron.core:new-npc :name "a wolf" :hp 8 :max-hp 8)))
+    (apeiron.core:container-add-object den wolf)
+    (apeiron.core:area-add-room! area den)
+    (apeiron.core:world-add-area! world area)
+    (apeiron.core:npc-defeat! wolf)
+    (is (equal (list wolf) (apeiron.core:world-resurrect-npcs! world)))
+    (is (not (apeiron.core:npc-defeated-p wolf)))
+    (is (= 8 (apeiron.core:npc-hp wolf)))
+    (is (null (apeiron.core:world-resurrect-npcs! world)))))
 
 (test challenge-answer-riddle
   "Answering a riddle correctly unblocks the connection via process-command."
