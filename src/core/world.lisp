@@ -75,7 +75,15 @@ indices, and return the object."
   ;; during login, and in tests that register objects directly, so those
   ;; objects keep CREATOR NIL.  Only fill when no creator is set yet, so
   ;; re-registering an existing object never overwrites its creator.
-  (when (and *current-player* (null (object-creator object)))
+  ;;
+  ;; Guests are never recorded: a guest character is destroyed on restart
+  ;; (see WORLD-RESTORE-OR-INITIALIZE), so a hard CREATOR reference to it
+  ;; becomes a dangling object reference that makes BKNR's snapshot
+  ;; encoder fail with "Encoding reference to destroyed object".  Leaving
+  ;; CREATOR NIL for guests keeps the datastore consistent.
+  (when (and *current-player*
+             (not (guest? *current-player*))
+             (null (object-creator object)))
     (setf (object-creator object) *current-player*))
   ;; Register in world's objects hash table
   (setf (gethash (object-id object) (world-objects world)) object)

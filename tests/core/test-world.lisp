@@ -352,11 +352,14 @@ by OBJECT-COPY tests."
 (test create-object!-stamps-creator-from-current-player
   "CREATE-OBJECT! records the acting player as the object's creator when
 *CURRENT-PLAYER* is bound (the in-game eval command binds it during a
-player's command), and leaves CREATOR NIL outside a player context."
+player's command), and leaves CREATOR NIL outside a player context or
+when the acting player is a guest (guests are destroyed on restart, so a
+hard CREATOR reference to one would dangle)."
   (let* ((world (apeiron.core:new-world))
          (session (make-instance 'apeiron.core:stream-session
                                  :stream (make-string-output-stream)))
-         (player (apeiron.core:new-character "Builder" session)))
+         (player (apeiron.core:new-character "Builder" session
+                                             :account "builder")))
     ;; Register the player character first, so world lookup works.
     (apeiron.core:create-object! world player)
     (let ((obj (apeiron.core:new-object :name "Vase")))
@@ -369,4 +372,12 @@ player's command), and leaves CREATOR NIL outside a player context."
         (let ((apeiron.core:*current-player* player))
           (apeiron.core:create-object! world obj2))
         (is (eq player (apeiron.core:object-creator obj2)))
-        (is (integerp (apeiron.core:object-created-at obj2)))))))
+        (is (integerp (apeiron.core:object-created-at obj2)))))
+    ;; A guest creator is never recorded: the reference would dangle once
+    ;; the guest is destroyed on restart, breaking BKNR snapshotting.
+    (let ((guest (apeiron.core:new-character "Guest" session))
+          (guest-obj (apeiron.core:new-object :name "Guest Vase")))
+      (apeiron.core:create-object! world guest)
+      (let ((apeiron.core:*current-player* guest))
+        (apeiron.core:create-object! world guest-obj))
+      (is (null (apeiron.core:object-creator guest-obj))))))
