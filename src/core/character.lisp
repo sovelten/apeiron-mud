@@ -221,7 +221,7 @@ and any worn/held items."
 (defparameter +character-hp-per-stamina+ 10
   "A character's maximum HP is this many times their stamina level.")
 
-(defparameter +character-strength-per-damage+ 5
+(defparameter +character-strength-per-damage+ 1
   "Character levels of strength that add one point of melee damage.")
 
 (defparameter +character-strength-per-attack+ 2
