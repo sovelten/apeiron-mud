@@ -451,24 +451,3 @@
 
   See [mcp/README.md](https://github.com/sovelten/apeiron-mud/blob/main/mcp/README.md)
   for setup and usage.""")
-
-(defsection @command-reference (:title "Command Reference")
-  """| Command | Usage | Description |
-  |---------|-------|-------------|
-  | `look` | `look` | Examine current room |
-  | `go` | `go <direction>` | Move (north/south/east/west) |
-  | `exits` | `exits` | List available exits |
-  | `inventory` | `inventory` | View carried items |
-  | `examine` | `examine <name>` | Examine an object or NPC |
-  | `attack` | `attack <name>` | Attack an NPC (builds strength) |
-  | `say` | `say <message>` | Speak to other characters in room |
-  | `shout` | `shout <message>` | Broadcast to all characters |
-  | `tell` | `tell <name> <message>` | Private message to a character or object |
-  | `read` | `read <name>` | Read a readable object (guestbook, sign, etc.) |
-  | `write` | `write <name>` | Write a message on a writable object |
-  | `answer` | `answer <text>` | Answer a challenge/puzzle |
-  | `status` | `status` | Show your strength, stamina, intelligence and HP |
-  | `help` | `help` | List all commands |
-  | `toggle-colors` | `toggle-colors` | Toggle ANSI color output |
-  | `eval` | `eval <sexpr>` | Run arbitrary lisp code (admin only!) |
-  | `quit` | `quit` | Disconnect |""")

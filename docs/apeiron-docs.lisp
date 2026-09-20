@@ -78,14 +78,12 @@
 ;;; truth — the manual renders the same sections).
 (defsection @readme (:title "Apeiron" :export t)
   """Apeiron is a MUD server written in Common Lisp, inspired by
-  Dworkin's Game Driver (DGD) and LMUD, with the reckless capability of
-  running Lisp code inside the game world.
+  Dworkin's Game Driver (DGD) and LambdaMoo and using Common Lisp as the scripting language.
 
   [![CI](https://github.com/sovelten/apeiron-mud/actions/workflows/test.yml/badge.svg)](https://github.com/sovelten/apeiron-mud/actions/workflows/test.yml)"""
   (@getting-started section)
   (@architecture section)
   (@protocols section)
-  (@command-reference section)
   """## Documentation
 
   - Full manual (generated from the source with 40ANTS-DOC):
@@ -109,7 +107,6 @@
   (@protocols section)
   (@features section)
   (@development section)
-  (@command-reference section)
   (apeiron.core::@world section)
   (apeiron.core::@commands section)
   (@tutorial-secret-room section)
