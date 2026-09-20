@@ -33,6 +33,22 @@ connection, so the game loop can stop polling a dead session instead of
 performing one more doomed — and possibly error-signalling — I/O
 operation on it."))
 
+(defgeneric session-sync-character (session character)
+  (:documentation "Push SESSION's current view of CHARACTER's state to the
+client.
+
+This is a protocol-agnostic hook: the core never decides *how* state is
+transmitted.  The default method does nothing, so non-networked sessions
+(and sessions whose transport has no structured channel) are unaffected.
+
+Network subclasses override it to emit whatever the client understands —
+for example a telnet session sends GMCP Char.Vitals / Char.Stats messages.
+It is called after login and after each processed command, so it must be
+cheap and idempotent.")
+  (:method (session character)
+    (declare (ignore session character))
+    nil))
+
 ;;
 ;; MUD Session basic implementation of protocols
 ;;

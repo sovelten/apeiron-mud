@@ -157,6 +157,12 @@
     (see `apeiron/telnet`).
   - **MSSP** — MUD Server Status Protocol: advertises server details
     (name, players, game type, ...) to directory services.
+  - **GMCP** — Generic Mud Communication Protocol (telnet option 201):
+    structured out-of-band client data.  The server pushes character
+    stats as `Char.Vitals` (hp/maxhp) and `Char.Stats` (str/sta/int).
+    The protocol engine lives in `apeiron/telnet` and is decoupled from
+    the game — the mapping from characters to GMCP packages is done in
+    the server bridge (`session-sync-character`).
   - **TLS** — secure transport for telnet connections (via `cl+ssl`).
   - **ANSI SGR colors** — colour output for the client (toggle with
     `toggle-colors`).""")

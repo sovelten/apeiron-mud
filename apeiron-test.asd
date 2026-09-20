@@ -8,6 +8,7 @@
                 :components
                 ((:file "test-package")
                  (:file "telnet/test-telnet" :depends-on ("test-package"))
+                 (:file "telnet/test-gmcp" :depends-on ("test-package" "telnet/test-telnet"))
                  (:file "core/test-object" :depends-on ("test-package"))
                  (:file "core/test-sign" :depends-on ("test-package"))
                  (:file "core/test-room" :depends-on ("test-package"))

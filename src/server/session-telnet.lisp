@@ -221,7 +221,63 @@ This function:
                 (let ((vars (funcall mssp-info-fn)))
                       vars))))
           
-          (defun %drain-telnet-negotiation (conn)
+          ;; ─── GMCP support ───────────────────────────────────────────────────────────
+
+(defun %setup-telnet-gmcp (protocol &key (client-name *mud-name*)
+                                      (client-version "1.0"))
+  "Register GMCP (Generic Mud Communication Protocol, telnet option 201)
+support on PROTOCOL.
+
+This marks the GMCP option as wanted locally (so TELNET-INIT-NEGOTIATION
+includes IAC WILL GMCP), records the name/version advertised in the
+Core.Hello handshake, and installs an on-enable callback that tells the
+client which GMCP packages we support.
+
+The telnet module itself knows nothing about characters or stats — it
+merely transports GMCP.  The mapping from game state to GMCP packages
+lives here (see SESSION-SYNC-CHARACTER) and in the game loop.
+
+CLIENT-NAME and CLIENT-VERSION default to the MUD name and \"1.0\"."
+  (telnet:telnet-register-gmcp protocol)
+  (setf (telnet:telnet-gmcp-client-name protocol) (or client-name "Apeiron")
+        (telnet:telnet-gmcp-client-version protocol) (or client-version "1.0")
+        ;; Sent once, right after GMCP is negotiated: advertise that we
+        ;; speak the Char package (level 1), so the client enables it.
+        (telnet:telnet-gmcp-on-enable-fn protocol)
+        (lambda (p)
+          (declare (ignore p))
+          (list (list "Core" "Supports.Set" "[\"Char 1\"]"))))
+  protocol)
+
+(defmethod session-sync-character ((session telnet-session) character)
+  "Push CHARACTER's current stats to a GMCP-capable client.
+
+Sends two standard GMCP packages:
+  Char.Vitals — {\"hp\":<current>,\"maxhp\":<maximum>}
+  Char.Stats  — {\"str\":<strength>,\"sta\":<stamina>,\"int\":<intelligence>}
+
+This is the server-side half of the decoupling: the core simply asks the
+session to sync a character (SESSION-SYNC-CHARACTER), and only here — where
+both the telnet transport and the game model are visible — do we decide
+that GMCP is how that is transmitted.
+
+It is a no-op when the session has no connection, GMCP was not negotiated,
+or there is no character.  Safe to call after every command."
+  (let ((conn (session-telnet-connection session)))
+    (when (and conn character (telnet:telnet-gmcp-enabled-p conn))
+      (character-ensure-combat-stats character)
+      (telnet:telnet-send-gmcp
+       conn "Char" "Vitals"
+       (format nil "{\"hp\":~D,\"maxhp\":~D}"
+               (character-hp character) (character-max-hp character)))
+      (telnet:telnet-send-gmcp
+       conn "Char" "Stats"
+       (format nil "{\"str\":~D,\"sta\":~D,\"int\":~D}"
+               (character-strength character)
+               (character-stamina character)
+               (character-intelligence character))))))
+
+(defun %drain-telnet-negotiation (conn)
   "Process all pending telnet negotiation commands (IAC WILL/WONT/DO/DONT
 and subnegotiations) from the connection, before the login flow starts.
 
@@ -292,7 +348,7 @@ REMOTE-ADDRESS is the client's IP address as a string."
                  :mssp-info-fn mssp-info-fn))
 
 (defun new-telnet-session (usocket &key start-tls certificate key password
-                                           mssp-info-fn)
+                                           mssp-info-fn (gmcp t))
   "Create a new telnet-session from an accepted usocket.
 Performs initial RFC 854 telnet option negotiation and returns
 a session ready for I/O.
@@ -301,6 +357,10 @@ When START-TLS is true, the START_TLS telnet option (46) is offered
 during initial negotiation.  If the client responds DO START_TLS, the
 connection is automatically upgraded to TLS in-band.  CERTIFICATE,
 KEY, and PASSWORD are required when START-TLS is true.
+
+When GMCP is true (the default), the GMCP option (201) is offered and,
+once negotiated, character stats are pushed to the client (see
+SESSION-SYNC-CHARACTER).
 
 MSSP-INFO-FN, when provided, enables MSSP (MUD Server Status Protocol,
 telnet option 70) support.  It is a function of no arguments that
@@ -314,6 +374,11 @@ Returns NIL if the connection is rejected as non-telnet traffic
                        (telnet-register-start-tls
                         (make-instance 'telnet-protocol))
                        (make-instance 'telnet-protocol))))
+    ;; Setup GMCP on the protocol BEFORE make-telnet-connection so that
+    ;; telnet-init-negotiation includes IAC WILL GMCP in the initial
+    ;; server negotiation.
+    (when gmcp
+      (%setup-telnet-gmcp protocol))
     ;; Setup MSSP on protocol BEFORE make-telnet-connection so that
     ;; telnet-init-negotiation includes IAC WILL MSSP in the initial
     ;; server negotiation.  The grapevine MSSP checker expects the
@@ -368,13 +433,17 @@ Returns NIL if the connection is rejected as non-telnet traffic
         (unless keep-open
           (telnet:telnet-connection-close conn))))))
 
-(defun new-telnet-tls-session (usocket &key certificate key password mssp-info-fn)
+(defun new-telnet-tls-session (usocket &key certificate key password
+                                          mssp-info-fn (gmcp t))
   "Create a new telnet-session with immediate TLS encryption from an
 accepted usocket.  Performs the TLS handshake (SSL_accept) and then
 initial RFC 854 telnet option negotiation.
 
 CERTIFICATE and KEY are paths to PEM-encoded certificate and private
 key files.  PASSWORD is the optional decryption password for the key.
+
+When GMCP is true (the default), the GMCP option (201) is offered and,
+once negotiated, character stats are pushed to the client.
 
 MSSP-INFO-FN, when provided, enables MSSP (MUD Server Status Protocol,
 telnet option 70) support.  It is a function of no arguments that
@@ -383,8 +452,12 @@ the server state (e.g. NAME, PLAYERS, UPTIME).
 
 Returns NIL if the connection is rejected as non-telnet traffic
 (e.g., HTTP-over-TLS on the secure port)."
-  (let* ((remote-addr (usocket-address-string usocket)))
+  (let* ((remote-addr (usocket-address-string usocket))
+         (protocol (make-instance 'telnet-protocol)))
+    (when gmcp
+      (%setup-telnet-gmcp protocol))
     (let ((conn (telnet:make-telnet-tls-connection usocket
+                                                   :protocol protocol
                                                    :certificate certificate
                                                    :key key
                                                    :password password))
@@ -410,10 +483,13 @@ Returns NIL if the connection is rejected as non-telnet traffic
           (telnet:telnet-connection-close conn))))))
 
 (defun new-telnet-session-with-start-tls (usocket &key certificate key password
-                                                        mssp-info-fn)
+                                                        mssp-info-fn (gmcp t))
   "Create a telnet-session that offers the START_TLS telnet option (46).
 The initial connection is plain-text.  If the client negotiates START_TLS,
 the connection is upgraded to TLS in-band using the provided credentials.
+
+When GMCP is true (the default), the GMCP option (201) is offered and,
+once negotiated, character stats are pushed to the client.
 
 MSSP-INFO-FN, when provided, enables MSSP (MUD Server Status Protocol,
 telnet option 70) support.  It is a function of no arguments that
@@ -426,4 +502,5 @@ This is a convenience wrapper around NEW-TELNET-SESSION with :START-TLS T."
                       :certificate certificate
                       :key key
                       :password password
+                      :gmcp gmcp
                       :mssp-info-fn mssp-info-fn))

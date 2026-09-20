@@ -303,6 +303,7 @@
    #:session-keepalive
    #:session-disconnect
    #:session-alive-p
+   #:session-sync-character
 
    ;; Session classes
    #:mud-session

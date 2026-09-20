@@ -71,7 +71,8 @@
                 ((:file "package")
                  (:file "protocol" :depends-on ("package"))
                  (:file "connection" :depends-on ("package" "protocol"))
-                 (:file "tls" :depends-on ("package" "protocol" "connection"))))))
+                 (:file "tls" :depends-on ("package" "protocol" "connection"))
+                 (:file "gmcp" :depends-on ("package" "protocol" "connection"))))))
 
 (defsystem "apeiron/persistence"
   :version "0.0.1"

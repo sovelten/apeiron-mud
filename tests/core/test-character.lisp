@@ -167,14 +167,23 @@ to the next level and announce the progress in yellow."
 ;; ─── Strength and weapon damage ────────────────────────────────────────────
 
 (test strength-bonus-follows-levels
-  "Strength grants one point of melee damage per five levels above the
-base, so a starting character adds nothing and a maxed one adds ten."
-  (let ((character (make-stat-test-character "Brawler")))
+  "Strength grants one point of melee damage per
++CHARACTER-STRENGTH-PER-DAMAGE+ levels above the base: a starting character
+adds nothing, and points accrue at that steady rate.  Expectations are
+derived from the tuning constants so the test tracks them."
+  (let* ((base apeiron.core:+character-base-stat+)
+         (max apeiron.core:+character-max-stat+)
+         (per apeiron.core:+character-strength-per-damage+)
+         ;; One full step above the base, clamped if a step overshoots max.
+         (mid (min (+ base per) max))
+         (character (make-stat-test-character "Brawler")))
     (is (= 0 (apeiron.core:character-strength-bonus character)))
-    (setf (apeiron.core:character-strength character) 15)
-    (is (= 1 (apeiron.core:character-strength-bonus character)))
-    (setf (apeiron.core:character-strength character) 60)
-    (is (= 10 (apeiron.core:character-strength-bonus character)))))
+    (setf (apeiron.core:character-strength character) mid)
+    (is (= (floor (- mid base) per)
+           (apeiron.core:character-strength-bonus character)))
+    (setf (apeiron.core:character-strength character) max)
+    (is (= (floor (- max base) per)
+           (apeiron.core:character-strength-bonus character)))))
 
 (test bare-handed-damage-uses-unarmed-range
   "With no weapon held, every roll lands within the bare-handed range plus

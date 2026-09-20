@@ -68,6 +68,19 @@
    #:+mssp-var+
    #:+mssp-val+
 
+   ;; GMCP (Generic Mud Communication Protocol)
+   #:+telnet-opt-gmcp+
+   #:telnet-register-gmcp
+   #:telnet-gmcp-enabled-p
+   #:telnet-send-gmcp
+   #:telnet-register-gmcp-handler
+   #:telnet-gmcp-on-enable-fn
+   #:telnet-gmcp-client-name
+   #:telnet-gmcp-client-version
+   #:telnet-gmcp-startup-messages
+   #:gmcp-encode
+   #:gmcp-decode
+
    ;; Option negotiation API
    #:telnet-local-option
    #:telnet-remote-option
