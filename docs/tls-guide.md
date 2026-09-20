@@ -260,10 +260,42 @@ layer above it is unaware of the change.
 | `TLS handshake failed`           | Certificate or key path incorrect.        |
 | `SSL_ERROR_SYSCALL`              | Client disconnected during handshake.     |
 | `Connection reset by peer`       | Client closed before server finished.     |
-| Client sees "unknown option 46"  | Old client that doesn't support START_TLS.|
+| `no shared cipher`              | Server had no certificate when the        |
+|                                 | handshake ran, usually because the TLS    |
+|                                 | config globals were wiped by a hot reload |
+|                                 | (`safe-update`). See below for details.   |
+| Client sees "unknown option 46" | Old client that doesn't support START_TLS.|
 | START_TLS not offered            | `*server-tls-prefer-start-tls*` is `nil`  |
 |                                  | or no certificate is configured.          |
 
 The server only advertises `START_TLS` when both
 `*server-tls-prefer-start-tls*` and valid certificate/key paths are
 configured.
+
+### `no shared cipher` in detail
+
+OpenSSL raises `tls_post_process_client_hello: no shared cipher` when it
+cannot select a cipher suite for the client's `ClientHello`. For a
+server this is the signature of **no certificate loaded** on the SSL
+handle: with no certificate there is no authentication method to anchor
+any cipher suite, so nothing can be chosen.
+
+`cl+ssl`'s `make-ssl-server-stream` reads the certificate and key *per
+connection*, so this error appears only for connections accepted *after*
+the certificate paths were lost. The listener keeps running and the log
+shows repeated `TLS handshake failed: ... no shared cipher ...` while
+the rest of the server behaves normally, which is why it looks like
+"TLS stopped getting through after a while".
+
+Historical cause in this project: the TLS settings were declared with
+`DEFPARAMETER`, so every hot reload (`safe-update` / `reload-apeiron`)
+that recompiled `src/server/constants.lisp` reset
+`*server-ssl-certificate*` and `*server-ssl-key*` to `nil` while the TLS
+listener kept running. They are `DEFVAR`s now, so a reload preserves the
+live configuration. If a running image already lost the settings, either
+restore them once or restart the server:
+
+```lisp
+(setf mud:*server-ssl-certificate* "/path/to/cert.pem"
+      mud:*server-ssl-key* "/path/to/key.pem")
+```
