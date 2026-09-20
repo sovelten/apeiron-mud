@@ -157,6 +157,12 @@
     (see `apeiron/telnet`).
   - **MSSP** — MUD Server Status Protocol: advertises server details
     (name, players, game type, ...) to directory services.
+  - **GMCP** — Generic Mud Communication Protocol (telnet option 201):
+    structured out-of-band client data.  The server pushes character
+    stats as `Char.Vitals` (hp/maxhp) and `Char.Stats` (str/sta/int).
+    The protocol engine lives in `apeiron/telnet` and is decoupled from
+    the game — the mapping from characters to GMCP packages is done in
+    the server bridge (`session-sync-character`).
   - **TLS** — secure transport for telnet connections (via `cl+ssl`).
   - **ANSI SGR colors** — colour output for the client (toggle with
     `toggle-colors`).""")
@@ -451,24 +457,3 @@
 
   See [mcp/README.md](https://github.com/sovelten/apeiron-mud/blob/main/mcp/README.md)
   for setup and usage.""")
-
-(defsection @command-reference (:title "Command Reference")
-  """| Command | Usage | Description |
-  |---------|-------|-------------|
-  | `look` | `look` | Examine current room |
-  | `go` | `go <direction>` | Move (north/south/east/west) |
-  | `exits` | `exits` | List available exits |
-  | `inventory` | `inventory` | View carried items |
-  | `examine` | `examine <name>` | Examine an object or NPC |
-  | `attack` | `attack <name>` | Attack an NPC (builds strength) |
-  | `say` | `say <message>` | Speak to other characters in room |
-  | `shout` | `shout <message>` | Broadcast to all characters |
-  | `tell` | `tell <name> <message>` | Private message to a character or object |
-  | `read` | `read <name>` | Read a readable object (guestbook, sign, etc.) |
-  | `write` | `write <name>` | Write a message on a writable object |
-  | `answer` | `answer <text>` | Answer a challenge/puzzle |
-  | `status` | `status` | Show your strength, stamina, intelligence and HP |
-  | `help` | `help` | List all commands |
-  | `toggle-colors` | `toggle-colors` | Toggle ANSI color output |
-  | `eval` | `eval <sexpr>` | Run arbitrary lisp code (admin only!) |
-  | `quit` | `quit` | Disconnect |""")

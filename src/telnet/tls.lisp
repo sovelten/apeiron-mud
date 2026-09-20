@@ -59,12 +59,17 @@ is an SSL stream returned by cl+ssl."
 ;;; Direct TLS — dedicated TLS port
 ;;; ----------------------------------------------------------------
 
-(defun make-telnet-tls-connection (usocket &key certificate key password)
+(defun make-telnet-tls-connection (usocket &key certificate key password
+                                            (protocol (make-instance 'telnet-protocol)))
   "Create a new telnet-connection that is immediately encrypted with TLS.
 
 USOCKET is a freshly-accepted usocket:stream-usocket from a TLS listener.
 CERTIFICATE and KEY are paths to PEM-encoded certificate and private key
 files.  PASSWORD is the (optional) password for the private key.
+
+When PROTOCOL is provided it is used instead of a fresh telnet-protocol
+instance, so callers can pre-configure option handlers/negotiation (e.g.
+START_TLS or GMCP) before the initial option negotiation is sent.
 
 The server-side TLS handshake (OpenSSL SSL_accept) is performed during
 this call.  On success, the returned telnet-connection is ready for use
@@ -90,8 +95,7 @@ On handshake failure, a telnet-tls-error is signalled."
              (error (e)
                (error 'telnet-tls-error
                       :message (format nil "TLS handshake failed: ~A" e))))))
-    (let* ((protocol (make-instance 'telnet-protocol))
-           (conn (make-instance 'telnet-connection
+    (let* ((conn (make-instance 'telnet-connection
                                 :usocket usocket
                                 :raw-stream ssl-stream
                                 :protocol protocol)))

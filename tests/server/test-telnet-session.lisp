@@ -206,3 +206,41 @@ stops polling it (and never touches the freed transport)."
 (test session-alive-p-default-true-for-base-session
   "The base MUD-SESSION (no transport) is always considered alive."
   (is-true (session-alive-p (new-session))))
+
+;; ─── GMCP character sync ────────────────────────────────────────────────────
+
+(defun enable-mock-gmcp (conn)
+  "Enable GMCP on CONN's protocol, as if the client answered DO GMCP."
+  (let ((protocol (telnet:telnet-conn-protocol conn)))
+    (setf (telnet::telnet-option-state-enabled
+           (telnet::ensure-option-state protocol :local telnet:+telnet-opt-gmcp+))
+          t)))
+
+(test session-sync-character-sends-gmcp-vitals-and-stats
+  "SESSION-SYNC-CHARACTER emits Char.Vitals and Char.Stats once GMCP is enabled."
+  (let* ((session (make-mock-telnet-session))
+         (conn (session-telnet-connection session))
+         (character (new-character "Tester" session)))
+    (enable-mock-gmcp conn)
+    (session-sync-character session character)
+    (let ((text (map 'string #'code-char (mock-conn-sent-bytes conn))))
+      (is-true (search "Char.Vitals" text) "Should send Char.Vitals")
+      (is-true (search "\"hp\":100" text) "Vitals should carry current hp")
+      (is-true (search "\"maxhp\":100" text) "Vitals should carry max hp")
+      (is-true (search "Char.Stats" text) "Should send Char.Stats")
+      (is-true (search "\"str\":10" text) "Stats should carry strength")
+      (is-true (search "\"sta\":10" text) "Stats should carry stamina")
+      (is-true (search "\"int\":10" text) "Stats should carry intelligence"))))
+
+(test session-sync-character-writes-nothing-without-gmcp
+  "SESSION-SYNC-CHARACTER is a no-op when GMCP was not negotiated."
+  (let* ((session (make-mock-telnet-session))
+         (conn (session-telnet-connection session))
+         (character (new-character "Tester" session)))
+    (session-sync-character session character)
+    (is (= 0 (length (mock-conn-sent-bytes conn)))
+        "No bytes should be written when GMCP is not negotiated")))
+
+(test session-sync-character-default-method-is-noop
+  "The base MUD-SESSION never sends protocol messages."
+  (is (null (session-sync-character (new-session) nil))))

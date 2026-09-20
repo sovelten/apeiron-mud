@@ -193,6 +193,9 @@ disconnected during the flow."
                (place-character! world character)
                (mud-write session (object-long-description (object-location character)))
                (mud-write session "Welcome to the MUD!")
+               ;; Push initial character state to protocol-capable clients
+               ;; (e.g. GMCP Char.Vitals/Char.Stats).
+               (session-sync-character session character)
 
                (let ((char-name (object-name character)))
                  (let ((ndc (format nil "ip=~A session=~A char=~A"
@@ -235,7 +238,11 @@ disconnected during the flow."
                                             (line
                                              (let ((trimmed (string-trim '(#\Return #\Newline) line)))
                                                (when (and trimmed (> (length trimmed) 0))
-                                                 (process-command world character trimmed))))
+                                                 (process-command world character trimmed)
+                                                 ;; Refresh protocol-side character
+                                                 ;; state (e.g. GMCP vitals/stats)
+                                                 ;; after the command took effect.
+                                                 (session-sync-character session character))))
                                             (t
                                              (return)))))
                                     (end-of-file ()

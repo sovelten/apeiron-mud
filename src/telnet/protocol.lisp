@@ -83,6 +83,8 @@
 
 (defconstant +telnet-opt-mssp+ 70 "MSSP — MUD Server Status Protocol.")
 
+(defconstant +telnet-opt-gmcp+ 201 "GMCP — Generic Mud Communication Protocol.")
+
 (defconstant +mssp-var+ 1 "MSSP variable marker byte — precedes each variable name.")
 
 (defconstant +mssp-val+ 2 "MSSP value marker byte — precedes each value.")
@@ -140,7 +142,31 @@
     :documentation "When non-NIL, a function of no arguments returning a list of
 (variable-name-string . value-string) conses for MSSP variables.
 Called when the server receives IAC DO MSSP (option 70) so it can
-immediately send the MSSP response: IAC SB MSSP (MSSP-VAR ...)* IAC SE."))
+immediately send the MSSP response: IAC SB MSSP (MSSP-VAR ...)* IAC SE.")
+   (gmcp-handlers
+    :initform (make-hash-table :test 'equal)
+    :reader telnet-gmcp-handlers
+    :documentation "Hash of GMCP package name (string, case-insensitive)
+-> handler function.  A handler receives (protocol message data-string)
+for every incoming GMCP message whose package it is registered under.
+See TELNET-REGISTER-GMCP-HANDLER.")
+   (gmcp-on-enable-fn
+    :initform nil
+    :accessor telnet-gmcp-on-enable-fn
+    :documentation "When non-NIL, a function of one argument (the protocol)
+called after GMCP negotiation completes (we send WILL GMCP and the client
+answers DO GMCP).  It must return a list of (package message data) triples
+describing initial GMCP messages the application wants to send; each is
+encoded and written after the mandatory Core.Hello handshake.  This is the
+decoupling hook: the telnet layer never inspects application state itself.")
+   (gmcp-client-name
+    :initform "Apeiron"
+    :accessor telnet-gmcp-client-name
+    :documentation "Client name advertised in the Core.Hello GMCP handshake.")
+   (gmcp-client-version
+    :initform "1.0"
+    :accessor telnet-gmcp-client-version
+    :documentation "Client version advertised in the Core.Hello GMCP handshake."))
   (:documentation "RFC 854 telnet protocol engine.
 
 Manages option negotiation state and provides methods to process incoming
@@ -396,11 +422,15 @@ The commands are a list of byte-vectors ready to be written to the socket."
     (let ((start-tls-state
            (gethash +telnet-opt-start-tls+ (telnet-local-options protocol)))
           (mssp-state
-           (gethash +telnet-opt-mssp+ (telnet-local-options protocol))))
+           (gethash +telnet-opt-mssp+ (telnet-local-options protocol)))
+          (gmcp-state
+           (gethash +telnet-opt-gmcp+ (telnet-local-options protocol))))
       (when (and start-tls-state (telnet-option-state-wanted start-tls-state))
         (push (make-command-2 will +telnet-opt-start-tls+) commands))
       (when (and mssp-state (telnet-option-state-wanted mssp-state))
-        (push (make-command-2 will +telnet-opt-mssp+) commands)))
+        (push (make-command-2 will +telnet-opt-mssp+) commands))
+      (when (and gmcp-state (telnet-option-state-wanted gmcp-state))
+        (push (make-command-2 will +telnet-opt-gmcp+) commands)))
     (nreverse commands)))
 
 ;;; ----------------------------------------------------------------

@@ -3,8 +3,7 @@
 # Apeiron
 
 Apeiron is a `MUD` server written in Common Lisp, inspired by
-Dworkin's Game Driver (`DGD`) and `LMUD`, with the reckless capability of
-running Lisp code inside the game world.
+Dworkin's Game Driver (`DGD`) and LambdaMoo and using Common Lisp as the scripting language.
 
 [![](https://github.com/sovelten/apeiron-mud/actions/workflows/test.yml/badge.svg)][b83b]
 
@@ -153,33 +152,15 @@ The server layer wires everything together.
   (see `apeiron/telnet`).
 * **`MSSP`** — `MUD` Server Status Protocol: advertises server details
   (name, players, game type, ...) to directory services.
+* **`GMCP`** — Generic Mud Communication Protocol (telnet option 201):
+  structured out-of-band client data.  The server pushes character
+  stats as `Char.Vitals` (hp/maxhp) and `Char.Stats` (str/sta/int).
+  The protocol engine lives in `apeiron/telnet` and is decoupled from
+  the game — the mapping from characters to `GMCP` packages is done in
+  the server bridge (`session-sync-character`).
 * **`TLS`** — secure transport for telnet connections (via `cl+ssl`).
 * **`ANSI` `SGR` colors** — colour output for the client (toggle with
   `toggle-colors`).
-
-<a id="x-28APEIRON-DOCS-3A-40COMMAND-REFERENCE-2040ANTS-DOC-2FLOCATIVES-3ASECTION-29"></a>
-
-## Command Reference
-
-| Command | Usage | Description |
-| --- | --- | --- |
-| `look` | `look` | Examine current room |
-| `go` | `go <direction>` | Move (north/south/east/west) |
-| `exits` | `exits` | List available exits |
-| `inventory` | `inventory` | View carried items |
-| `examine` | `examine <name>` | Examine an object or NPC |
-| `attack` | `attack <name>` | Attack an NPC (builds strength) |
-| `say` | `say <message>` | Speak to other characters in room |
-| `shout` | `shout <message>` | Broadcast to all characters |
-| `tell` | `tell <name> <message>` | Private message to a character or object |
-| `read` | `read <name>` | Read a readable object (guestbook, sign, etc.) |
-| `write` | `write <name>` | Write a message on a writable object |
-| `answer` | `answer <text>` | Answer a challenge/puzzle |
-| `status` | `status` | Show your strength, stamina, intelligence and HP |
-| `help` | `help` | List all commands |
-| `toggle-colors` | `toggle-colors` | Toggle ANSI color output |
-| `eval` | `eval <sexpr>` | Run arbitrary lisp code (admin only!) |
-| `quit` | `quit` | Disconnect |
 
 <a id="documentation"></a>
 
