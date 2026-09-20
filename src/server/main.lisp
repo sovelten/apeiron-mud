@@ -282,51 +282,109 @@ disconnected during the flow."
       (remhash session-id *player-threads*)
       (session-disconnect session))))
 
-(defun accept-connections (world)
+(defun %spawn-session-thread (world session &key (thread-name "session")
+                              (description "session"))
+  "Start the per-client handler thread for SESSION, register it in
+*PLAYER-THREADS*, and return the thread.  THREAD-NAME is the thread's
+name base (\"session\" or \"session-tls\"); DESCRIPTION is how the
+session is referred to in the log."
+  (let ((thread
+          (bordeaux-threads:make-thread
+           (lambda () (handle-client world session))
+           :name (format nil "~A-~A" thread-name (session-id session)))))
+    (log-message "Thread for ~A ~A created" description (session-id session))
+    (setf (gethash (session-id session) *player-threads*) thread)
+    thread))
+
+(defun %accept-plain-client (world client-socket &key prefer-start-tls
+                             tls-certificate tls-key tls-password)
+  "Handle one freshly-accepted plain-text socket: build the telnet
+session (offering the START_TLS option when TLS material is configured)
+and start its handler thread."
+  (handler-case
+      (let ((session
+              (if (and prefer-start-tls tls-certificate tls-key)
+                  (new-telnet-session
+                   client-socket
+                   :start-tls t
+                   :certificate tls-certificate
+                   :key tls-key
+                   :password tls-password
+                   :mssp-info-fn (%make-mssp-info-fn world))
+                  (new-telnet-session
+                   client-socket
+                   :mssp-info-fn (%make-mssp-info-fn world)))))
+        ;; Session may be NIL if rejected as non-telnet
+        (when session
+          (%spawn-session-thread world session)))
+    (error (e)
+      (usocket:socket-close client-socket)
+      (log-error "Failed to create session: ~A" e))))
+
+(defun %accept-tls-client (world client-socket tls-certificate tls-key tls-password)
+  "Handle one freshly-accepted TLS socket: run the server-side TLS
+handshake, build the telnet session, and start its handler thread.
+
+Returns NIL — after closing CLIENT-SOCKET — when the TLS material is
+missing or the handshake fails."
+  (when (or (null tls-certificate) (null tls-key))
+    ;; Fail loudly and actionably instead of letting OpenSSL hand back
+    ;; its opaque "no shared cipher".
+    (log-error
+     "TLS connection rejected: no certificate/key configured for the TLS listener")
+    (usocket:socket-close client-socket)
+    (return-from %accept-tls-client nil))
+  (log-message "New TLS connection accepted")
+  (let ((session
+          (handler-case
+              (new-telnet-tls-session
+               client-socket
+               :certificate tls-certificate
+               :key tls-key
+               :password tls-password
+               :mssp-info-fn (%make-mssp-info-fn world))
+            (telnet:telnet-tls-error (e)
+              (log-error "TLS handshake failed: ~A"
+                         (telnet:telnet-error-message e))
+              (usocket:socket-close client-socket)
+              nil)
+            (error (e)
+              (log-error "Failed to create TLS session: ~A" e)
+              (usocket:socket-close client-socket)
+              nil))))
+    (when session
+      (%spawn-session-thread world session
+                             :thread-name "session-tls"
+                             :description "TLS session"))))
+
+(defun accept-connections (world &key
+                                   (prefer-start-tls *server-tls-prefer-start-tls*)
+                                   (tls-certificate *server-ssl-certificate*)
+                                   (tls-key *server-ssl-key*)
+                                   (tls-password *server-ssl-password*))
   "Accept incoming client connections.
-When *server-tls-prefer-start-tls* is true, the START_TLS telnet option
-is offered on each connection, allowing clients to upgrade to TLS."
+When PREFER-START-TLS is true, the START_TLS telnet option (46) is
+offered on each connection, allowing clients to upgrade to TLS using
+TLS-CERTIFICATE, TLS-KEY, and TLS-PASSWORD.
+
+The TLS material is captured by the caller at listener-start time
+rather than re-read from the package globals for every connection, so a
+hot reload (SAFE-UPDATE) that re-evaluates the config DEFVARs can never
+strip the running listener of its certificate."
   (handler-case
       (loop while *server-running*
             do
             (handler-case
                 (let ((client-socket (usocket:socket-accept *server-socket*)))
                   (when client-socket
-                    (if (not *server-running*)
-                        (usocket:socket-close client-socket)
-                        (handler-case
-                            (let ((session
-                                    (if (and *server-tls-prefer-start-tls*
-                                             *server-ssl-certificate*
-                                             *server-ssl-key*)
-                                        (new-telnet-session
-                                         client-socket
-                                         :start-tls t
-                                         :certificate *server-ssl-certificate*
-                                         :key *server-ssl-key*
-                                         :password *server-ssl-password*
-                                         :mssp-info-fn (%make-mssp-info-fn world))
-                                        (new-telnet-session
-                                         client-socket
-                                         :mssp-info-fn (%make-mssp-info-fn world)))))
-                              ;; Session may be NIL if rejected as non-telnet
-                              (when session
-                                (let ((thread
-                                        (bordeaux-threads:make-thread
-                                         (lambda ()
-                                           (handle-client world session))
-                                         :name
-                                         (format nil "session-~A"
-                                                 (session-id session)))))
-                                  (log-message
-                                   "Thread for session ~A created"
-                                   (session-id session))
-                                  (setf (gethash (session-id session)
-                                                 *player-threads*)
-                                        thread))))
-                          (error (e)
-                            (usocket:socket-close client-socket)
-                            (log-error "Failed to create session: ~A" e))))))
+                    (if *server-running*
+                        (%accept-plain-client
+                         world client-socket
+                         :prefer-start-tls prefer-start-tls
+                         :tls-certificate tls-certificate
+                         :tls-key tls-key
+                         :tls-password tls-password)
+                        (usocket:socket-close client-socket))))
               (usocket:timeout-error ()
                 nil)
               (error (e)
@@ -336,51 +394,27 @@ is offered on each connection, allowing clients to upgrade to TLS."
       (when *server-running*
         (log-error "Accept connections error: ~A" e)))))
 
-(defun accept-tls-connections (world)
-  "Accept incoming TLS-encrypted client connections."
+(defun accept-tls-connections (world &key
+                                     (tls-certificate *server-ssl-certificate*)
+                                     (tls-key *server-ssl-key*)
+                                     (tls-password *server-ssl-password*))
+  "Accept incoming TLS-encrypted client connections.
+
+TLS-CERTIFICATE, TLS-KEY, and TLS-PASSWORD are captured by the caller
+at listener-start time rather than re-read from the package globals for
+every connection, so a hot reload (SAFE-UPDATE) that re-evaluates the
+config DEFVARs cannot leave the running listener with no certificate —
+which OpenSSL reports as the opaque 'no shared cipher'."
   (handler-case
       (loop while *server-running*
             do
             (handler-case
                 (let ((client-socket (usocket:socket-accept *server-tls-socket*)))
                   (when client-socket
-                    (if (not *server-running*)
-                        (usocket:socket-close client-socket)
-                        (let ((mssp-fn (%make-mssp-info-fn world)))
-                          (log-message "New TLS connection accepted")
-                          (let ((session
-                                  (handler-case
-                                      (new-telnet-tls-session
-                                       client-socket
-                                       :certificate *server-ssl-certificate*
-                                       :key *server-ssl-key*
-                                       :password *server-ssl-password*
-                                       :mssp-info-fn mssp-fn)
-                                    (telnet:telnet-tls-error (e)
-                                      (log-error
-                                       "TLS handshake failed: ~A"
-                                       (telnet:telnet-error-message e))
-                                      (usocket:socket-close client-socket)
-                                      nil)
-                                    (error (e)
-                                      (log-error
-                                       "Failed to create TLS session: ~A" e)
-                                      (usocket:socket-close client-socket)
-                                      nil))))
-                            (when session
-                              (let ((thread
-                                      (bordeaux-threads:make-thread
-                                       (lambda ()
-                                         (handle-client world session))
-                                       :name
-                                       (format nil "session-tls-~A"
-                                               (session-id session)))))
-                                (log-message
-                                 "Thread for TLS session ~A created"
-                                 (session-id session))
-                                (setf (gethash (session-id session)
-                                              *player-threads*)
-                                      thread))))))))
+                    (if *server-running*
+                        (%accept-tls-client
+                         world client-socket tls-certificate tls-key tls-password)
+                        (usocket:socket-close client-socket))))
               (usocket:timeout-error ()
                 nil)
               (error (e)
@@ -425,11 +459,12 @@ connection to TLS in-band."
           (log-message "MUD Server started on ~A:~D" host port)
 
           ;; Start TLS listener (if certificate configured).
-          ;; Bind the effective TLS material into the package globals the
-          ;; accept loops read per connection, so the keyword-argument API
-          ;; works exactly like setting *server-ssl-certificate* etc. before
-          ;; starting (run-mud.lisp does the latter).  Without this, a server
-          ;; started via
+          ;; Mirror the effective TLS material into the package globals
+          ;; (for introspection and for tests that reset them), but the
+          ;; accept loops capture it as arguments, so the keyword-argument
+          ;; API works exactly like setting *server-ssl-certificate* etc.
+          ;; before starting (run-mud.lisp does the latter).  Without this
+          ;; binding, a server started via
           ;;   (start-mud-server :tls-certificate "c.pem" :tls-key "k.pem")
           ;; would accept TLS connections but run SSL_accept with NO
           ;; certificate, failing every handshake.
@@ -444,15 +479,28 @@ connection to TLS in-band."
                   (log-message "TLS listener started on ~A:~D" host tls-port)
                   (setf *tls-acceptance-thread*
                         (bordeaux-threads:make-thread
-                         (lambda () (accept-tls-connections world))
+                         (lambda ()
+                           (accept-tls-connections
+                            world
+                            :tls-certificate tls-certificate
+                            :tls-key tls-key
+                            :tls-password *server-ssl-password*))
                          :name "accept-tls-connections")))
               (error (e)
                 (log-error "Failed to start TLS listener: ~A" e))))
 
-          ;; Start plain-text acceptance thread
+          ;; Start plain-text acceptance thread.  Capture the TLS material
+          ;; too: START_TLS handshakes use it, and the captured values keep
+          ;; the live listener immune to later hot reloads.
           (setf *acceptance-thread*
                 (bordeaux-threads:make-thread
-                 (lambda () (accept-connections world))
+                 (lambda ()
+                   (accept-connections
+                    world
+                    :prefer-start-tls prefer-start-tls
+                    :tls-certificate tls-certificate
+                    :tls-key tls-key
+                    :tls-password *server-ssl-password*))
                  :name "accept-connections"))
 
           ;; Signal whether START_TLS is available

@@ -393,6 +393,16 @@
   eval (reload-apeiron)
   ```
 
+  **Note on hot reloads and runtime configuration:** server settings such
+  as `*server-ssl-certificate*`, `*server-ssl-key*`, `*server-port*`, and
+  `*server-tls-port*` are declared with `defvar` (not `defparameter`) on
+  purpose.  A reload leaves an already-bound configuration variable
+  untouched, so the running listeners keep their settings.  If these were
+  `defparameter`, every reload would reset them to their defaults — for
+  example wiping the TLS certificate from a live server, after which each
+  new TLS connection fails the handshake with OpenSSL's opaque
+  `no shared cipher` error.
+
   ### Stopping the Server
 
   ```lisp
