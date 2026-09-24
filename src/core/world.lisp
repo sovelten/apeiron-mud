@@ -28,8 +28,10 @@
                :documentation "Monotonic ID counter for assigning world-level IDs.")
    (config :initarg :config
            :accessor world-config
-           :initform (make-hash-table :test #'eq)
-           :documentation "Configuration hash table (keys are keywords).")
+           :initform (fset:empty-map)
+           :documentation "Configuration map (keys are keywords).  An outer,
+immutable FSET hash map so a config change rebinds the slot with a new value
+— an ordinary slot write that BKNR records.")
    (characters :initarg :characters
             :accessor world-characters
             :initform (make-hash-table :test #'equal)
@@ -54,8 +56,8 @@
    and other objects are stored as independent BKNR persistent objects."))
 
 (defun get-config-key (world key)
-  "Get a configuration value from the world config."
-  (gethash key (world-config world)))
+  "Get a configuration value from the world config, or NIL when unset."
+  (fset:lookup (world-config world) key))
 
 (defun new-world () (make-instance 'mud-world))
 
@@ -162,7 +164,8 @@ east-room."
          args))
 
 (defun world-set-starting-room! (world room)
-  (setf (gethash :starting-room-id (world-config world)) (object-id room)))
+  (setf (world-config world)
+        (fset:with (world-config world) :starting-room-id (object-id room))))
 
 (defun starting-room (world)
   "Get the starting room of the world."

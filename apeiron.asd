@@ -23,6 +23,11 @@
                "cl-csv"
                "cl-graph"
                "deeds"
+               ;; FSET — immutable functional collections.  Object properties
+               ;; and the world config are FSET hash maps so that a change
+               ;; produces a new value that BKNR records as a slot write
+               ;; (see apeiron/persistence).
+               "fset"
                "ironclad"
                "log4cl"
                ;; Lightweight doc-system core: only the DEFSECTION macro
@@ -84,6 +89,9 @@
                "bknr.datastore"
                "bknr.indices"
                "bknr.utils"
+               ;; FSET maps are persisted via a custom BKNR encoder defined in
+               ;; src/persistence/store.lisp.
+               "fset"
                "serapeum")
   :components ((:module "src/persistence"
                 :components

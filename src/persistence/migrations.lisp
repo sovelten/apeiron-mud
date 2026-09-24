@@ -124,26 +124,51 @@ form — no changes to SAFE-UPDATE or the restore path."
       ,@body)))
 
 ;; ─── Version marker ─────────────────────────────────────────────────────────
-;; The current data version is stored in the world's config hash table under
-;; :data-version.  Config is a persistent slot on PERSISTENT-WORLD, so the
-;; marker survives snapshots and restarts; a datastore written before this
-;; mechanism has no such key and therefore reports version 0.
+;; The current data version is stored in the world's config under
+;; :data-version.  Config is a persistent slot on PERSISTENT-WORLD and is an
+;; FSET map, so the marker survives snapshots and restarts; a datastore
+;; written before this mechanism has no such key and therefore reports
+;; version 0.
+;;
+;; The version marker lives in the very structure (the config) that the FSET
+;; migration converts, so reading and writing it must tolerate the legacy
+;; hash-table representation: an old datastore decodes its config as a hash
+;; table, and RUN-DATA-MIGRATIONS reads the version before any migration has
+;; had a chance to convert it.
+
+(defun hash-table->fset-map (table)
+  "Return an FSET map holding the same entries as the hash TABLE, or an
+empty map when TABLE is not a hash table.  Used to upgrade legacy hash-table
+slots (object properties, world config) to FSET maps."
+  (let ((map (fset:empty-map)))
+    (when (hash-table-p table)
+      (maphash (lambda (key value) (setf map (fset:with map key value))) table))
+    map))
 
 (defun current-data-version (world)
-  "Return the data migration version recorded in WORLD's config.
+  "Return the data migration version recorded in WORLD's config, tolerating
+the legacy hash-table config of a pre-FSET datastore.
 A datastore written before version markers existed has no :data-version
 key and reports 0."
-  (or (get-config-key world :data-version) 0))
+  (let ((config (world-config world)))
+    (or (if (fset:map? config)
+            (fset:lookup config :data-version)
+            (and (hash-table-p config) (gethash :data-version config)))
+        0)))
 
 (defun (setf current-data-version) (version world)
   "Record VERSION as WORLD's data migration version and persist it.
 Must be called while the datastore is open; the write goes through the
-normal persistent-slot path so BKNR logs it."
-  (setf (gethash :data-version (world-config world)) version)
-  ;; BKNR only notices slot changes when the slot is written, not when the
-  ;; hash table it holds is mutated in place — write the slot back, exactly
-  ;; like OBJECT-SET-PROPERTY does.
-  (setf (world-config world) (world-config world))
+normal persistent-slot path so BKNR logs it.  A legacy hash-table config is
+converted to an FSET map here, so this is safe to call before the FSET
+migration has run.
+
+WORLD-CONFIG is an immutable FSET map: rebinding the slot with a new map is
+itself the slot write BKNR records, so no separate self-write is needed."
+  (let ((config (world-config world)))
+    (setf (world-config world)
+          (fset:with (if (fset:map? config) config (hash-table->fset-map config))
+                     :data-version version)))
   version)
 
 ;; ─── Runner ─────────────────────────────────────────────────────────────────
@@ -207,3 +232,30 @@ before this migration shipped); fresh datastores are stamped at creation."
                    (plusp (length owner)))
           (setf (character-account char) owner)
           (setf (object-owner char) nil))))))
+
+(define-data-migration
+    2 "convert-properties-and-config-to-fset-maps" (world)
+  "Migrate datastores written while object properties and the world config
+were hash tables.
+
+OBJECT-PROPERTIES and WORLD-CONFIG are now immutable FSET maps.  BKNR
+decodes an old snapshot's hash-table value straight into the slot (it does
+not type-check), so after restore every persistent object's PROPERTIES — and
+the world's CONFIG — may still hold a hash table.  Convert them to FSET maps
+so the accessors (FSET:LOOKUP / FSET:WITH) work.
+
+The config is normally already converted by the version-marker writer (see
+SETF CURRENT-DATA-VERSION), which runs before this migration body; the guard
+here keeps the migration correct if it is ever the first to run.  Runs only
+on datastores recorded below version 2; fresh datastores are stamped at
+creation and skip it."
+  ;; World config: convert if it is still a legacy hash table.
+  (let ((config (world-config world)))
+    (unless (fset:map? config)
+      (setf (world-config world) (hash-table->fset-map config))))
+  ;; Every live persistent object's properties.
+  (dolist (obj (bknr.datastore:store-objects-with-class 'persistent-object))
+    (unless (bknr.indices:object-destroyed-p obj)
+      (let ((props (object-properties obj)))
+        (unless (fset:map? props)
+          (setf (object-properties obj) (hash-table->fset-map props)))))))

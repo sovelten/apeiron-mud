@@ -65,27 +65,6 @@ Usage from the MUD: eval (refresh-guestbooks)"
       (log-message "Refreshed guestbook ~A from ~A" (object-name gb) fp)))
   (values))
 
-(defmethod object-set-property ((obj persistent-object) property-name value)
-  "Set a property on a persistent object, ensuring BKNR tracks the change.
-
-The default method modifies the hash-table in-place, which is invisible
-to BKNR.  This method additionally writes the hash-table reference back
-to the slot.  The write triggers wrapping-persistent-class's auto-wrap
-(which creates a transaction when needed) and BKNR's (setf
-slot-value-using-class) :after method, which encodes
-tx-change-slot-values into the transaction log.
-
-When called from within an existing transaction (e.g. during
-materialize-object), the auto-wrap passes through and BKNR records the
-change in the outer transaction's buffer."
-  (setf (gethash property-name (object-properties obj)) value)
-  ;; Write the slot so BKNR records the change — see docstring above.
-  (setf (object-properties obj) (object-properties obj))
-  ;; Return the stored value, not the hash-table the slot write returns:
-  ;; callers (and the lazy accessors built on OBJECT-SET-PROPERTY) expect
-  ;; the value they set, exactly like the default method.
-  value)
-
 (defun touch-persistent-slots (object)
   "Force every bound, non-transient slot value of OBJECT into the current
 BKNR transaction.

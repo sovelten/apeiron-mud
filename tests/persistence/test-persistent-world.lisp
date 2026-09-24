@@ -269,13 +269,13 @@ so BKNR records the change in the transaction log."
     (object-set-property obj "color" "blue")
     ;; Verify the value is set
     (is (equal "blue" (object-get-property obj "color")))
-    ;; Verify the property is in the hash-table
-    (is (equal "blue" (gethash "color" (object-properties obj))))))
+    ;; Verify the property is in the properties (FSET) map
+    (is (equal "blue" (fset:lookup (object-properties obj) "color")))))
 
 (test persistent-object-set-property-returns-value
   "OBJECT-SET-PROPERTY on a persistent object returns the value set, not
-the properties hash-table.  Regression: the lazy stamina accessor read
-that return value, so on a persistent character it leaked a hash-table
+the properties map.  Regression: the lazy stamina accessor read that return
+value, so on a persistent character it leaked the FSET properties map
 into the Fibonacci step loop and `go` signalled a type error."
   (let* ((world (world-restore-or-initialize :force-new t))
          (character (create-object!
@@ -495,6 +495,65 @@ accounts.dat, with no character-slot link needed."
                                'apeiron.persistence:persistent-character)))
                  "The owned character exists as a persistent-character in the datastore")))
 
+      ;; ---- Cleanup ----------------------------------------------------
+      (ignore-errors
+       (when (boundp 'bknr.datastore:*store*)
+         (ignore-errors (bknr.datastore:close-store))
+         (makunbound 'bknr.datastore:*store*))
+       (clrhash *accounts*)))))
+
+(test legacy-properties-and-config-migrated-to-fset-maps
+  "A datastore written while object properties and the world config were
+hash tables restores with them converted to FSET maps by data migration 2,
+preserving their entries — and the migration does not re-run afterwards."
+  (let* ((*data-directory* *data-directory*)
+         (*store-directory* *store-directory*))
+    (unwind-protect
+         (progn
+           ;; ---- Phase 1: create a world, then rewrite the properties and
+           ;; config slots into their legacy hash-table shape -------------
+           (let ((world (apeiron.persistence:world-restore-or-initialize :force-new t)))
+             (let ((obj (apeiron.core:create-object!
+                         world (apeiron.core:new-object :name "LegacyPropObj"))))
+               (apeiron.core:object-set-property obj "color" "crimson")
+               ;; Simulate a snapshot written before the FSET conversion:
+               ;; hash-table values in both persistent slots, version 1.
+               (bknr.datastore:with-transaction ("simulate-legacy-fset-format")
+                 (let ((props (make-hash-table :test #'equal)))
+                   (setf (gethash "color" props) "crimson")
+                   (setf (apeiron.core:object-properties obj) props))
+                 (let ((config (make-hash-table :test #'eq)))
+                   (setf (gethash :starting-room-id config)
+                         (apeiron.core:get-config-key world :starting-room-id))
+                   (setf (gethash :data-version config) 1)
+                   (setf (apeiron.core:world-config world) config)))
+               (is (hash-table-p (apeiron.core:object-properties obj)))))
+           (apeiron.persistence:sync-world)
+           (bknr.datastore:close-store)
+
+           ;; ---- Phase 2: reopen; migration 2 must convert both -----------
+           (let* ((new-world (apeiron.persistence:world-restore-or-initialize))
+                  (obj (apeiron.core:world-object-with-name new-world "LegacyPropObj")))
+             (is-true obj "The object must survive the reopen")
+             (is (fset:map? (apeiron.core:object-properties obj))
+                 "Object properties must become an FSET map")
+             (is (equal "crimson" (apeiron.core:object-get-property obj "color"))
+                 "Property entries must be preserved by the migration")
+             (is (fset:map? (apeiron.core:world-config new-world))
+                 "World config must become an FSET map")
+             (is (not (null (apeiron.core:get-config-key new-world :starting-room-id)))
+                 "Config entries must be preserved by the migration")
+             (is (>= (apeiron.persistence:current-data-version new-world) 2)
+                 "Data version must be bumped past the FSET migration"))
+
+           ;; ---- Phase 3: a further reopen must NOT re-run the migration --
+           (bknr.datastore:close-store)
+           (let* ((world3 (apeiron.persistence:world-restore-or-initialize))
+                  (obj (apeiron.core:world-object-with-name world3 "LegacyPropObj")))
+             (is (fset:map? (apeiron.core:object-properties obj)))
+             (is (equal "crimson" (apeiron.core:object-get-property obj "color")))
+             (is (null (apeiron.persistence:run-data-migrations world3))
+                 "No pending migrations after the FSET migration already ran")))
       ;; ---- Cleanup ----------------------------------------------------
       (ignore-errors
        (when (boundp 'bknr.datastore:*store*)
