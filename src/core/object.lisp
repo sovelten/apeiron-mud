@@ -27,8 +27,11 @@
              :documentation "List of keywords representing the object")
    (properties :initarg :properties
                :accessor object-properties
-               :initform (make-hash-table :test #'equal)
-               :documentation "Extensible property storage")
+               :initform (fset:empty-map)
+               :documentation "Extensible property storage: an immutable FSET
+hash map.  On persistent objects a property change rebinds this slot with a
+new map — a genuine slot write that BKNR records — so no in-place hash-table
+mutation needs to be \"touched\".")
    (created-at :initarg :created-at
                :accessor object-created-at
                :initform (get-universal-time)
@@ -71,10 +74,14 @@ instead.")
 
 (defgeneric object-set-property (obj property-name value)
   (:documentation
-   "Set a property value on an object. ")
+   "Set a property value on an object.  Returns VALUE.")
   (:method (obj property-name value)
-    "Default: modify the properties hash-table in-place."
-    (setf (gethash property-name (object-properties obj)) value)))
+    "Store VALUE under PROPERTY-NAME, rebinding OBJECT's immutable
+properties map.  On persistent objects the resulting slot write is what BKNR
+records, so no in-place mutation or self-write is needed."
+    (setf (object-properties obj)
+          (fset:with (object-properties obj) property-name value))
+    value))
 
 (defgeneric add-keyword (obj k)
   (:documentation "Add new keyword, ignore if existing")
@@ -88,13 +95,10 @@ instead.")
           (remove k (object-keywords obj) :test #'string-equal))))
 
 (defun %copy-object-properties (from to)
-  "Give TO a fresh properties hash table holding a copy of every entry
-of FROM's, so a copy never shares mutable state with the original."
-  (let ((fresh (make-hash-table :test #'equal)))
-    (loop for k being the hash-keys of (object-properties from)
-            using (hash-value v)
-          do (setf (gethash k fresh) v))
-    (setf (object-properties to) fresh)))
+  "Give TO FROM's properties.  The property map is an immutable FSET map, so
+sharing the reference is safe: any later OBJECT-SET-PROPERTY on either object
+rebinds only that object's slot, never the shared map."
+  (setf (object-properties to) (object-properties from)))
 
 (defgeneric object-copy (object)
   (:documentation "Returns a copy of object with id set to -1 and location to nil")
@@ -144,8 +148,8 @@ case-insensitive) or any alias (exact, case-insensitive). Returns NIL for empty 
                  (object-aliases obj)))))
 
 (defun object-get-property (obj property-name)
-  "Get a property value from an object."
-  (gethash property-name (object-properties obj)))
+  "Get a property value from an object, or NIL when unset."
+  (fset:lookup (object-properties obj) property-name))
 
 (defun object-move (obj new-location)
   "Move an object to a new location."

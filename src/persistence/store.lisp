@@ -121,3 +121,36 @@ Example:
        ,slots
        (:metaclass wrapping-persistent-class)
        ,@class-options)))
+
+;; ─── Persisting FSET maps ───────────────────────────────────────────────────
+;;
+;; Object properties (MUD-OBJECT.PROPERTIES) and the world config
+;; (MUD-WORLD.CONFIG) are immutable FSET maps, so a property change rebinds
+;; the slot with a new value that BKNR records as an ordinary slot write —
+;; no in-place "touch" of a hash table is needed.
+;;
+;; BKNR's binary encoder only knows a fixed set of data types; anything else
+;; is dispatched to the ENCODE-OBJECT generic function, whose only method
+;; covers STORE-OBJECT.  Teach it to serialize FSET maps under a private tag
+;; (#\M, which does not collide with BKNR's built-in tags a i y c s l # f d r
+;; o), writing the size followed by each key/value pair via BKNR's own ENCODE
+;; so nested store-object references, strings, numbers, lists, etc. all work.
+;;
+;; NOTE: this relies on BKNR internal helpers (%WRITE-TAG, %ENCODE-INTEGER,
+;; %DECODE-INTEGER, ENCODE, DECODE).  Revisit if BKNR's on-disk format or
+;; internals change.
+
+(defmethod bknr.datastore::encode-object ((map fset:map) stream)
+  (bknr.datastore::%write-tag #\M stream)
+  (bknr.datastore::%encode-integer (fset:size map) stream)
+  (fset:do-map (key value map)
+    (bknr.datastore::encode key stream)
+    (bknr.datastore::encode value stream)))
+
+(defmethod bknr.datastore::decode-object ((tag (eql #\M)) stream)
+  (let ((map (fset:empty-map))
+        (n (bknr.datastore::%decode-integer stream)))
+    (dotimes (i n map)
+      (let ((key (bknr.datastore::decode stream))
+            (value (bknr.datastore::decode stream)))
+        (setf map (fset:with map key value))))))

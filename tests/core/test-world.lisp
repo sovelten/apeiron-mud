@@ -8,7 +8,8 @@
     ;; Initially nil (default)
     (is (null (apeiron.core:get-config-key world :nothing)))
     ;; Set a value and read it back
-    (setf (gethash :test-key (apeiron.core:world-config world)) "hello")
+    (setf (apeiron.core:world-config world)
+          (fset:with (apeiron.core:world-config world) :test-key "hello"))
     (is (equal "hello" (apeiron.core:get-config-key world :test-key)))))
 
 (test new-world

@@ -302,30 +302,37 @@ makes fresh exports visible without manual intervention."
 ;; These are available in the eval context (apeiron.eval package) and are
 ;; designed to help debug/inspect objects from within the game.
 
-(defun hashmap (table)
-  "Return the contents of a hash-table as a string, one KEY => VALUE per
-line.  Handy in eval because CL:DESCRIBE does not print a hash-table's
-entries.
+(defun hashmap (collection)
+  "Return the contents of a hash-table or FSET map as a string, one
+KEY => VALUE per line.  Handy in eval because CL:DESCRIBE does not print a
+collection's entries.
 Example: (hashmap (object-properties (me)))"
   (cond
-    ((not (hash-table-p table))
-     (format nil "~A is not a hash-table." table))
-    ((zerop (hash-table-count table))
+    ((fset:map? collection)
+     (if (fset:empty? collection)
+         "The map is empty."
+         (with-output-to-string (*standard-output*)
+           (format t "Map with ~D entr~:@P:~%" (fset:size collection))
+           (fset:do-map (key val collection)
+             (format t "  ~S => ~S~%" key val)))))
+    ((not (hash-table-p collection))
+     (format nil "~A is not a hash-table or FSET map." collection))
+    ((zerop (hash-table-count collection))
      "The hash-table is empty.")
     (t
      (with-output-to-string (*standard-output*)
-       (format t "Hash-table with ~D entr~:@P:~%" (hash-table-count table))
-       (loop for key being the hash-keys of table
+       (format t "Hash-table with ~D entr~:@P:~%" (hash-table-count collection))
+       (loop for key being the hash-keys of collection
                using (hash-value val)
              do (format t "  ~S => ~S~%" key val))))))
 
 (defun d (object)
   "Describe OBJECT, capturing output to a string.
 Like CL:DESCRIBE but returns a string instead of printing to *standard-output*.
-Hash-tables are shown entry by entry (see HASHMAP), since DESCRIBE does
-not print their contents.
+Hash-tables and FSET maps are shown entry by entry (see HASHMAP), since
+DESCRIBE does not print their contents.
 Example: (d (me))"
-  (if (hash-table-p object)
+  (if (or (hash-table-p object) (fset:map? object))
       (hashmap object)
       (with-output-to-string (*standard-output*)
         (describe object))))
@@ -339,12 +346,13 @@ Example: (slots-of (me))"
       (describe object))))
 
 (defun props (object)
-  "Return all properties of OBJECT as a string (from its properties hash-table).
+  "Return all properties of OBJECT as a string (from its properties FSET map).
 Example: (props (me))"
-  (let ((ht (object-properties object)))
-    (if (zerop (hash-table-count ht))
+  (let ((properties (object-properties object)))
+    (if (fset:empty? properties)
         (format nil "No properties on ~A." (object-name object))
-        (format nil "Properties of ~A:~%~A" (object-name object) (hashmap ht)))))
+        (format nil "Properties of ~A:~%~A" (object-name object)
+                (hashmap properties)))))
 
 (defun inv (container)
   "Return the contents of CONTAINER as a string.
