@@ -14,6 +14,8 @@
 
   - **SBCL** 2.0+
   - **Quicklisp**
+  - **cl-cm** — not on Quicklisp. Clone
+    https://github.com/sovelten/cl-cm into Quicklisp's `local-projects`
 
   ### Start the Server
 
@@ -572,12 +574,14 @@
   - **bknr.datastore** — persistence
   - **serapeum** — utility hash tables (the declarative persistent class registry)
   - **cl-cm** — content-addressable Common Lisp code: alpha-equivalent
-    normalisation and content identifiers. Not on Quicklisp; keep it on the
-    ASDF source registry (e.g. Quicklisp's `local-projects`). It is the basis
-    of the verb registry (see @VERBS).
+    normalisation and content identifiers. It is the basis of the verb
+    registry (see @VERBS). **Not on Quicklisp**: it lives at
+    https://github.com/sovelten/cl-cm. For local development keep a checkout
+    on the ASDF source registry (e.g. Quicklisp's `local-projects`); CI pulls
+    the commit pinned in the `qlfile` at the repository root.
   - **fiveam** — testing (optional)
 
-  All installed via Quicklisp automatically.""")
+  Everything except `cl-cm` is installed via Quicklisp automatically.""")
 
 (defsection @mcp (:title "MCP Server (LLM Integration)")
   """An [MCP (Model Context Protocol)](https://spec.modelcontextprotocol.io/)
