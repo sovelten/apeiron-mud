@@ -333,6 +333,122 @@
   skipped.  See @DEPLOYMENT."""
   (apeiron.persistence::@data-migrations section))
 
+(defsection @verbs (:title "Content-addressed verbs")
+  """A *verb* is a named function whose identity is a content identifier
+  (CID) — a hash of its code — computed by the `cl-cm` library. This is the
+  Unison idea applied to the MUD's scripting: a verb is addressed by *what
+  it is*, not by where it is stored or what it is called.
+
+  ### How a verb's CID is computed
+
+  A verb is defined by a lambda list and a body. `cl-cm` alpha-renames the
+  code, so the names of a verb's own bound variables do not affect the CID,
+  and replaces every *free* reference to another verb with that verb's CID.
+  The result is *recursive content addressing*:
+
+  - renaming a verb changes no CID — a reference is to a version, not to a
+    name;
+  - editing a verb's body gives it a new CID, and gives a new CID to every
+    verb that calls it, because the caller's CID depends on the callee's;
+  - identical verbs are stored once, however they are named.
+
+  A leading string literal in the body is the verb's docstring (the DEFUN
+  convention) and, being content, it takes part in the CID.
+
+  ### Defining and calling
+
+  ```lisp
+  (defparameter *verbs* (apeiron.verbs:make-verb-registry))
+
+  (apeiron.verbs:define-verb *verbs* greet (who)
+    "Greet WHO."
+    (format nil "Hello, ~A!" who))
+
+  (apeiron.verbs:define-verb *verbs* greet-twice (who)
+    (greet (greet who)))
+
+  (apeiron.verbs:call-verb *verbs* 'greet-twice "world")
+  ;; => "Hello, Hello, world!"
+  ```
+
+  Because `greet-twice` calls `greet`, its CID depends on `greet`'s: editing
+  `greet` gives `greet-twice` a new CID too, without touching its source. A
+  compiled verb keeps reaching the version it was compiled against, so
+  redefining `greet` under the same name does not change what an already
+  compiled `greet-twice` calls; re-register the caller (or call a freshly
+  compiled verb) to move to the new version.
+
+  ### Inspecting the registry
+
+  - VERB-CID — the CID a name currently resolves to.
+  - FIND-VERB / VERB-SOURCE / VERB-DOCSTRING — the stored definition.
+  - VERB-HISTORY — every CID a name has been bound to, newest first.
+  - VERB-REFERENCES — the resolved (NAME . CID) references of a verb.
+  - VERB-REFERRERS — the names whose current definition references a CID.
+  - VERB-UNRESOLVED-REFERENCES — free functions that are not registered
+    verbs (they are called as ordinary functions at run time).
+
+  DEFINE-VERB / REGISTER-VERB add or replace a verb by name; CALL-VERB runs
+  one. Registering identical code under two names stores it once and points
+  both names at the same definition.
+
+  ### Verbs on objects
+
+  An object's `VERBS` slot (see the World section) is an immutable FSET map
+  from a verb name to a CID; the code itself lives once in the registry. The
+  per-object API is OBJECT-DEFINE-VERB! (register a verb and bind it on an
+  object), OBJECT-BIND-VERB! (bind an already-registered CID — to share a
+  definition between objects, or to pin one object to a version), OBJECT-VERB
+  / OBJECT-VERB-CID / OBJECT-VERB-NAMES (inspect) and OBJECT-CALL-VERB (run).
+  Because only the CID is stored on the object, a verb binding is an ordinary
+  slot write that BKNR records and persists.
+
+  ### Persistence
+
+  The registry is transient (it caches compiled functions); a world keeps it
+  in its `WORLD-VERB-REGISTRY` slot, created on first use by
+  `ENSURE-VERB-REGISTRY`. SAVE-VERB-REGISTRY! serializes it as plain data
+  with VERB-REGISTRY->MAP and stores the result in the world's `CONFIG` map
+  — an ordinary slot write that BKNR records and persists; LOAD-VERB-REGISTRY!
+  rebuilds it from there with MAP->VERB-REGISTRY, restoring the CIDs verbatim
+  without re-hashing, so object verb bindings keep resolving after a restart.
+
+  ### Limitations
+
+  - A referenced name must already be bound when the referrer is registered:
+    *forward references* and *mutual recursion* between two brand-new verbs
+    are not supported. A self-recursive verb either uses `labels` inside its
+    body or refers to the previously registered version of itself.
+  - Free functions that are not registered verbs are resolved by name at run
+    time and are not content-addressed; REGISTER-VERB with `:STRICT` rejects
+    them.
+  - A verb may be named by a symbol of a locked package (such as `GET` or
+    `REMOVE` in COMMON-LISP); the compilation step lifts the package lock for
+    exactly the referenced names, so such a reference can still be pinned by
+    CID."""
+  (apeiron.verbs:define-verb macro)
+  (apeiron.verbs:register-verb function)
+  (apeiron.verbs:call-verb function)
+  (apeiron.verbs:verb-cid function)
+  (apeiron.verbs:verb-history function)
+  (apeiron.verbs:verb-references function)
+  (apeiron.verbs:verb-referrers function)
+  (apeiron.verbs:verb-unresolved-references function)
+  (apeiron.verbs:find-verb function)
+  (apeiron.verbs:verb-source function)
+  (apeiron.verbs:verb-docstring function)
+  (apeiron.verbs:ensure-verb-registry function)
+  (apeiron.verbs:verb-registry->map function)
+  (apeiron.verbs:map->verb-registry function)
+  (apeiron.verbs:save-verb-registry! function)
+  (apeiron.verbs:load-verb-registry! function)
+  (apeiron.verbs:object-define-verb! macro)
+  (apeiron.verbs:object-bind-verb! function)
+  (apeiron.verbs:object-verb function)
+  (apeiron.verbs:object-call-verb function)
+  (apeiron.core:object-verbs generic-function)
+  (apeiron.core:world-verb-registry generic-function))
+
 (defsection @deployment (:title "Deployment")
   """### Configuration
 
@@ -455,6 +571,10 @@
   - **deeds** — event system
   - **bknr.datastore** — persistence
   - **serapeum** — utility hash tables (the declarative persistent class registry)
+  - **cl-cm** — content-addressable Common Lisp code: alpha-equivalent
+    normalisation and content identifiers. Not on Quicklisp; keep it on the
+    ASDF source registry (e.g. Quicklisp's `local-projects`). It is the basis
+    of the verb registry (see @VERBS).
   - **fiveam** — testing (optional)
 
   All installed via Quicklisp automatically.""")

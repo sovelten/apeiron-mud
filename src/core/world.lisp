@@ -51,7 +51,14 @@ immutable FSET hash map so a config change rebinds the slot with a new value
    (parser :initarg :parser
            :accessor world-parser
            :initform (make-instance 'mud-parser)
-           :documentation "Command parser used to turn player input into command name and args."))
+           :documentation "Command parser used to turn player input into command name and args.")
+   (verb-registry :initarg :verb-registry
+                  :accessor world-verb-registry
+                  :initform nil
+                  :documentation "The world's content-addressed verb registry
+(see APEIRON/VERBS), or NIL until first use.  Transient: the registry is
+rebuilt/loaded separately from the datastore.  Use ENSURE-VERB-REGISTRY to
+get a non-NIL registry."))
   (:documentation "Configuration root for the MUD world.  Rooms, guestbooks,
    and other objects are stored as independent BKNR persistent objects."))
 

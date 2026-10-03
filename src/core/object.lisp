@@ -32,6 +32,15 @@
 hash map.  On persistent objects a property change rebinds this slot with a
 new map — a genuine slot write that BKNR records — so no in-place hash-table
 mutation needs to be \"touched\".")
+   (verbs :initarg :verbs
+          :accessor object-verbs
+          :initform (fset:empty-map)
+          :documentation "Per-object verbs: an immutable FSET map from a verb
+name (a symbol or a string) to the content identifier (CID, a string) of the
+verb's definition in the world's verb registry (see APEIRON/VERBS).  Like
+PROPERTIES, rebinding this slot with a new map is what BKNR records, so the
+code itself is stored once in the registry and addressed here by CID — an
+object does not carry a second copy of a verb's source.")
    (created-at :initarg :created-at
                :accessor object-created-at
                :initform (get-universal-time)
@@ -82,6 +91,41 @@ records, so no in-place mutation or self-write is needed."
     (setf (object-properties obj)
           (fset:with (object-properties obj) property-name value))
     value))
+
+(defgeneric object-set-verb (obj name cid)
+  (:documentation
+   "Bind verb NAME on OBJ to the content identifier CID.  Returns CID.
+NAME is a symbol or string; CID is the string returned by the verb
+registry (see APEIRON/VERBS).  Rebinds OBJ's immutable verb map, so on a
+persistent object the change is a slot write BKNR records.")
+  (:method (obj name cid)
+    (setf (object-verbs obj)
+          (fset:with (object-verbs obj) name cid))
+    cid))
+
+(defgeneric object-remove-verb (obj name)
+  (:documentation
+   "Unbind verb NAME from OBJ, if present.  Returns the removed CID, or
+NIL when NAME was not bound.")
+  (:method (obj name)
+    (let ((cid (fset:lookup (object-verbs obj) name)))
+      (when cid
+        (setf (object-verbs obj) (fset:less (object-verbs obj) name)))
+      cid)))
+
+(defgeneric object-verb-cid (obj name)
+  (:documentation "Return the CID OBJ binds verb NAME to, or NIL.")
+  (:method (obj name)
+    (fset:lookup (object-verbs obj) name)))
+
+(defgeneric object-verb-names (obj)
+  (:documentation "Return the list of verb names bound on OBJ.")
+  (:method (obj)
+    (let ((names '()))
+      (fset:do-map (name cid (object-verbs obj))
+        (declare (ignore cid))
+        (push name names))
+      (nreverse names))))
 
 (defgeneric add-keyword (obj k)
   (:documentation "Add new keyword, ignore if existing")

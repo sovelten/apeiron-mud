@@ -27,7 +27,10 @@
   (:import-from #:pythonic-string-reader
                 #:pythonic-string-syntax)
   (:import-from #:40ants-doc/locatives
-                #:include)
+                #:include
+                ;; `function' is CL:FUNCTION and `variable' is inherited
+                ;; from 40ANTS-DOC, but the macro locative is not.
+                #:macro)
   (:export #:@index
            #:@readme))
 
@@ -67,11 +70,13 @@
 ;;; by hand — adding an export is enough to get it documented.
 (defautodoc-packages @api (:packages (:apeiron.core
                                       :apeiron.core.utils
-                                      :apeiron.persistence)
+                                      :apeiron.persistence
+                                      :apeiron.verbs)
                           :title "API Reference")
   "Automatically generated from the exported symbols of the
   `apeiron.core` package (and its small `apeiron.core.utils` helper
-  package, plus the `apeiron.persistence` persistence layer).")
+  package, plus the `apeiron.persistence` persistence layer and the
+  `apeiron.verbs` content-addressed verb registry).")
 
 ;;; The landing README.md. All substantive content is REFERENCED from
 ;;; the shared sections in docs/apeiron-manual.lisp (single source of
@@ -84,6 +89,7 @@
   (@getting-started section)
   (@architecture section)
   (@protocols section)
+  (@verbs section)
   """## Documentation
 
   - Full manual (generated from the source with 40ANTS-DOC):
@@ -109,6 +115,7 @@
   (@development section)
   (apeiron.core::@world section)
   (apeiron.core::@commands section)
+  (@verbs section)
   (@tutorial-secret-room section)
   (@tutorial-wordle section)
   (@persistence section)

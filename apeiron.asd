@@ -101,6 +101,22 @@
                  (:file "migrations" :depends-on ("registry"))
                  (:file "persistent-world" :depends-on ("registry" "migrations"))))))
 
+(defsystem "apeiron/verbs"
+  :version "0.0.1"
+  :description "Content-addressed verbs for the Apeiron MUD, built on cl-cm."
+  :author "Sophia Velten"
+  :license "MIT"
+  :depends-on ("apeiron/core"
+               "cl-cm"
+               "fset")
+  :components ((:module "src/verbs"
+                :components
+                ((:file "package")
+                 (:file "registry" :depends-on ("package"))
+                 (:file "compile" :depends-on ("registry"))
+                 (:file "serialize" :depends-on ("registry"))
+                 (:file "integration" :depends-on ("registry" "compile"))))))
+
 (defsystem "apeiron/worlds"
   :version "0.0.1"
   :description "Transient world definitions for the Apeiron MUD."
@@ -139,6 +155,7 @@
   :author "Sophia Velten"
   :license "MIT"
   :depends-on ("apeiron/core"
+               "apeiron/verbs"
                "apeiron/telnet"
                "apeiron/persistence"
                "apeiron/worlds"
