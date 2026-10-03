@@ -274,7 +274,7 @@ without re-hashing, so object verb bindings keep resolving after a restart.
 
 <a id="x-28APEIRON-2EVERBS-3ADEFINE-VERB-20-2840ANTS-DOC-2FLOCATIVES-3AMACRO-29-29"></a>
 
-### [macro](54ce) `apeiron.verbs:define-verb` registry name lambda-list &body body
+### [macro](ec80) `apeiron.verbs:define-verb` registry name lambda-list &body body
 
 Define the verb `NAME` in `REGISTRY` with `LAMBDA-LIST` and `BODY`.
 Expands to [`register-verb`][bf76]; see it for the docstring convention and how
@@ -282,7 +282,7 @@ references are resolved.
 
 <a id="x-28APEIRON-2EVERBS-3AREGISTER-VERB-20FUNCTION-29"></a>
 
-### [function](aed8) `apeiron.verbs:register-verb` registry name lambda-list body &key strict
+### [function](a10f) `apeiron.verbs:register-verb` registry name lambda-list body &key strict
 
 Define (or redefine) the verb `NAME` in `REGISTRY` and return its
 [`verb-definition`][ca81].
@@ -301,32 +301,32 @@ a registered verb.
 
 <a id="x-28APEIRON-2EVERBS-3ACALL-VERB-20FUNCTION-29"></a>
 
-### [function](b807) `apeiron.verbs:call-verb` registry name-or-cid &rest arguments
+### [function](4ca8) `apeiron.verbs:call-verb` registry name-or-cid &rest arguments
 
 Call the verb addressed by `NAME-OR-CID` in `REGISTRY` with `ARGUMENTS`.
 Returns whatever the verb returns (including multiple values).
 
 <a id="x-28APEIRON-2EVERBS-3AVERB-CID-20FUNCTION-29"></a>
 
-### [function](c145) `apeiron.verbs:verb-cid` registry name-or-cid
+### [function](dac0) `apeiron.verbs:verb-cid` registry name-or-cid
 
 `CID` addressed by `NAME-OR-CID`, or `NIL`.
 
 <a id="x-28APEIRON-2EVERBS-3AVERB-HISTORY-20FUNCTION-29"></a>
 
-### [function](dddb) `apeiron.verbs:verb-history` registry name
+### [function](7ea3) `apeiron.verbs:verb-history` registry name
 
 List of `CID`s `NAME` has been bound to in `REGISTRY`, newest first.
 
 <a id="x-28APEIRON-2EVERBS-3AVERB-REFERENCES-20FUNCTION-29"></a>
 
-### [function](82bf) `apeiron.verbs:verb-references` registry name-or-cid
+### [function](6167) `apeiron.verbs:verb-references` registry name-or-cid
 
 Alist (`SYMBOL` . `CID`) of the resolved references of `NAME-OR-CID`.
 
 <a id="x-28APEIRON-2EVERBS-3AVERB-REFERRERS-20FUNCTION-29"></a>
 
-### [function](ff4c) `apeiron.verbs:verb-referrers` registry cid-or-definition
+### [function](4190) `apeiron.verbs:verb-referrers` registry cid-or-definition
 
 Names whose current definition references `CID-OR-DEFINITION`.
 `CID-OR-DEFINITION` may be a `CID` string, a [`verb-definition`][ca81], or a verb `NAME`
@@ -335,39 +335,39 @@ Names whose current definition references `CID-OR-DEFINITION`.
 
 <a id="x-28APEIRON-2EVERBS-3AVERB-UNRESOLVED-REFERENCES-20FUNCTION-29"></a>
 
-### [function](885f) `apeiron.verbs:verb-unresolved-references` registry name-or-cid
+### [function](aef0) `apeiron.verbs:verb-unresolved-references` registry name-or-cid
 
 Free function symbols of `NAME-OR-CID` that were not resolved to a verb.
 
 <a id="x-28APEIRON-2EVERBS-3AFIND-VERB-20FUNCTION-29"></a>
 
-### [function](6f1b) `apeiron.verbs:find-verb` registry name-or-cid
+### [function](04d5) `apeiron.verbs:find-verb` registry name-or-cid
 
 Return the [`verb-definition`][ca81] named or addressed by `NAME-OR-CID`, or `NIL`.
 A string is treated as a `CID`; a symbol is resolved through the name index.
 
 <a id="x-28APEIRON-2EVERBS-3AVERB-SOURCE-20FUNCTION-29"></a>
 
-### [function](7f6e) `apeiron.verbs:verb-source` registry name-or-cid
+### [function](bd94) `apeiron.verbs:verb-source` registry name-or-cid
 
 Source form of the verb addressed by `NAME-OR-CID`.
 
 <a id="x-28APEIRON-2EVERBS-3AVERB-DOCSTRING-20FUNCTION-29"></a>
 
-### [function](0fa5) `apeiron.verbs:verb-docstring` registry name-or-cid
+### [function](d0a9) `apeiron.verbs:verb-docstring` registry name-or-cid
 
 Docstring of the verb addressed by `NAME-OR-CID`.
 
 <a id="x-28APEIRON-2EVERBS-3AENSURE-VERB-REGISTRY-20FUNCTION-29"></a>
 
-### [function](b3c5) `apeiron.verbs:ensure-verb-registry` world
+### [function](43b9) `apeiron.verbs:ensure-verb-registry` world
 
 Return `WORLD`'s verb registry, creating an empty one on first use.
 `WORLD`'s registry lives in its transient `world-verb-registry` ([`1`][0e7c] [`2`][e12c] [`3`][c421]) slot.
 
 <a id="x-28APEIRON-2EVERBS-3AVERB-REGISTRY--3EMAP-20FUNCTION-29"></a>
 
-### [function](afaa) `apeiron.verbs:verb-registry->map` registry
+### [function](5665) `apeiron.verbs:verb-registry->map` registry
 
 Return `REGISTRY` as an immutable `FSET` map of plain data.
 
@@ -378,7 +378,7 @@ symbols, so it can be persisted directly; `MAP`->[`verb-registry`][8830] restore
 
 <a id="x-28APEIRON-2EVERBS-3AMAP--3EVERB-REGISTRY-20FUNCTION-29"></a>
 
-### [function](feef) `apeiron.verbs:map->verb-registry` map
+### [function](7d18) `apeiron.verbs:map->verb-registry` map
 
 Rebuild a verb registry from the plain data `MAP` produced by
 [`verb-registry`][8830]->`MAP`.  `CID`s, names and history are restored verbatim, so the
@@ -386,7 +386,7 @@ result addresses exactly the same definitions.
 
 <a id="x-28APEIRON-2EVERBS-3ASAVE-VERB-REGISTRY-21-20FUNCTION-29"></a>
 
-### [function](f469) `apeiron.verbs:save-verb-registry!` world &key (key \*verb-registry-config-key\*)
+### [function](ec62) `apeiron.verbs:save-verb-registry!` world &key (key \*verb-registry-config-key\*)
 
 Serialize `WORLD`'s verb registry into `WORLD`'s `CONFIG` map so the datastore
 stores it.  Returns the serialized map.
@@ -397,7 +397,7 @@ survive a restart.  Restore it with `LOAD-VERB-REGISTRY`!.
 
 <a id="x-28APEIRON-2EVERBS-3ALOAD-VERB-REGISTRY-21-20FUNCTION-29"></a>
 
-### [function](aa6c) `apeiron.verbs:load-verb-registry!` world &key (key \*verb-registry-config-key\*)
+### [function](babc) `apeiron.verbs:load-verb-registry!` world &key (key \*verb-registry-config-key\*)
 
 Rebuild `WORLD`'s verb registry from the serialized map stored in its `CONFIG`
 map under `KEY`, and install it in `WORLD`'s `world-verb-registry` ([`1`][0e7c] [`2`][e12c] [`3`][c421]) slot.  `CID`s are
@@ -406,7 +406,7 @@ resolving.  Returns the registry, or `NIL` when nothing is stored.
 
 <a id="x-28APEIRON-2EVERBS-3AOBJECT-DEFINE-VERB-21-20-2840ANTS-DOC-2FLOCATIVES-3AMACRO-29-29"></a>
 
-### [macro](303b) `apeiron.verbs:object-define-verb!` registry object name lambda-list &body body
+### [macro](5eaa) `apeiron.verbs:object-define-verb!` registry object name lambda-list &body body
 
 Register a verb `NAME` (with `LAMBDA-LIST` and `BODY`) in `REGISTRY` and bind it
 on `OBJECT`.  Returns the [`verb-definition`][ca81].  This is how an object gains its own
@@ -426,7 +426,7 @@ once:
 ```
 <a id="x-28APEIRON-2EVERBS-3AOBJECT-BIND-VERB-21-20FUNCTION-29"></a>
 
-### [function](7b56) `apeiron.verbs:object-bind-verb!` object name cid
+### [function](277c) `apeiron.verbs:object-bind-verb!` object name cid
 
 Bind `NAME` on `OBJECT` to the already-registered `CID`.  Returns `CID`.
 Use this to share a definition between objects, or to pin one object to a
@@ -434,13 +434,13 @@ specific version while another object moves on.
 
 <a id="x-28APEIRON-2EVERBS-3AOBJECT-VERB-20FUNCTION-29"></a>
 
-### [function](eb21) `apeiron.verbs:object-verb` registry object name
+### [function](a270) `apeiron.verbs:object-verb` registry object name
 
 Return the [`verb-definition`][ca81] `OBJECT` binds to `NAME` in `REGISTRY`, or `NIL`.
 
 <a id="x-28APEIRON-2EVERBS-3AOBJECT-CALL-VERB-20FUNCTION-29"></a>
 
-### [function](c152) `apeiron.verbs:object-call-verb` registry object name &rest arguments
+### [function](3e55) `apeiron.verbs:object-call-verb` registry object name &rest arguments
 
 Call the verb `OBJECT` binds to `NAME` with `ARGUMENTS`, resolving nested verb
 references through `REGISTRY`.  Returns whatever the verb returns.
@@ -468,26 +468,26 @@ references through `REGISTRY`.  Returns whatever the verb returns.
 
 
 [b83b]: https://github.com/sovelten/apeiron-mud/actions/workflows/test.yml
-[b807]: https://github.com/sovelten/apeiron-mud/blob/8fe1585cd96403d1282ed681462c72110287e6f9/src/verbs/compile.lisp#L63
-[303b]: https://github.com/sovelten/apeiron-mud/blob/8fe1585cd96403d1282ed681462c72110287e6f9/src/verbs/integration.lisp#L11
-[7b56]: https://github.com/sovelten/apeiron-mud/blob/8fe1585cd96403d1282ed681462c72110287e6f9/src/verbs/integration.lisp#L31
-[eb21]: https://github.com/sovelten/apeiron-mud/blob/8fe1585cd96403d1282ed681462c72110287e6f9/src/verbs/integration.lisp#L37
-[c152]: https://github.com/sovelten/apeiron-mud/blob/8fe1585cd96403d1282ed681462c72110287e6f9/src/verbs/integration.lisp#L42
-[f469]: https://github.com/sovelten/apeiron-mud/blob/8fe1585cd96403d1282ed681462c72110287e6f9/src/verbs/integration.lisp#L65
-[aa6c]: https://github.com/sovelten/apeiron-mud/blob/8fe1585cd96403d1282ed681462c72110287e6f9/src/verbs/integration.lisp#L77
-[dddb]: https://github.com/sovelten/apeiron-mud/blob/8fe1585cd96403d1282ed681462c72110287e6f9/src/verbs/registry.lisp#L119
-[6f1b]: https://github.com/sovelten/apeiron-mud/blob/8fe1585cd96403d1282ed681462c72110287e6f9/src/verbs/registry.lisp#L141
-[c145]: https://github.com/sovelten/apeiron-mud/blob/8fe1585cd96403d1282ed681462c72110287e6f9/src/verbs/registry.lisp#L149
-[7f6e]: https://github.com/sovelten/apeiron-mud/blob/8fe1585cd96403d1282ed681462c72110287e6f9/src/verbs/registry.lisp#L154
-[0fa5]: https://github.com/sovelten/apeiron-mud/blob/8fe1585cd96403d1282ed681462c72110287e6f9/src/verbs/registry.lisp#L158
-[82bf]: https://github.com/sovelten/apeiron-mud/blob/8fe1585cd96403d1282ed681462c72110287e6f9/src/verbs/registry.lisp#L162
-[885f]: https://github.com/sovelten/apeiron-mud/blob/8fe1585cd96403d1282ed681462c72110287e6f9/src/verbs/registry.lisp#L166
-[ff4c]: https://github.com/sovelten/apeiron-mud/blob/8fe1585cd96403d1282ed681462c72110287e6f9/src/verbs/registry.lisp#L170
-[aed8]: https://github.com/sovelten/apeiron-mud/blob/8fe1585cd96403d1282ed681462c72110287e6f9/src/verbs/registry.lisp#L232
-[54ce]: https://github.com/sovelten/apeiron-mud/blob/8fe1585cd96403d1282ed681462c72110287e6f9/src/verbs/registry.lisp#L275
-[b3c5]: https://github.com/sovelten/apeiron-mud/blob/8fe1585cd96403d1282ed681462c72110287e6f9/src/verbs/registry.lisp#L93
-[afaa]: https://github.com/sovelten/apeiron-mud/blob/8fe1585cd96403d1282ed681462c72110287e6f9/src/verbs/serialize.lisp#L44
-[feef]: https://github.com/sovelten/apeiron-mud/blob/8fe1585cd96403d1282ed681462c72110287e6f9/src/verbs/serialize.lisp#L69
+[4ca8]: https://github.com/sovelten/apeiron-mud/blob/d9e4cde3e4e8ebfa635edfea89a16365293db76a/src/verbs/compile.lisp#L63
+[5eaa]: https://github.com/sovelten/apeiron-mud/blob/d9e4cde3e4e8ebfa635edfea89a16365293db76a/src/verbs/integration.lisp#L11
+[277c]: https://github.com/sovelten/apeiron-mud/blob/d9e4cde3e4e8ebfa635edfea89a16365293db76a/src/verbs/integration.lisp#L31
+[a270]: https://github.com/sovelten/apeiron-mud/blob/d9e4cde3e4e8ebfa635edfea89a16365293db76a/src/verbs/integration.lisp#L37
+[3e55]: https://github.com/sovelten/apeiron-mud/blob/d9e4cde3e4e8ebfa635edfea89a16365293db76a/src/verbs/integration.lisp#L42
+[ec62]: https://github.com/sovelten/apeiron-mud/blob/d9e4cde3e4e8ebfa635edfea89a16365293db76a/src/verbs/integration.lisp#L65
+[babc]: https://github.com/sovelten/apeiron-mud/blob/d9e4cde3e4e8ebfa635edfea89a16365293db76a/src/verbs/integration.lisp#L77
+[7ea3]: https://github.com/sovelten/apeiron-mud/blob/d9e4cde3e4e8ebfa635edfea89a16365293db76a/src/verbs/registry.lisp#L119
+[04d5]: https://github.com/sovelten/apeiron-mud/blob/d9e4cde3e4e8ebfa635edfea89a16365293db76a/src/verbs/registry.lisp#L141
+[dac0]: https://github.com/sovelten/apeiron-mud/blob/d9e4cde3e4e8ebfa635edfea89a16365293db76a/src/verbs/registry.lisp#L149
+[bd94]: https://github.com/sovelten/apeiron-mud/blob/d9e4cde3e4e8ebfa635edfea89a16365293db76a/src/verbs/registry.lisp#L154
+[d0a9]: https://github.com/sovelten/apeiron-mud/blob/d9e4cde3e4e8ebfa635edfea89a16365293db76a/src/verbs/registry.lisp#L158
+[6167]: https://github.com/sovelten/apeiron-mud/blob/d9e4cde3e4e8ebfa635edfea89a16365293db76a/src/verbs/registry.lisp#L162
+[aef0]: https://github.com/sovelten/apeiron-mud/blob/d9e4cde3e4e8ebfa635edfea89a16365293db76a/src/verbs/registry.lisp#L166
+[4190]: https://github.com/sovelten/apeiron-mud/blob/d9e4cde3e4e8ebfa635edfea89a16365293db76a/src/verbs/registry.lisp#L170
+[a10f]: https://github.com/sovelten/apeiron-mud/blob/d9e4cde3e4e8ebfa635edfea89a16365293db76a/src/verbs/registry.lisp#L232
+[ec80]: https://github.com/sovelten/apeiron-mud/blob/d9e4cde3e4e8ebfa635edfea89a16365293db76a/src/verbs/registry.lisp#L275
+[43b9]: https://github.com/sovelten/apeiron-mud/blob/d9e4cde3e4e8ebfa635edfea89a16365293db76a/src/verbs/registry.lisp#L93
+[5665]: https://github.com/sovelten/apeiron-mud/blob/d9e4cde3e4e8ebfa635edfea89a16365293db76a/src/verbs/serialize.lisp#L44
+[7d18]: https://github.com/sovelten/apeiron-mud/blob/d9e4cde3e4e8ebfa635edfea89a16365293db76a/src/verbs/serialize.lisp#L69
 [668c]: https://github.com/sovelten/apeiron-mud/blob/main/docs/tutorial-secret-room.md
 [954d]: https://github.com/sovelten/apeiron-mud/blob/main/docs/tutorial-wordle.md
 [7e6e]: https://github.com/sovelten/apeiron-mud/blob/main/mcp/README.md
