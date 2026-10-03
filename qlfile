@@ -1,0 +1,16 @@
+# qlfile — dependency manifest for the CI environment.
+#
+# This file is read by Qlot, which is what the GitHub Actions we use
+# (40ants/setup-lisp@v4 and 40ants/run-tests@v2) run everything inside.
+# Qlot needs an explicit entry for every dependency that cannot be resolved
+# from the Quicklisp distribution.
+#
+# Local development does NOT use Qlot: dev.lisp and run-tests.lisp use plain
+# Quicklisp, with cl-cm checked out under ~/quicklisp/local-projects/cl-cm.
+#
+# cl-cm is not on Quicklisp. It is a public GitHub repository, so it is
+# pulled here as a git source. The :ref pins an exact commit so that CI
+# builds are reproducible; to pick up newer cl-cm commits, update the hash
+# below (e.g. `git -C ~/quicklisp/local-projects/cl-cm rev-parse origin/main`).
+
+git cl-cm https://github.com/sovelten/cl-cm.git :ref 13f2b928b4850ef5181027212625c78f71f0208b

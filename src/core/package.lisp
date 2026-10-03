@@ -128,6 +128,11 @@
    #:object-properties
    #:object-get-property
    #:object-set-property
+   #:object-verbs
+   #:object-set-verb
+   #:object-remove-verb
+   #:object-verb-cid
+   #:object-verb-names
    #:object-move
    #:object-copy
 
@@ -377,6 +382,7 @@
    #:connect-west-east!
    #:world-id-counter
    #:world-config
+   #:world-verb-registry
    #:world-characters
    #:world-objects
    #:world-rooms
