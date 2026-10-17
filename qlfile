@@ -13,4 +13,4 @@
 # builds are reproducible; to pick up newer cl-cm commits, update the hash
 # below (e.g. `git -C ~/quicklisp/local-projects/cl-cm rev-parse origin/main`).
 
-git cl-cm https://github.com/sovelten/cl-cm.git :ref 5d78f4eb28930f7a8a244ea85ac70505c55992fe
+git cl-cm https://github.com/sovelten/cl-cm.git :ref aa87e15ee5c633f1615c283502440244fe9525b6

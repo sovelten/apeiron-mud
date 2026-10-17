@@ -63,8 +63,7 @@ a persistent CL-CM-DB code database.")
    #:verb-docstring
    #:verb-unresolved-references
 
-   ;; invocation
-   #:*verb-registry*
+   ;; invocation (compiled code is managed by the cl-cm-db database)
    #:verb-function
    #:call-verb
 

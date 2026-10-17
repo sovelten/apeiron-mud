@@ -412,8 +412,13 @@
   identity log mapping verb names to CIDs, and a content-addressed object
   store holding each definition's source (identical code is stored once).
   Every definition or redefinition is written to that log, which is also
-  where VERB-HISTORY comes from. `MAKE-VERB-REGISTRY` opens one; the only
-  transient state Apeiron adds is a cache of compiled functions.
+  where VERB-HISTORY comes from. `MAKE-VERB-REGISTRY` opens one.
+
+  The database also owns the compiled code: it lazily compiles a stored
+  definition and caches the compiled function by CID, wiring each free
+  reference to the compiled function of the referenced CID. Nothing about
+  compiled code is persisted; it is rebuilt from the stored source on
+  demand, so an image restart simply recompiles on first call.
 
   A world keeps its database in the transient `WORLD-VERB-REGISTRY` slot,
   created on first use by `ENSURE-VERB-REGISTRY`. The database directory is

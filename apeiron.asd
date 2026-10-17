@@ -113,8 +113,7 @@
                 :components
                 ((:file "package")
                  (:file "registry" :depends-on ("package"))
-                 (:file "compile" :depends-on ("registry"))
-                 (:file "integration" :depends-on ("registry" "compile"))))))
+                 (:file "integration" :depends-on ("registry"))))))
 
 (defsystem "apeiron/worlds"
   :version "0.0.1"
