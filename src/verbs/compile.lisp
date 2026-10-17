@@ -10,9 +10,21 @@
 (in-package #:apeiron.verbs)
 
 (defvar *verb-registry* nil
-  "The verb registry in effect while a verb's compiled function runs.
+  "The verb database in effect while a verb's compiled function runs.
 Bound by the wrapper VERB-FUNCTION returns, so nested verb references
-resolve through the same registry.")
+resolve through the same database.")
+
+(defvar *verb-function-cache* (make-hash-table :test #'eq)
+  "Transient cache: verb database -> (cid -> compiled function).
+
+A registry has no state of its own beyond the cl-cm-db database, so the
+compiled functions are cached here, keyed by the database object.")
+
+(defun verb-function-cache (registry)
+  "The CID -> compiled-function table for REGISTRY, created on first use."
+  (or (gethash registry *verb-function-cache*)
+      (setf (gethash registry *verb-function-cache*)
+            (make-hash-table :test #'equal))))
 
 (declaim (ftype (function (t t) function) verb-function))
 
@@ -26,7 +38,7 @@ cache is keyed by CID, so two names for the same verb share one function."
   (let* ((definition (or (find-verb registry name-or-cid)
                          (error "No such verb: ~S" name-or-cid)))
          (cid (verb-definition-cid definition)))
-    (or (gethash cid (registry-functions registry))
+    (or (gethash cid (verb-function-cache registry))
         (let* ((references (verb-definition-references definition))
                (ref-names (mapcar #'car references))
                (args (gensym "VERB-ARGS-"))
@@ -57,7 +69,7 @@ cache is keyed by CID, so two names for the same verb share one function."
                (function (lambda (&rest arguments)
                            (let ((*verb-registry* registry))
                              (apply inner arguments)))))
-          (setf (gethash cid (registry-functions registry)) function)
+          (setf (gethash cid (verb-function-cache registry)) function)
           function))))
 
 (defun call-verb (registry name-or-cid &rest arguments)

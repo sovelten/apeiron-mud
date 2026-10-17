@@ -53,9 +53,9 @@ references through REGISTRY.  Returns whatever the verb returns."
 ;;; The world's database
 ;;; ------------------------------------------------------------------
 ;;;
-;;; Persistence needs no code here: a world's registry is a thin wrapper
-;;; around a CL-CM-DB code database, and the database writes its identity
-;;; log and content-addressed object store itself.  ENSURE-VERB-REGISTRY
-;;; opens it (see registry.lisp); object bindings are name -> CID and are
-;;; persisted by BKNR as ordinary slot writes.  Both halves therefore line
-;;; up after a restart without a serialization step.
+;;; Persistence needs no code here: a world's registry IS a CL-CM-DB code
+;;; database, which writes its identity log and content-addressed object
+;;; store itself.  ENSURE-VERB-REGISTRY opens it (see registry.lisp);
+;;; object bindings are name -> CID and are persisted by BKNR as ordinary
+;;; slot writes.  Both halves therefore line up after a restart without a
+;;; serialization step.

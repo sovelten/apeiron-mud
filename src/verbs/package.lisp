@@ -17,6 +17,9 @@ CID (recursive content addressing, as in Unison).  Renaming a verb therefore
 changes no CID; editing a verb's body changes its CID and the CID of every
 verb that calls it, so versions are addressed, not overwritten.
 
+A registry is simply a CL-CM-DB:CODE-DATABASE: verb names are identities,
+verb source is content-addressed code, and VERB-HISTORY is its identity
+log.  MAKE-VERB-REGISTRY opens one; ENSURE-VERB-REGISTRY opens a world's.
 REGISTER-VERB / DEFINE-VERB add or replace a verb by NAME.  FIND-VERB,
 VERB-CID, VERB-HISTORY, VERB-REFERENCES and VERB-REFERRERS inspect the
 registry; CALL-VERB runs a verb (its references are wired by CID).  The
@@ -26,11 +29,9 @@ name -> CID; the code itself lives once in the registry, which is backed by
 a persistent CL-CM-DB code database.")
 
   (:export
-   ;; registry
-   #:verb-registry
+   ;; registry (a cl-cm-db code database; see the package docstring)
    #:make-verb-registry
    #:ensure-verb-registry
-   #:verb-registry-database
    #:verb-registry-directory
    #:default-verb-database-directory
    #:verb-count

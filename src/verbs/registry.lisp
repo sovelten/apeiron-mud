@@ -17,23 +17,22 @@
 ;;;; the body and takes part in the CID, so re-documenting a verb produces
 ;;;; a new definition.
 ;;;;
-;;;; Storage is delegated to CL-CM-DB, the content-addressed code database
-;;;; that ships with CL-CM.  A VERB-REGISTRY is a thin wrapper around a
-;;;; CL-CM-DB:CODE-DATABASE:
+;;;; There is no separate registry object: a "verb registry" IS a
+;;;; CL-CM-DB:CODE-DATABASE.  The database is exactly the right shape:
 ;;;;
-;;;;   * a verb NAME is an *identity* in the database, so the database's
-;;;;     append-only identity log records every definition and redefinition
-;;;;     (and is the source of VERB-HISTORY);
+;;;;   * a verb NAME is an *identity* in the database, so its append-only
+;;;;     identity log records every definition and redefinition (and is the
+;;;;     source of VERB-HISTORY);
 ;;;;   * the verb's SOURCE is stored, content-addressed, in the database's
 ;;;;     object store — identical code is stored once, however many names
 ;;;;     point at it, and old versions remain addressable by CID;
 ;;;;   * the database doubles as CL-CM's reference resolver, so a
 ;;;;     definition's CID is recursively content addressed.
 ;;;;
-;;;; The registry keeps no persistent state of its own.  Definitions are
-;;;; rebuilt from the database on demand, and only compiled functions are
-;;;; cached (transiently).  See ENSURE-VERB-REGISTRY for how a world gets
-;;;; its database.
+;;;; Definitions are rebuilt from the database on demand.  The only state
+;;;; Apeiron adds is a transient cache of compiled functions (see
+;;;; compile.lisp).  See ENSURE-VERB-REGISTRY for how a world gets its
+;;;; database.
 
 (in-package #:apeiron.verbs)
 
@@ -70,26 +69,8 @@ are rebuilt from the database on demand; nothing here is persisted."))
     (format stream "~A ~A" (verb-definition-name def) (verb-definition-cid def))))
 
 ;;; ------------------------------------------------------------------
-;;; The registry (a thin wrapper around a cl-cm-db code database)
+;;; Opening a verb database
 ;;; ------------------------------------------------------------------
-
-(defclass verb-registry ()
-  ((database :initarg :database :reader verb-registry-database
-             :documentation "The CL-CM-DB:CODE-DATABASE that stores verb
-identities and code.")
-   (functions :initform (make-hash-table :test #'equal)
-              :accessor registry-functions
-              :documentation "Transient cache: cid -> compiled function.")
-   (references :initform (make-hash-table :test #'equal)
-               :accessor registry-references
-               :documentation "Transient cache: cid -> (REFERENCES . UNRESOLVED),
-resolved against the identity table as it was when CID was stored."))
-  (:documentation "A content-addressed store of verbs, backed by a
-CL-CM-DB code database.  See the file header."))
-
-(defmethod print-object ((reg verb-registry) stream)
-  (print-unreadable-object (reg stream :type t)
-    (format stream "~D verb~:P" (verb-count reg))))
 
 (defvar *verb-database-counter* 0
   "Makes each standalone registry's temporary database directory unique.")
@@ -106,8 +87,10 @@ CL-CM-DB code database.  See the file header."))
    (uiop:temporary-directory)))
 
 (defun make-verb-registry (&key database directory (name "verbs"))
-  "Return a verb registry backed by a CL-CM-DB code database.
+  "Return a CL-CM-DB:CODE-DATABASE to use as a verb registry.
 
+A verb registry has no state beyond the code database: names are
+identities, definitions are code objects, and history is the identity log.
 DATABASE, when supplied, is used as-is.  Otherwise a database named NAME is
 opened under DIRECTORY; when DIRECTORY is not supplied a fresh temporary
 directory is used, which keeps standalone registries (tests, scratch use)
@@ -117,19 +100,19 @@ ENSURE-VERB-REGISTRY."
                       (cl-cm-db:make-database
                        :directory (or directory (fresh-verb-database-directory))
                        :name name))))
-    (cl-cm-db:ensure-database database)
-    (make-instance 'verb-registry :database database)))
+    (cl-cm-db:ensure-database database)))
 
 (defun verb-registry-directory (registry)
   "Directory holding REGISTRY's identity log and code store."
   (uiop:pathname-directory-pathname
-   (cl-cm-db:identity-log-path (verb-registry-database registry))))
+   (cl-cm-db:identity-log-path registry)))
 
 (defun ensure-verb-registry (world &key directory)
-  "Return WORLD's verb registry, opening its database on first use.
-WORLD's registry lives in its transient WORLD-VERB-REGISTRY slot.  The
-database directory is DIRECTORY when supplied, else WORLD's :VERB-DIRECTORY
-config value, else DEFAULT-VERB-DATABASE-DIRECTORY."
+  "Return WORLD's verb database, opening it on first use.
+WORLD's registry lives in its transient WORLD-VERB-REGISTRY slot and is a
+CL-CM-DB:CODE-DATABASE.  The directory is DIRECTORY when supplied, else
+WORLD's :VERB-DIRECTORY config value, else
+DEFAULT-VERB-DATABASE-DIRECTORY."
   (or (world-verb-registry world)
       (setf (world-verb-registry world)
             (make-verb-registry
@@ -175,7 +158,7 @@ This turns one back into a symbol when that package exists in the image."
                  (let ((symbol (identity-key-symbol key)))
                    (when symbol
                      (pushnew symbol names)))))
-             (cl-cm-db:database-identities (verb-registry-database registry)))
+             (cl-cm-db:database-identities registry))
     (sort names #'string< :key #'symbol-name)))
 
 ;;; ------------------------------------------------------------------
@@ -185,11 +168,11 @@ This turns one back into a symbol when that package exists in the image."
 (defun verb-name-cid (registry name)
   "CID currently bound to NAME (a symbol) in REGISTRY, or NIL."
   (and (symbolp name)
-       (cl-cm-db:identity-cid name (verb-registry-database registry))))
+       (cl-cm-db:identity-cid name registry)))
 
 (defun read-identity-records (registry)
   "Read REGISTRY's identity log as a list of records, oldest first."
-  (let ((path (cl-cm-db:identity-log-path (verb-registry-database registry))))
+  (let ((path (cl-cm-db:identity-log-path registry)))
     (when (probe-file path)
       (with-open-file (in path :direction :input)
         (let ((*read-eval* nil))
@@ -271,8 +254,7 @@ Returns (values REFERENCES UNRESOLVED), where REFERENCES is a sorted alist
   (let ((references '())
         (free '())
         (identities (or identities
-                        (cl-cm-db:database-identities
-                         (verb-registry-database registry)))))
+                        (cl-cm-db:database-identities registry))))
     (let ((cl-cm:*reference-resolver*
             (lambda (namespace symbol)
               (let ((cid (gethash (cl-cm-db:identity-key symbol) identities)))
@@ -286,8 +268,8 @@ Returns (values REFERENCES UNRESOLVED), where REFERENCES is a sorted alist
             (sort (set-difference free (mapcar #'car references))
                   #'string< :key #'symbol-name))))
 
-(defun stored-code-by-cid (database cid)
-  "The source expression CL-CM-DB stored for CID, or NIL.
+(defun stored-code-by-cid (registry cid)
+  "The source expression the database stored for CID, or NIL.
 
 Uses CL-CM-DB:CODE-BY-CID when the loaded cl-cm provides it (the normal
 case), and otherwise the code entry's source accessor, so Apeiron keeps
@@ -295,28 +277,20 @@ working against a cl-cm checkout from before that convenience function was
 exported."
   (let ((code-by-cid (find-symbol "CODE-BY-CID" :cl-cm-db)))
     (if (and code-by-cid (fboundp code-by-cid))
-        (funcall code-by-cid database cid)
-        (let ((entry (gethash cid (cl-cm-db:database-code database)))
+        (funcall code-by-cid registry cid)
+        (let ((entry (gethash cid (cl-cm-db:database-code registry)))
               (source (find-symbol "CODE-ENTRY-SOURCE" :cl-cm-db)))
           (when (and entry source (fboundp source))
             (funcall source entry))))))
 
 (defun references-for-cid (registry cid source)
   "References SOURCE had when it was stored as CID.
-Values as RECORD-REFERENCES.  Cached per CID, since a content-addressed
-definition's references never change."
-  (let ((cached (gethash cid (registry-references registry))))
-    (if cached
-        (values (car cached) (cdr cached))
-        (multiple-value-bind (references unresolved)
-            (record-references registry source (identities-before-cid registry cid))
-          (setf (gethash cid (registry-references registry))
-                (cons references unresolved))
-          (values references unresolved)))))
+Values as RECORD-REFERENCES.  Recomputed from the identity log each time."
+  (record-references registry source (identities-before-cid registry cid)))
 
 (defun make-verb-definition (registry cid &optional name)
   "Build the VERB-DEFINITION for CID, or NIL when CID holds no verb code."
-  (let ((source (stored-code-by-cid (verb-registry-database registry) cid)))
+  (let ((source (stored-code-by-cid registry cid)))
     (when (and (consp source) (eq (first source) 'lambda))
       (let ((lambda-list (second source))
             (body (cddr source)))
@@ -381,7 +355,7 @@ CID, so it is naming-independent: renaming a verb does not change it."
                                     :test #'string= :key #'cdr))
                      (let ((name (identity-key-symbol key)))
                        (when name (push name out))))))
-               (cl-cm-db:database-identities (verb-registry-database registry))))
+               (cl-cm-db:database-identities registry)))
     (sort (remove-duplicates out) #'string< :key #'symbol-name)))
 
 ;;; ------------------------------------------------------------------
@@ -397,7 +371,7 @@ name), and the sorted list of free function symbols REGISTRY did not know.
 The CID is computed by the database (CL-CM-DB:DATABASE-CODE-CID), so it is
 exactly the CID the database will assign when the source is stored."
   (multiple-value-bind (references unresolved) (record-references registry source)
-    (values (cl-cm-db:database-code-cid (verb-registry-database registry) source)
+    (values (cl-cm-db:database-code-cid registry source)
             references
             unresolved)))
 
@@ -412,11 +386,11 @@ CID.  The verb's CID is computed by CL-CM after resolving every free
 reference to the CID currently bound to that name, so a reference is to a
 *version*, not to a name.
 
-The definition is stored in the registry's CL-CM-DB database: a new name is
-a `:define' record in its identity log, an existing name a `:set' record.
-Storing identical code is a no-op, so several names can point at one
-definition.  When STRICT is true, an error is signalled if any free function
-reference could not be resolved to a registered verb."
+The definition is stored in REGISTRY, a CL-CM-DB code database: a new name
+is a `:define' record in its identity log, an existing name a `:set'
+record.  Storing identical code is a no-op, so several names can point at
+one definition.  When STRICT is true, an error is signalled if any free
+function reference could not be resolved to a registered verb."
   (check-type name symbol)
   (let ((source `(lambda ,lambda-list ,@body)))
     (multiple-value-bind (cid references unresolved)
@@ -425,12 +399,11 @@ reference could not be resolved to a registered verb."
       (when (and strict unresolved)
         (error "register-verb: ~A refers to undefined verb~:P ~{~A~^, ~}."
                name unresolved))
-      (let ((database (verb-registry-database registry))
-            (current (verb-name-cid registry name)))
+      (let ((current (verb-name-cid registry name)))
         (cond ((null current)
-               (setf cid (cl-cm-db:defidentity database name source)))
+               (setf cid (cl-cm-db:defidentity registry name source)))
               ((not (string= current cid))
-               (setf cid (cl-cm-db:setidentity database name source))))
+               (setf cid (cl-cm-db:setidentity registry name source))))
         (find-verb registry name)))))
 
 (defmacro define-verb (registry name lambda-list &body body)
@@ -445,7 +418,7 @@ references are resolved."
 
 (defun verb-count (registry)
   "Number of distinct definitions (CIDs) stored in REGISTRY."
-  (hash-table-count (cl-cm-db:database-code (verb-registry-database registry))))
+  (hash-table-count (cl-cm-db:database-code registry)))
 
 (defun map-verbs (function registry)
   "Call FUNCTION with each VERB-DEFINITION in REGISTRY, in CID order."
@@ -453,7 +426,7 @@ references are resolved."
     (maphash (lambda (cid entry)
                (declare (ignore entry))
                (push cid cids))
-             (cl-cm-db:database-code (verb-registry-database registry)))
+             (cl-cm-db:database-code registry))
     (dolist (cid (sort cids #'string<))
       (let ((definition (make-verb-definition registry cid)))
         (when definition

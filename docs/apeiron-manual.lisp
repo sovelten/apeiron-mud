@@ -407,15 +407,15 @@
 
   ### Storage
 
-  A registry is a thin wrapper around a `cl-cm-db` code database. The
-  database owns persistence: it keeps an append-only identity log mapping
-  verb names to CIDs, and a content-addressed object store holding each
-  definition's source (identical code is stored once). Every definition or
-  redefinition is written to that log, which is also where VERB-HISTORY
-  comes from. The registry itself is transient — it caches compiled
-  functions and reference analysis — and only the database touches disk.
+  A registry *is* a `cl-cm-db` code database — there is no separate
+  registry object. The database owns persistence: it keeps an append-only
+  identity log mapping verb names to CIDs, and a content-addressed object
+  store holding each definition's source (identical code is stored once).
+  Every definition or redefinition is written to that log, which is also
+  where VERB-HISTORY comes from. `MAKE-VERB-REGISTRY` opens one; the only
+  transient state Apeiron adds is a cache of compiled functions.
 
-  A world keeps its registry in the transient `WORLD-VERB-REGISTRY` slot,
+  A world keeps its database in the transient `WORLD-VERB-REGISTRY` slot,
   created on first use by `ENSURE-VERB-REGISTRY`. The database directory is
   `DATA/VERBS/` by default, or the world's `:VERB-DIRECTORY` config value,
   or the explicit `:DIRECTORY` argument. An object's `VERBS` slot still
@@ -448,7 +448,6 @@
   (apeiron.verbs:verb-source function)
   (apeiron.verbs:verb-docstring function)
   (apeiron.verbs:ensure-verb-registry function)
-  (apeiron.verbs:verb-registry-database function)
   (apeiron.verbs:verb-registry-directory function)
   (apeiron.verbs:default-verb-database-directory function)
   (apeiron.verbs:object-define-verb! macro)

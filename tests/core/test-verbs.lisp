@@ -325,7 +325,7 @@ gains one via the transient-instance initform)."
         (directory (fresh-verb-test-directory)))
     (is (null (apeiron.core:world-verb-registry world)))
     (let ((reg (apeiron.verbs:ensure-verb-registry world :directory directory)))
-      (is (typep reg 'apeiron.verbs:verb-registry))
+      (is (typep reg 'cl-cm-db:code-database))
       (is (eq reg (apeiron.verbs:ensure-verb-registry world :directory directory))))))
 
 (test world-verb-registry-persists-in-code-database
@@ -344,7 +344,7 @@ per-object bindings."
     (setf (apeiron.core:world-verb-registry world) nil)
     (is (null (apeiron.core:world-verb-registry world)))
     (let ((reg (apeiron.verbs:ensure-verb-registry world :directory directory)))
-      (is (typep reg 'apeiron.verbs:verb-registry))
+      (is (typep reg 'cl-cm-db:code-database))
       (is (equal "whirr" (apeiron.verbs:object-call-verb reg obj 'whirr)))
       (is (equal "Whirr." (apeiron.verbs:verb-docstring reg 'whirr)))
       (is (string= (apeiron.core:object-verb-cid obj 'whirr)
