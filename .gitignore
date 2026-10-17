@@ -7,3 +7,8 @@ docs/build/
 # Compiled artifacts
 *.fasl
 *.fas
+
+# Qlot environment.  It is what the CI actions (40ants/setup-lisp,
+# 40ants/run-tests) build from qlfile; local development uses plain
+# Quicklisp, so there is normally no .qlot/ directory here.
+.qlot/

@@ -14,6 +14,8 @@
 
   - **SBCL** 2.0+
   - **Quicklisp**
+  - **cl-cm** — not on Quicklisp. Clone
+    https://github.com/sovelten/cl-cm into Quicklisp's `local-projects`
 
   ### Start the Server
 
@@ -333,6 +335,140 @@
   skipped.  See @DEPLOYMENT."""
   (apeiron.persistence::@data-migrations section))
 
+(defsection @verbs (:title "Content-addressed verbs")
+  """A *verb* is a named function whose identity is a content identifier
+  (CID) — a hash of its code — computed by the `cl-cm` library and stored in
+  a `cl-cm-db` code database. This is the Unison idea applied to the MUD's
+  scripting: a verb is addressed by *what it is*, not by where it is stored
+  or what it is called.
+
+  ### How a verb's CID is computed
+
+  A verb is defined by a lambda list and a body. `cl-cm` alpha-renames the
+  code, so the names of a verb's own bound variables do not affect the CID,
+  and replaces every *free* reference to another verb with that verb's CID.
+  The result is *recursive content addressing*:
+
+  - renaming a verb changes no CID — a reference is to a version, not to a
+    name;
+  - editing a verb's body gives it a new CID, and gives a new CID to every
+    verb that calls it, because the caller's CID depends on the callee's;
+  - identical verbs are stored once, however they are named.
+
+  A leading string literal in the body is the verb's docstring (the DEFUN
+  convention) and, being content, it takes part in the CID.
+
+  ### Defining and calling
+
+  ```lisp
+  (defparameter *verbs*
+    (cl-cm-db:ensure-database
+     (cl-cm-db:make-database :directory #p"data/verbs/" :name "verbs")))
+
+  (apeiron.verbs:define-verb *verbs* greet (who)
+    "Greet WHO."
+    (format nil "Hello, ~A!" who))
+
+  (apeiron.verbs:define-verb *verbs* greet-twice (who)
+    (greet (greet who)))
+
+  (cl-cm-db:call-identity 'greet-twice *verbs* "world")
+  ;; => "Hello, Hello, world!"
+  ```
+
+  `DEFINE-VERB` is only sugar: it builds the `(lambda ...)` form and stores
+  it with `CL-CM-DB:ENSURE-IDENTITY`. Renaming, redefinition, deduplication
+  and recursive content addressing are the database's behavior.
+
+  Because `greet-twice` calls `greet`, its CID depends on `greet`'s: editing
+  `greet` gives `greet-twice` a new CID too, without touching its source. A
+  compiled verb keeps reaching the version it was compiled against, so
+  redefining `greet` under the same name does not change what an already
+  compiled `greet-twice` calls; re-register the caller (or call a freshly
+  compiled verb) to move to the new version.
+
+  ### Inspecting verbs
+
+  Inspection is `cl-cm-db`:
+
+  - `CL-CM-DB:IDENTITY-CID` — the CID a name currently resolves to.
+  - `CL-CM-DB:DEFINITION-BY-IDENTITY` / `DEFINITION-BY-CID` — the stored
+    `CODE-DEFINITION` (source, lambda list, body).
+  - `CL-CM-DB:IDENTITY-HISTORY` — every CID a name has been bound to,
+    newest first.
+  - `CL-CM-DB:CODE-REFERENCES` — the `(NAME . CID)` references a stored
+    definition was hashed with.
+  - `CL-CM-DB:CODE-REFERRERS` — the names whose current definition
+    references a CID.
+  - `CL-CM-DB:CODE-FUNCTION` / `CALL-IDENTITY` — the compiled function.
+  - `APEIRON.VERBS:VERB-DOCSTRING` — the DEFUN-style docstring of a
+    definition.
+
+  `DEFINE-VERB` / `REGISTER-VERB` add or replace a verb by name. Registering
+  identical code under two names stores it once and points both names at the
+  same definition.
+
+  ### Verbs on objects
+
+  An object's `VERBS` slot (see the World section) is an immutable FSET map
+  from a verb name to a CID; the code itself lives once in the registry. The
+  per-object API is OBJECT-DEFINE-VERB! (register a verb and bind it on an
+  object), OBJECT-BIND-VERB! (bind an already-registered CID — to share a
+  definition between objects, or to pin one object to a version), OBJECT-VERB
+  (returns the `CL-CM-DB:CODE-DEFINITION`), OBJECT-VERB-CID /
+  OBJECT-VERB-NAMES (inspect) and OBJECT-CALL-VERB (run). Because only the
+  CID is stored on the object, a verb binding is an ordinary slot write that
+  BKNR records and persists.
+
+  ### Storage
+
+  A registry *is* a `cl-cm-db` code database — there is no separate
+  registry object. The database owns persistence: it keeps an append-only
+  identity log mapping verb names to CIDs, and a content-addressed object
+  store holding each definition's source (identical code is stored once).
+  Every definition or redefinition is written to that log, which is also
+  where `CL-CM-DB:IDENTITY-HISTORY` comes from. Open a standalone database
+  with `CL-CM-DB:MAKE-DATABASE` + `ENSURE-DATABASE` (or `INIT-DATABASE`).
+
+  The database also owns the compiled code: it lazily compiles a stored
+  definition and caches the compiled function by CID, wiring each free
+  reference to the compiled function of the referenced CID. Nothing about
+  compiled code is persisted; it is rebuilt from the stored source on
+  demand, so an image restart simply recompiles on first call.
+
+  A world keeps its database in the transient `WORLD-VERB-REGISTRY` slot,
+  created on first use by `ENSURE-VERB-REGISTRY`. The database directory is
+  `DATA/VERBS/` by default, or the world's `:VERB-DIRECTORY` config value,
+  or the explicit `:DIRECTORY` argument. An object's `VERBS` slot still
+  stores name -> CID, so object bindings survive a restart as ordinary BKNR
+  slot writes, and the CIDs they name remain addressable in the code store
+  even after a verb is redefined.
+
+  ### Limitations
+
+  - A referenced name must already be bound when the referrer is registered:
+    *forward references* and *mutual recursion* between two brand-new verbs
+    are not supported. A self-recursive verb either uses `labels` inside its
+    body or refers to the previously registered version of itself.
+  - Free functions that are not registered verbs are resolved by name at run
+    time and are not content-addressed; REGISTER-VERB with `:STRICT` rejects
+    them.
+  - A verb may be named by a symbol of a locked package (such as `GET` or
+    `REMOVE` in COMMON-LISP); the compilation step lifts the package lock for
+    exactly the referenced names, so such a reference can still be pinned by
+    CID."""
+  (apeiron.verbs:define-verb macro)
+  (apeiron.verbs:register-verb function)
+  (apeiron.verbs:verb-docstring function)
+  (apeiron.verbs:ensure-verb-registry function)
+  (apeiron.verbs:default-verb-database-directory function)
+  (apeiron.verbs:object-define-verb! macro)
+  (apeiron.verbs:object-bind-verb! function)
+  (apeiron.verbs:object-verb function)
+  (apeiron.verbs:object-call-verb function)
+  (apeiron.core:object-verbs generic-function)
+  (apeiron.core:world-verb-registry generic-function))
+
 (defsection @deployment (:title "Deployment")
   """### Configuration
 
@@ -455,9 +591,16 @@
   - **deeds** — event system
   - **bknr.datastore** — persistence
   - **serapeum** — utility hash tables (the declarative persistent class registry)
+  - **cl-cm** — content-addressable Common Lisp code: alpha-equivalent
+    normalisation, content identifiers, and `cl-cm-db`, the persistent
+    identity/code database that stores verbs (see @VERBS). **Not on
+    Quicklisp**: it lives at https://github.com/sovelten/cl-cm. For local
+    development keep a checkout on the ASDF source registry (e.g.
+    Quicklisp's `local-projects`); CI pulls the commit pinned in the
+    `qlfile` at the repository root.
   - **fiveam** — testing (optional)
 
-  All installed via Quicklisp automatically.""")
+  Everything except `cl-cm` is installed via Quicklisp automatically.""")
 
 (defsection @mcp (:title "MCP Server (LLM Integration)")
   """An [MCP (Model Context Protocol)](https://spec.modelcontextprotocol.io/)
