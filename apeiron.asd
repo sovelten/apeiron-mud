@@ -112,8 +112,8 @@
   :components ((:module "src/verbs"
                 :components
                 ((:file "package")
-                 (:file "registry" :depends-on ("package"))
-                 (:file "integration" :depends-on ("registry"))))))
+                 (:file "verbs" :depends-on ("package"))
+                 (:file "integration" :depends-on ("verbs"))))))
 
 (defsystem "apeiron/worlds"
   :version "0.0.1"

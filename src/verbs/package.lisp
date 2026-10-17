@@ -1,14 +1,15 @@
-;;;; src/verbs/package.lisp — package for the content-addressed verb registry
+;;;; src/verbs/package.lisp — verb sugar over cl-cm-db
 ;;;;
-;;;; Built on CL-CM (content-addressable Common Lisp code): a verb's
-;;;; identity is the CID of its definition with free references replaced by
-;;;; the CIDs of the verbs it calls, so it is independent of naming.
+;;;; The verb store itself is CL-CM-DB (content-addressable identities,
+;;;; code, history, references and compiled functions).  This package adds
+;;;; only the MUD-facing sugar: DEFINE-VERB / REGISTER-VERB, the docstring
+;;;; convention, a world's database, and the per-object verb bindings.
 
 (defpackage #:apeiron.verbs
   (:use #:cl
         #:apeiron.core)
   (:documentation
-   "Content-addressed verbs for the Apeiron MUD.
+   "Verb sugar for the Apeiron MUD, on top of CL-CM-DB.
 
 A *verb* is a named function whose identity is a content identifier (CID)
 computed by CL-CM: its body is alpha-renamed (bound-variable names do not
@@ -17,55 +18,29 @@ CID (recursive content addressing, as in Unison).  Renaming a verb therefore
 changes no CID; editing a verb's body changes its CID and the CID of every
 verb that calls it, so versions are addressed, not overwritten.
 
-A registry is simply a CL-CM-DB:CODE-DATABASE: verb names are identities,
-verb source is content-addressed code, and VERB-HISTORY is its identity
-log.  MAKE-VERB-REGISTRY opens one; ENSURE-VERB-REGISTRY opens a world's.
-REGISTER-VERB / DEFINE-VERB add or replace a verb by NAME.  FIND-VERB,
-VERB-CID, VERB-HISTORY, VERB-REFERENCES and VERB-REFERRERS inspect the
-registry; CALL-VERB runs a verb (its references are wired by CID).  The
-per-object side — which verbs an object answers to — is an immutable FSET map
-in MUD-OBJECT's VERBS slot (OBJECT-VERBS, OBJECT-SET-VERB, ...), holding
-name -> CID; the code itself lives once in the registry, which is backed by
-a persistent CL-CM-DB code database.")
+A registry IS a CL-CM-DB:CODE-DATABASE.  Names, history, definitions,
+references, referrers and compiled functions are all its responsibility; use
+CL-CM-DB:IDENTITY-CID, DEFINITION-BY-IDENTITY, CODE-REFERENCES,
+CODE-REFERRERS, IDENTITY-HISTORY, CODE-FUNCTION, CALL-IDENTITY, ... directly.
+This package adds only:
+
+  * DEFINE-VERB / REGISTER-VERB — lambda-list + body sugar, with the DEFUN
+    docstring convention (VERB-DOCSTRING);
+  * ENSURE-VERB-REGISTRY — opens a world's database;
+  * the per-object side — which verbs an object answers to is an immutable
+    FSET map in MUD-OBJECT's VERBS slot (OBJECT-VERBS, OBJECT-SET-VERB, ...),
+    holding name -> CID, with OBJECT-DEFINE-VERB!, OBJECT-BIND-VERB!,
+    OBJECT-VERB and OBJECT-CALL-VERB.")
 
   (:export
-   ;; registry (a cl-cm-db code database; see the package docstring)
-   #:make-verb-registry
-   #:ensure-verb-registry
-   #:verb-registry-directory
-   #:default-verb-database-directory
-   #:verb-count
-   #:map-verbs
-
-   ;; definitions
-   #:verb-definition
-   #:verb-definition-p
-   #:verb-definition-cid
-   #:verb-definition-name
-   #:verb-definition-lambda-list
-   #:verb-definition-body
-   #:verb-definition-source
-   #:verb-definition-docstring
-   #:verb-definition-references
-   #:verb-definition-unresolved-references
-   #:verb-definition-created-at
-
-   ;; defining / lookup
+   ;; defining
    #:define-verb
    #:register-verb
-   #:find-verb
-   #:verb-cid
-   #:verb-names
-   #:verb-history
-   #:verb-references
-   #:verb-referrers
-   #:verb-source
    #:verb-docstring
-   #:verb-unresolved-references
 
-   ;; invocation (compiled code is managed by the cl-cm-db database)
-   #:verb-function
-   #:call-verb
+   ;; a world's database
+   #:ensure-verb-registry
+   #:default-verb-database-directory
 
    ;; object integration
    #:object-define-verb!

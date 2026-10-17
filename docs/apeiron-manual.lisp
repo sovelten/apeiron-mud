@@ -337,9 +337,10 @@
 
 (defsection @verbs (:title "Content-addressed verbs")
   """A *verb* is a named function whose identity is a content identifier
-  (CID) — a hash of its code — computed by the `cl-cm` library. This is the
-  Unison idea applied to the MUD's scripting: a verb is addressed by *what
-  it is*, not by where it is stored or what it is called.
+  (CID) — a hash of its code — computed by the `cl-cm` library and stored in
+  a `cl-cm-db` code database. This is the Unison idea applied to the MUD's
+  scripting: a verb is addressed by *what it is*, not by where it is stored
+  or what it is called.
 
   ### How a verb's CID is computed
 
@@ -360,7 +361,9 @@
   ### Defining and calling
 
   ```lisp
-  (defparameter *verbs* (apeiron.verbs:make-verb-registry))
+  (defparameter *verbs*
+    (cl-cm-db:ensure-database
+     (cl-cm-db:make-database :directory #p"data/verbs/" :name "verbs")))
 
   (apeiron.verbs:define-verb *verbs* greet (who)
     "Greet WHO."
@@ -369,9 +372,13 @@
   (apeiron.verbs:define-verb *verbs* greet-twice (who)
     (greet (greet who)))
 
-  (apeiron.verbs:call-verb *verbs* 'greet-twice "world")
+  (cl-cm-db:call-identity 'greet-twice *verbs* "world")
   ;; => "Hello, Hello, world!"
   ```
+
+  `DEFINE-VERB` is only sugar: it builds the `(lambda ...)` form and stores
+  it with `CL-CM-DB:ENSURE-IDENTITY`. Renaming, redefinition, deduplication
+  and recursive content addressing are the database's behavior.
 
   Because `greet-twice` calls `greet`, its CID depends on `greet`'s: editing
   `greet` gives `greet-twice` a new CID too, without touching its source. A
@@ -380,19 +387,26 @@
   compiled `greet-twice` calls; re-register the caller (or call a freshly
   compiled verb) to move to the new version.
 
-  ### Inspecting the registry
+  ### Inspecting verbs
 
-  - VERB-CID — the CID a name currently resolves to.
-  - FIND-VERB / VERB-SOURCE / VERB-DOCSTRING — the stored definition.
-  - VERB-HISTORY — every CID a name has been bound to, newest first.
-  - VERB-REFERENCES — the resolved (NAME . CID) references of a verb.
-  - VERB-REFERRERS — the names whose current definition references a CID.
-  - VERB-UNRESOLVED-REFERENCES — free functions that are not registered
-    verbs (they are called as ordinary functions at run time).
+  Inspection is `cl-cm-db`:
 
-  DEFINE-VERB / REGISTER-VERB add or replace a verb by name; CALL-VERB runs
-  one. Registering identical code under two names stores it once and points
-  both names at the same definition.
+  - `CL-CM-DB:IDENTITY-CID` — the CID a name currently resolves to.
+  - `CL-CM-DB:DEFINITION-BY-IDENTITY` / `DEFINITION-BY-CID` — the stored
+    `CODE-DEFINITION` (source, lambda list, body).
+  - `CL-CM-DB:IDENTITY-HISTORY` — every CID a name has been bound to,
+    newest first.
+  - `CL-CM-DB:CODE-REFERENCES` — the `(NAME . CID)` references a stored
+    definition was hashed with.
+  - `CL-CM-DB:CODE-REFERRERS` — the names whose current definition
+    references a CID.
+  - `CL-CM-DB:CODE-FUNCTION` / `CALL-IDENTITY` — the compiled function.
+  - `APEIRON.VERBS:VERB-DOCSTRING` — the DEFUN-style docstring of a
+    definition.
+
+  `DEFINE-VERB` / `REGISTER-VERB` add or replace a verb by name. Registering
+  identical code under two names stores it once and points both names at the
+  same definition.
 
   ### Verbs on objects
 
@@ -401,9 +415,10 @@
   per-object API is OBJECT-DEFINE-VERB! (register a verb and bind it on an
   object), OBJECT-BIND-VERB! (bind an already-registered CID — to share a
   definition between objects, or to pin one object to a version), OBJECT-VERB
-  / OBJECT-VERB-CID / OBJECT-VERB-NAMES (inspect) and OBJECT-CALL-VERB (run).
-  Because only the CID is stored on the object, a verb binding is an ordinary
-  slot write that BKNR records and persists.
+  (returns the `CL-CM-DB:CODE-DEFINITION`), OBJECT-VERB-CID /
+  OBJECT-VERB-NAMES (inspect) and OBJECT-CALL-VERB (run). Because only the
+  CID is stored on the object, a verb binding is an ordinary slot write that
+  BKNR records and persists.
 
   ### Storage
 
@@ -412,7 +427,8 @@
   identity log mapping verb names to CIDs, and a content-addressed object
   store holding each definition's source (identical code is stored once).
   Every definition or redefinition is written to that log, which is also
-  where VERB-HISTORY comes from. `MAKE-VERB-REGISTRY` opens one.
+  where `CL-CM-DB:IDENTITY-HISTORY` comes from. Open a standalone database
+  with `CL-CM-DB:MAKE-DATABASE` + `ENSURE-DATABASE` (or `INIT-DATABASE`).
 
   The database also owns the compiled code: it lazily compiles a stored
   definition and caches the compiled function by CID, wiring each free
@@ -443,17 +459,8 @@
     CID."""
   (apeiron.verbs:define-verb macro)
   (apeiron.verbs:register-verb function)
-  (apeiron.verbs:call-verb function)
-  (apeiron.verbs:verb-cid function)
-  (apeiron.verbs:verb-history function)
-  (apeiron.verbs:verb-references function)
-  (apeiron.verbs:verb-referrers function)
-  (apeiron.verbs:verb-unresolved-references function)
-  (apeiron.verbs:find-verb function)
-  (apeiron.verbs:verb-source function)
   (apeiron.verbs:verb-docstring function)
   (apeiron.verbs:ensure-verb-registry function)
-  (apeiron.verbs:verb-registry-directory function)
   (apeiron.verbs:default-verb-database-directory function)
   (apeiron.verbs:object-define-verb! macro)
   (apeiron.verbs:object-bind-verb! function)
