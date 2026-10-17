@@ -114,7 +114,6 @@
                 ((:file "package")
                  (:file "registry" :depends-on ("package"))
                  (:file "compile" :depends-on ("registry"))
-                 (:file "serialize" :depends-on ("registry"))
                  (:file "integration" :depends-on ("registry" "compile"))))))
 
 (defsystem "apeiron/worlds"

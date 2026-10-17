@@ -56,9 +56,10 @@ immutable FSET hash map so a config change rebinds the slot with a new value
                   :accessor world-verb-registry
                   :initform nil
                   :documentation "The world's content-addressed verb registry
-(see APEIRON/VERBS), or NIL until first use.  Transient: the registry is
-rebuilt/loaded separately from the datastore.  Use ENSURE-VERB-REGISTRY to
-get a non-NIL registry."))
+(see APEIRON/VERBS), or NIL until first use.  Transient: the registry wraps
+a cl-cm-db code database that persists itself on disk (DATA/VERBS/ by
+default, or the world's :VERB-DIRECTORY config value).  Use
+ENSURE-VERB-REGISTRY to get the registry."))
   (:documentation "Configuration root for the MUD world.  Rooms, guestbooks,
    and other objects are stored as independent BKNR persistent objects."))
 

@@ -405,15 +405,23 @@
   Because only the CID is stored on the object, a verb binding is an ordinary
   slot write that BKNR records and persists.
 
-  ### Persistence
+  ### Storage
 
-  The registry is transient (it caches compiled functions); a world keeps it
-  in its `WORLD-VERB-REGISTRY` slot, created on first use by
-  `ENSURE-VERB-REGISTRY`. SAVE-VERB-REGISTRY! serializes it as plain data
-  with VERB-REGISTRY->MAP and stores the result in the world's `CONFIG` map
-  — an ordinary slot write that BKNR records and persists; LOAD-VERB-REGISTRY!
-  rebuilds it from there with MAP->VERB-REGISTRY, restoring the CIDs verbatim
-  without re-hashing, so object verb bindings keep resolving after a restart.
+  A registry is a thin wrapper around a `cl-cm-db` code database. The
+  database owns persistence: it keeps an append-only identity log mapping
+  verb names to CIDs, and a content-addressed object store holding each
+  definition's source (identical code is stored once). Every definition or
+  redefinition is written to that log, which is also where VERB-HISTORY
+  comes from. The registry itself is transient — it caches compiled
+  functions and reference analysis — and only the database touches disk.
+
+  A world keeps its registry in the transient `WORLD-VERB-REGISTRY` slot,
+  created on first use by `ENSURE-VERB-REGISTRY`. The database directory is
+  `DATA/VERBS/` by default, or the world's `:VERB-DIRECTORY` config value,
+  or the explicit `:DIRECTORY` argument. An object's `VERBS` slot still
+  stores name -> CID, so object bindings survive a restart as ordinary BKNR
+  slot writes, and the CIDs they name remain addressable in the code store
+  even after a verb is redefined.
 
   ### Limitations
 
@@ -440,10 +448,9 @@
   (apeiron.verbs:verb-source function)
   (apeiron.verbs:verb-docstring function)
   (apeiron.verbs:ensure-verb-registry function)
-  (apeiron.verbs:verb-registry->map function)
-  (apeiron.verbs:map->verb-registry function)
-  (apeiron.verbs:save-verb-registry! function)
-  (apeiron.verbs:load-verb-registry! function)
+  (apeiron.verbs:verb-registry-database function)
+  (apeiron.verbs:verb-registry-directory function)
+  (apeiron.verbs:default-verb-database-directory function)
   (apeiron.verbs:object-define-verb! macro)
   (apeiron.verbs:object-bind-verb! function)
   (apeiron.verbs:object-verb function)
@@ -574,11 +581,12 @@
   - **bknr.datastore** — persistence
   - **serapeum** — utility hash tables (the declarative persistent class registry)
   - **cl-cm** — content-addressable Common Lisp code: alpha-equivalent
-    normalisation and content identifiers. It is the basis of the verb
-    registry (see @VERBS). **Not on Quicklisp**: it lives at
-    https://github.com/sovelten/cl-cm. For local development keep a checkout
-    on the ASDF source registry (e.g. Quicklisp's `local-projects`); CI pulls
-    the commit pinned in the `qlfile` at the repository root.
+    normalisation, content identifiers, and `cl-cm-db`, the persistent
+    identity/code database that stores verbs (see @VERBS). **Not on
+    Quicklisp**: it lives at https://github.com/sovelten/cl-cm. For local
+    development keep a checkout on the ASDF source registry (e.g.
+    Quicklisp's `local-projects`); CI pulls the commit pinned in the
+    `qlfile` at the repository root.
   - **fiveam** — testing (optional)
 
   Everything except `cl-cm` is installed via Quicklisp automatically.""")

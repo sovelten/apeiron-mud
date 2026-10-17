@@ -22,13 +22,17 @@ VERB-CID, VERB-HISTORY, VERB-REFERENCES and VERB-REFERRERS inspect the
 registry; CALL-VERB runs a verb (its references are wired by CID).  The
 per-object side — which verbs an object answers to — is an immutable FSET map
 in MUD-OBJECT's VERBS slot (OBJECT-VERBS, OBJECT-SET-VERB, ...), holding
-name -> CID; the code itself lives once in the registry.")
+name -> CID; the code itself lives once in the registry, which is backed by
+a persistent CL-CM-DB code database.")
 
   (:export
    ;; registry
    #:verb-registry
    #:make-verb-registry
    #:ensure-verb-registry
+   #:verb-registry-database
+   #:verb-registry-directory
+   #:default-verb-database-directory
    #:verb-count
    #:map-verbs
 
@@ -67,13 +71,4 @@ name -> CID; the code itself lives once in the registry.")
    #:object-define-verb!
    #:object-bind-verb!
    #:object-verb
-   #:object-call-verb
-
-   ;; serialization (store the registry as plain data)
-   #:verb-registry->map
-   #:map->verb-registry
-
-   ;; persisting a world's registry in its CONFIG map
-   #:*verb-registry-config-key*
-   #:save-verb-registry!
-   #:load-verb-registry!))
+   #:object-call-verb))

@@ -2,9 +2,11 @@
 ;;;;
 ;;;; An object's VERBS slot is an immutable FSET map from a verb name to the
 ;;;; CID of its definition (see APEIRON.CORE:OBJECT-VERBS and friends).  The
-;;;; code lives once, in the world's registry; the object only names the
-;;;; versions it answers to.  Rebinding the map is what BKNR records, so an
-;;;; object's verb bindings persist like any other slot.
+;;;; code lives once, in the world's registry — which is itself backed by a
+;;;; CL-CM-DB code database on disk — and the object only names the versions
+;;;; it answers to.  Rebinding the map is what BKNR records, so an object's
+;;;; verb bindings persist like any other slot; the definitions they name
+;;;; persist in the code database.
 
 (in-package #:apeiron.verbs)
 
@@ -48,38 +50,12 @@ references through REGISTRY.  Returns whatever the verb returns."
     (apply (verb-function registry cid) arguments)))
 
 ;;; ------------------------------------------------------------------
-;;; Persisting a world's registry
+;;; The world's database
 ;;; ------------------------------------------------------------------
 ;;;
-;;; The registry is transient: it caches compiled functions.  Its persistent
-;;; form is plain data — VERB-REGISTRY->MAP produces an FSET map of strings,
-;;; numbers, lists and nested FSET maps, which the datastore's FSET encoder
-;;; (see APEIRON/PERSISTENCE, STORE.LISP) round-trips.  It is stored in the
-;;; world's CONFIG map, itself an immutable FSET map, so saving is an
-;;; ordinary slot write that BKNR records.
-
-(defparameter *verb-registry-config-key* :verb-registry
-  "Key under which a world's serialized verb registry is kept in its CONFIG
-map.  See SAVE-VERB-REGISTRY! and LOAD-VERB-REGISTRY!.")
-
-(defun save-verb-registry! (world &key (key *verb-registry-config-key*))
-  "Serialize WORLD's verb registry into WORLD's CONFIG map so the datastore
-stores it.  Returns the serialized map.
-
-Object verb bindings are name -> CID; the code those CIDs name lives only in
-the registry, so persisting the registry is what makes an object's verbs
-survive a restart.  Restore it with LOAD-VERB-REGISTRY!."
-  (let ((serialized (verb-registry->map (ensure-verb-registry world))))
-    (setf (world-config world)
-          (fset:with (world-config world) key serialized))
-    serialized))
-
-(defun load-verb-registry! (world &key (key *verb-registry-config-key*))
-  "Rebuild WORLD's verb registry from the serialized map stored in its CONFIG
-map under KEY, and install it in WORLD's WORLD-VERB-REGISTRY slot.  CIDs are
-restored verbatim, without re-hashing, so object verb bindings keep
-resolving.  Returns the registry, or NIL when nothing is stored."
-  (let ((serialized (fset:lookup (world-config world) key)))
-    (when serialized
-      (setf (world-verb-registry world)
-            (map->verb-registry serialized)))))
+;;; Persistence needs no code here: a world's registry is a thin wrapper
+;;; around a CL-CM-DB code database, and the database writes its identity
+;;; log and content-addressed object store itself.  ENSURE-VERB-REGISTRY
+;;; opens it (see registry.lisp); object bindings are name -> CID and are
+;;; persisted by BKNR as ordinary slot writes.  Both halves therefore line
+;;; up after a restart without a serialization step.

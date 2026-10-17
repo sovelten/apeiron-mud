@@ -21,6 +21,16 @@
 
 (in-suite core-suite)
 
+(defvar *verb-test-database-counter* 0
+  "Makes each test's verb database directory unique within an image.")
+
+(defun fresh-verb-test-directory ()
+  "A brand-new temporary directory for a test's verb database."
+  (merge-pathnames
+   (format nil "apeiron-verb-test-~D-~D/"
+           (get-universal-time) (incf *verb-test-database-counter*))
+   (uiop:temporary-directory)))
+
 ;;; ------------------------------------------------------------------
 ;;; Defining and calling
 ;;; ------------------------------------------------------------------
@@ -223,19 +233,20 @@ CL:REMOVE); pinning such a reference must not violate the package lock."
                            (apeiron.verbs:verb-cid reg 'two))
                      #'string<)))))
 
-(test verb-registry-serialization-round-trip
-  "VERB-REGISTRY->MAP / MAP->VERB-REGISTRY preserve CIDs, names, history
-and callability without re-hashing."
-  (let* ((reg (apeiron.verbs:make-verb-registry)))
+(test verb-registry-persists-in-code-database
+  "A registry's definitions live in a cl-cm-db database: opening a second
+registry over the same directory preserves CIDs, names, history,
+docstrings, references and callability without re-hashing."
+  (let* ((directory (fresh-verb-test-directory))
+         (reg (apeiron.verbs:make-verb-registry :directory directory)))
     (apeiron.verbs:define-verb reg add-one (x) "Adds one." (+ x 1))
     (apeiron.verbs:define-verb reg twice (x) (add-one (add-one x)))
     (apeiron.verbs:define-verb reg twice (x) (add-one (add-one (add-one x))))
-    (let* ((map (apeiron.verbs:verb-registry->map reg))
-           (restored (apeiron.verbs:map->verb-registry map)))
+    (let ((restored (apeiron.verbs:make-verb-registry :directory directory)))
       (is (= (apeiron.verbs:verb-count reg) (apeiron.verbs:verb-count restored)))
       (is (string= (apeiron.verbs:verb-cid reg 'twice)
                    (apeiron.verbs:verb-cid restored 'twice))
-          "CIDs are restored verbatim")
+          "CIDs are restored from the database verbatim")
       (is (equal (apeiron.verbs:verb-history reg 'twice)
                  (apeiron.verbs:verb-history restored 'twice)))
       (is (equal (apeiron.verbs:verb-docstring restored 'add-one) "Adds one."))
@@ -243,6 +254,20 @@ and callability without re-hashing."
                  (apeiron.verbs:verb-references reg 'twice)))
       (is (= 13 (apeiron.verbs:call-verb restored 'twice 10))
           "the restored verb still runs"))))
+
+(test verb-registry-reloads-a-pinned-old-version
+  "A CID that is no longer any identity's current value stays addressable
+from the code store, so an object pinned to it still runs after reload."
+  (let* ((directory (fresh-verb-test-directory))
+         (reg (apeiron.verbs:make-verb-registry :directory directory)))
+    (apeiron.verbs:define-verb reg inc (x) (+ x 1))
+    (let ((old (apeiron.verbs:verb-cid reg 'inc)))
+      (apeiron.verbs:define-verb reg inc (x) (+ x 10))
+      (let ((restored (apeiron.verbs:make-verb-registry :directory directory)))
+        (is (= 11 (apeiron.verbs:call-verb restored old 10))
+            "the superseded version is still addressable by CID")
+        (is (= 20 (apeiron.verbs:call-verb restored 'inc 10))
+            "the current version is the redefinition")))))
 
 ;;; ------------------------------------------------------------------
 ;;; Integration with MUD objects
@@ -296,26 +321,31 @@ gains one via the transient-instance initform)."
 
 (test world-verb-registry-is-lazy
   "A world's verb registry is created on first use and reused after."
-  (let ((world (make-instance 'mud-world)))
-    (is (null (apeiron.core:world-verb-registry world)))
-    (let ((reg (apeiron.verbs:ensure-verb-registry world)))
-      (is (typep reg 'apeiron.verbs:verb-registry))
-      (is (eq reg (apeiron.verbs:ensure-verb-registry world))))))
-
-(test world-verb-registry-save-and-load
-  "SAVE-VERB-REGISTRY! / LOAD-VERB-REGISTRY! round-trip a world's registry
-through its CONFIG map, preserving CIDs and per-object bindings."
   (let ((world (make-instance 'mud-world))
-        (obj (apeiron.core:new-object :name "widget")))
-    (apeiron.verbs:object-define-verb! (apeiron.verbs:ensure-verb-registry world)
+        (directory (fresh-verb-test-directory)))
+    (is (null (apeiron.core:world-verb-registry world)))
+    (let ((reg (apeiron.verbs:ensure-verb-registry world :directory directory)))
+      (is (typep reg 'apeiron.verbs:verb-registry))
+      (is (eq reg (apeiron.verbs:ensure-verb-registry world :directory directory))))))
+
+(test world-verb-registry-persists-in-code-database
+  "A world's registry is backed by an on-disk cl-cm-db database, so
+dropping the transient registry and re-opening it preserves CIDs and
+per-object bindings."
+  (let ((world (make-instance 'mud-world))
+        (obj (apeiron.core:new-object :name "widget"))
+        (directory (fresh-verb-test-directory)))
+    (apeiron.verbs:object-define-verb! (apeiron.verbs:ensure-verb-registry
+                                        world :directory directory)
                                        obj whirr ()
                                        "Whirr."
                                        (format nil "whirr"))
-    (apeiron.verbs:save-verb-registry! world)
-    ;; Simulate a restart: drop the transient registry, then reload it.
+    ;; Simulate a restart: drop the transient registry, then reopen the db.
     (setf (apeiron.core:world-verb-registry world) nil)
     (is (null (apeiron.core:world-verb-registry world)))
-    (let ((reg (apeiron.verbs:load-verb-registry! world)))
+    (let ((reg (apeiron.verbs:ensure-verb-registry world :directory directory)))
       (is (typep reg 'apeiron.verbs:verb-registry))
       (is (equal "whirr" (apeiron.verbs:object-call-verb reg obj 'whirr)))
-      (is (equal "Whirr." (apeiron.verbs:verb-docstring reg 'whirr))))))
+      (is (equal "Whirr." (apeiron.verbs:verb-docstring reg 'whirr)))
+      (is (string= (apeiron.core:object-verb-cid obj 'whirr)
+                   (apeiron.verbs:verb-cid reg 'whirr))))))
